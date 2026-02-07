@@ -3,10 +3,18 @@
 
 a = Analysis(
     ['app.py'],
-    pathex=[],
+    pathex=['.'],
     binaries=[],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=[
+        "bootstrap",
+        "ui_theme",
+        "ui_filters",
+        "ui_prefs",
+        "form_rules",
+        "csv_store",
+        "validation",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
