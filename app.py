@@ -20,16 +20,17 @@ from PySide6.QtWidgets import QStyledItemDelegate
 
 from csv_store import CsvStore
 from validation import ValidationError, normalize_prazo_text, validate_payload
+from bootstrap import resolve_storage_root, ensure_storage_root
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
-
 DATE_FMT_QT = "dd/MM/yyyy"
 
 
 def debug_msg(title: str, text: str):
     if DEBUG_MODE:
         QMessageBox.information(None, title, text)
+
 
 
 def qdate_to_date(qd: QDate) -> date:
@@ -906,7 +907,19 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    storage_root = resolve_storage_root(sys.argv[0])
+    base_dir = ensure_storage_root(storage_root)
+    if not base_dir:
+        QMessageBox.critical(
+            None,
+            "Primeira instalação",
+            (
+                f"Não foi possível criar a pasta obrigatória em '{storage_root}'.\n\n"
+                "Crie essa pasta manualmente e abra o software novamente."
+            ),
+        )
+        sys.exit(1)
+
     store = CsvStore(base_dir)
     win = MainWindow(store)
     win.resize(1280, 720)
