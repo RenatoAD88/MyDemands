@@ -1,0 +1,4 @@
+_id;É Urgente?;Status;Prioridade;Data de Registro;Prazo;Data Conclusão;Projeto;Descrição;ID Azure;% Conclusão;Responsável;Reportar?;Nome;Time/Função
+d331add8-af9d-4e6e-947d-d2d0039aa429;Sim;Concluído;Alta;07/02/2026;06/02/2026;07/02/2026;;teste;;1;teste;;;
+0f93b9a2-2522-4154-99a8-27735e433fce;Sim;Não iniciada;Alta;07/02/2026;07/02/2026, 06/02/2026;;;teste 2;;;teste 2;;;
+624d6bec-3a29-41af-a4ed-b6a51bc54671;Não;Não iniciada;Alta;09/02/2026;10/02/2026;;;teste 3;;;teste  3;;;
