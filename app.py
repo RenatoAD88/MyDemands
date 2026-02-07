@@ -63,7 +63,93 @@ STATUS_EDIT_OPTIONS = [
     "Concluído",
 ]
 PRIORIDADE_EDIT_OPTIONS = ["Alta", "Média", "Baixa"]
-@@ -147,50 +153,53 @@ class ColumnComboDelegate(QStyledItemDelegate):
+URGENCIA_EDIT_OPTIONS = ["Sim", "Não"]
+REPORTAR_EDIT_OPTIONS = ["Sim", "Não"]
+
+# ✅ % Conclusão como combo fixo
+PERCENT_COMBO_OPTIONS = ["0%", "25%", "50%", "75%", "100%"]
+
+PERCENT_OPTIONS: List[Tuple[str, str]] = [
+    ("", ""),
+    ("0% - Não iniciado", "0"),
+    ("25% - Começando", "0.25"),
+    ("50% - Parcial", "0.5"),
+    ("75% - Avançado", "0.75"),
+    ("100% - Concluído", "1"),
+]
+
+PERCENT_QUICK_PICK = [
+    ("0%", "0"),
+    ("25%", "0.25"),
+    ("50%", "0.5"),
+    ("75%", "0.75"),
+]
+
+
+def _normalize_percent_to_decimal_str(raw: str) -> str:
+    """
+    Converte entradas comuns em string decimal:
+    - "100%" -> "1"
+    - "100" -> "1"
+    - "1" / "1.0" -> "1"
+    - "0,75" -> "0.75"
+    Retorna "" se não conseguir.
+    """
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    s2 = s.replace(" ", "").replace(",", ".")
+    if s2.endswith("%"):
+        s2 = s2[:-1]
+    try:
+        f = float(s2)
+    except Exception:
+        return ""
+    if f > 1.0 and f <= 100.0:
+        f = f / 100.0
+
+    # normaliza para degraus conhecidos
+    steps = [0.0, 0.25, 0.5, 0.75, 1.0]
+    closest = min(steps, key=lambda x: abs(x - f))
+    if abs(closest - f) < 1e-6:
+        f = closest
+
+    if abs(f - 1.0) < 1e-9:
+        return "1"
+    if abs(f - 0.0) < 1e-9:
+        return "0"
+    return str(f).rstrip("0").rstrip(".") if "." in str(f) else str(f)
+
+
+def _is_percent_100(raw: str) -> bool:
+    return _normalize_percent_to_decimal_str(raw) == "1"
+
+
+class ColumnComboDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None, column_to_options: Dict[int, List[str]] | None = None):
+        super().__init__(parent)
+        self.column_to_options = column_to_options or {}
+
+    def createEditor(self, parent, option, index):
+        col = index.column()
+        if col in self.column_to_options:
+            combo = QComboBox(parent)
+            combo.setEditable(False)
+            combo.addItems(self.column_to_options[col])
+            return combo
+        return super().createEditor(parent, option, index)
+
+    def setEditorData(self, editor, index):
+        col = index.column()
+        if col in self.column_to_options and isinstance(editor, QComboBox):
+            current = (index.data(Qt.EditRole) or "").strip()
+            items = self.column_to_options[col]
+            try:
+                idx = items.index(current)
+            except ValueError:
+                # se vier vazio, cai no primeiro
+                idx = 0
+            editor.setCurrentIndex(idx)
             return
         super().setEditorData(editor, index)
 
@@ -117,7 +203,12 @@ class DatePickDialog(QDialog):
         root.addLayout(btns)
         self.setLayout(root)
 
-@@ -203,50 +212,53 @@ class DatePickDialog(QDialog):
+    def was_cleared(self) -> bool:
+        return self._cleared
+
+    def selected_date_str(self) -> str:
+        return qdate_to_date(self.date_edit.date()).strftime("%d/%m/%Y")
+
 
 class PrazoMultiDialog(QDialog):
     def __init__(self, parent: QWidget, current_prazo: str):
@@ -171,7 +262,30 @@ class PrazoMultiDialog(QDialog):
         for i in range(self.listw.count()):
             if self.listw.item(i).text() == txt:
                 return
-@@ -277,50 +289,53 @@ class DeleteDemandDialog(QDialog):
+        self.listw.addItem(txt)
+
+    def _remove(self):
+        for it in self.listw.selectedItems():
+            self.listw.takeItem(self.listw.row(it))
+
+    def prazo_str(self) -> str:
+        prazos = ", ".join(self.listw.item(i).text() for i in range(self.listw.count()))
+        return normalize_prazo_text(prazos)
+
+
+class DeleteDemandDialog(QDialog):
+    """
+    Exclusão por Linha:
+    - usuário informa Linha
+    - app carrega Projeto, Prazo e Descrição
+    - confirma excluir
+    - bloqueia se Status == Concluído
+    """
+    def __init__(self, parent: QWidget, store: CsvStore):
+        super().__init__(parent)
+        self.store = store
+        self.setWindowTitle("Excluir demanda")
+
         self.line_input = QLineEdit()
         self.line_input.setPlaceholderText("Ex: 12")
 
@@ -225,7 +339,54 @@ class PrazoMultiDialog(QDialog):
         line = int(raw)
         self.store.load()
         view = self.store.build_view()
-@@ -375,269 +390,311 @@ class DeleteDemandDialog(QDialog):
+
+        if line < 1 or line > len(view):
+            QMessageBox.warning(self, "Não encontrado", f"Nenhuma demanda encontrada na Linha {line}.")
+            self._loaded_id = None
+            self._loaded_line = None
+            self.delete_btn.setEnabled(False)
+            self.info_label.setText("")
+            return
+
+        row = view[line - 1]
+        _id = row.get("_id")
+        status = (row.get("Status") or "").strip()
+
+        self._loaded_id = _id
+        self._loaded_line = line
+
+        projeto = row.get("Projeto", "")
+        prazo = row.get("Prazo", "")
+        desc = row.get("Descrição", "")
+
+        self.info_label.setText(
+            f"**Linha {line}**\n"
+            f"Projeto: {projeto}\n"
+            f"Prazo: {prazo}\n"
+            f"Descrição: {desc}\n"
+            f"Status: {status}"
+        )
+
+        if status == "Concluído":
+            self.delete_btn.setEnabled(False)
+            QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
+        else:
+            self.delete_btn.setEnabled(True)
+
+    def _do_delete(self):
+        if not self._loaded_id or not self._loaded_line:
+            return
+
+        self.store.load()
+        dr = self.store.get(self._loaded_id)
+        if dr and (dr.data.get("Status") or "").strip() == "Concluído":
+            QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
+            self.reject()
+            return
+
+        ok = self.store.delete_by_id(self._loaded_id)
+        if not ok:
+            QMessageBox.warning(self, "Falha", "Não foi possível excluir. Verifique a Linha e tente novamente.")
             self.reject()
             return
 
@@ -537,7 +698,126 @@ class MainWindow(QMainWindow):
         items = [lbl for (lbl, _v) in PERCENT_QUICK_PICK]
         choice, ok = QInputDialog.getItem(
             self,
-@@ -764,89 +821,149 @@ class MainWindow(QMainWindow):
+            "% Conclusão",
+            "Informe o % conclusão para este novo status:",
+            items,
+            0,
+            False
+        )
+        if not ok:
+            return None
+        mapping = {lbl: v for (lbl, v) in PERCENT_QUICK_PICK}
+        return mapping.get(choice, "")
+
+    def _on_cell_double_clicked(self, row: int, col: int):
+        col_name = VISIBLE_COLUMNS[col]
+        table = self.sender()
+        if not isinstance(table, QTableWidget):
+            return
+
+        it = table.item(row, col)
+        if not it:
+            return
+        _id = it.data(Qt.UserRole)
+        if not _id:
+            return
+
+        # Data de Registro / Data Conclusão (picker)
+        if col_name in ("Data de Registro", "Data Conclusão"):
+            allow_clear = (col_name == "Data Conclusão")
+            dlg = DatePickDialog(self, col_name, f"Selecione {col_name.lower()}:", allow_clear=allow_clear)
+            if dlg.exec() != QDialog.Accepted:
+                return
+
+            if allow_clear and dlg.was_cleared():
+                # limpar data conclusão (mantém suas regras: status não muda aqui)
+                try:
+                    self.store.update(_id, {col_name: ""})
+                except ValidationError as ve:
+                    QMessageBox.warning(self, "Validação", str(ve))
+                self.refresh_all()
+                return
+
+            selected = dlg.selected_date_str()
+
+            if col_name == "Data Conclusão":
+                # ✅ data conclusão => status concluído + % 100
+                try:
+                    self.store.update(_id, {"Data Conclusão": selected, "Status": "Concluído", "% Conclusão": "1"})
+                except ValidationError as ve:
+                    QMessageBox.warning(self, "Validação", str(ve))
+                self.refresh_all()
+                return
+
+            try:
+                self.store.update(_id, {col_name: selected})
+            except ValidationError as ve:
+                QMessageBox.warning(self, "Validação", str(ve))
+            self.refresh_all()
+            return
+
+        # Prazo (multi datas)
+        if col_name == "Prazo":
+            current = (it.text() or "").replace("*", "")
+            dlg = PrazoMultiDialog(self, current)
+            if dlg.exec() != QDialog.Accepted:
+                return
+            try:
+                self.store.update(_id, {"Prazo": dlg.prazo_str()})
+            except ValidationError as ve:
+                QMessageBox.warning(self, "Validação", str(ve))
+            self.refresh_all()
+            return
+
+    def _on_item_changed(self, item: QTableWidgetItem):
+        if self._filling:
+            return
+
+        _id = item.data(Qt.UserRole)
+        if not _id:
+            return
+
+        col_name = VISIBLE_COLUMNS[item.column()]
+        if col_name in NON_EDITABLE:
+            return
+
+        new_value = (item.text() or "").strip()
+
+        # Status -> Concluído: exige data conclusão e força % 100
+        if col_name == "Status" and new_value == "Concluído":
+            concl = self._prompt_conclusao_date_required()
+            if not concl:
+                self.refresh_all()
+                return
+            try:
+                self.store.update(_id, {"Status": "Concluído", "Data Conclusão": concl, "% Conclusão": "1"})
+            except ValidationError as ve:
+                QMessageBox.warning(self, "Validação", str(ve))
+            self.refresh_all()
+            return
+
+        # Status: Concluído -> outro (pede % e limpa data conclusão)
+        if col_name == "Status":
+            old_value = (item.data(Qt.UserRole + 1) or "").strip()
+            if old_value == "Concluído" and new_value != "Concluído":
+                pct = self._prompt_percent_when_unconcluding()
+                if pct is None:
+                    self.refresh_all()
+                    return
+                try:
+                    self.store.update(_id, {"Status": new_value, "% Conclusão": pct, "Data Conclusão": ""})
+                except ValidationError as ve:
+                    QMessageBox.warning(self, "Validação", str(ve))
+                self.refresh_all()
+                return
+
+        # ✅ % Conclusão via combo
+        if col_name == "% Conclusão":
+            # new_value é tipo "25%" etc
+            pct_dec = _normalize_percent_to_decimal_str(new_value)
+            if _is_percent_100(new_value):
+                concl = self._prompt_conclusao_date_required()
+                if not concl:
                     self.refresh_all()
                     return
                 try:
@@ -687,7 +967,9 @@ class MainWindow(QMainWindow):
         top.addWidget(self.t4_end)
         top.addWidget(btn)
         top.addStretch()
-@@ -856,63 +973,93 @@ class MainWindow(QMainWindow):
+
+        layout = QVBoxLayout()
+        layout.addLayout(top)
         layout.addWidget(self.t4_table)
         tab.setLayout(layout)
         self.tabs.addTab(tab, "Consultar demandas concluídas entre datas")
@@ -781,5 +1063,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-bootstrap.py
-bootstrap.py
