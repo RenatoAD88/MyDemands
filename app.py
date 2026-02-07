@@ -6,6 +6,7 @@ from datetime import date
 from typing import Dict, Any, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QDate
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QTabWidget,
@@ -14,22 +15,27 @@ from PySide6.QtWidgets import (
     QMessageBox, QInputDialog,
     QDialog, QFormLayout,
     QDateEdit, QLineEdit, QTextEdit, QComboBox,
-    QListWidget
+    QListWidget, QGroupBox
 )
 from PySide6.QtWidgets import QStyledItemDelegate
 
 from csv_store import CsvStore
 from validation import ValidationError, normalize_prazo_text, validate_payload
+from bootstrap import resolve_storage_root, ensure_storage_root
+from ui_theme import APP_STYLESHEET, status_color, timing_color
+from ui_filters import filter_rows, summary_counts
+from ui_prefs import load_prefs, save_prefs
+from form_rules import required_fields
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
-
 DATE_FMT_QT = "dd/MM/yyyy"
 
 
 def debug_msg(title: str, text: str):
     if DEBUG_MODE:
         QMessageBox.information(None, title, text)
+
 
 
 def qdate_to_date(qd: QDate) -> date:
@@ -169,6 +175,9 @@ class DatePickDialog(QDialog):
         form = QFormLayout()
         form.addRow(label, self.date_edit)
 
+        self.inline_error = QLabel("")
+        self.inline_error.setObjectName("errorText")
+
         btns = QHBoxLayout()
         okb = QPushButton("OK")
         cb = QPushButton("Cancelar")
@@ -224,6 +233,9 @@ class PrazoMultiDialog(QDialog):
         remb = QPushButton("Remover selecionada")
         addb.clicked.connect(self._add)
         remb.clicked.connect(self._remove)
+
+        self.inline_error = QLabel("")
+        self.inline_error.setObjectName("errorText")
 
         btns = QHBoxLayout()
         okb = QPushButton("OK")
@@ -298,6 +310,9 @@ class DeleteDemandDialog(QDialog):
         top = QHBoxLayout()
         top.addWidget(self.load_btn)
         top.addStretch()
+
+        self.inline_error = QLabel("")
+        self.inline_error.setObjectName("errorText")
 
         btns = QHBoxLayout()
         btns.addStretch()
@@ -397,7 +412,9 @@ class NewDemandDialog(QDialog):
         self.data_registro.setDisplayFormat(DATE_FMT_QT)
 
         self.responsavel = QLineEdit()
+        self.responsavel.setPlaceholderText("Ex: Ana Silva")
         self.descricao = QTextEdit()
+        self.descricao.setPlaceholderText("Descreva a demanda com contexto e resultado esperado")
 
         self.urgente = QComboBox()
         self.urgente.setEditable(False)
@@ -405,7 +422,9 @@ class NewDemandDialog(QDialog):
         self.urgente.addItems(URGENCIA_EDIT_OPTIONS)
 
         self.projeto = QLineEdit()
+        self.projeto.setPlaceholderText("Ex: Migração ERP")
         self.id_azure = QLineEdit()
+        self.id_azure.setPlaceholderText("Ex: AB#12345")
 
         self.perc = QComboBox()
         self.perc.setEditable(False)
@@ -418,7 +437,9 @@ class NewDemandDialog(QDialog):
         self.reportar.addItems(REPORTAR_EDIT_OPTIONS)
 
         self.nome = QLineEdit()
+        self.nome.setPlaceholderText("Nome de referência")
         self.time_funcao = QLineEdit()
+        self.time_funcao.setPlaceholderText("Ex: Engenharia de Dados")
 
         self._conclusao_txt: str = ""
         self.conclusao_value = QLabel("")
@@ -445,22 +466,6 @@ class NewDemandDialog(QDialog):
         add_prazo.clicked.connect(self._add_prazo)
         rem_prazo.clicked.connect(self._remove_prazo)
 
-        form = QFormLayout()
-        form.addRow("Status*", self.status)
-        form.addRow("Prioridade*", self.prioridade)
-        form.addRow("Data de Registro*", self.data_registro)
-        form.addRow("Responsável*", self.responsavel)
-        form.addRow("Descrição*", self.descricao)
-
-        form.addRow("É Urgente?", self.urgente)
-        form.addRow("Projeto", self.projeto)
-        form.addRow("ID Azure", self.id_azure)
-        form.addRow("% Conclusão", self.perc)
-        form.addRow("Data Conclusão", conc_row)
-        form.addRow("Reportar?", self.reportar)
-        form.addRow("Nome", self.nome)
-        form.addRow("Time/Função", self.time_funcao)
-
         prazo_box = QVBoxLayout()
         prazo_box.addWidget(self.prazo_label)
         line = QHBoxLayout()
@@ -469,6 +474,9 @@ class NewDemandDialog(QDialog):
         prazo_box.addLayout(line)
         prazo_box.addWidget(self.prazo_list)
         prazo_box.addWidget(rem_prazo)
+
+        self.inline_error = QLabel("")
+        self.inline_error.setObjectName("errorText")
 
         btns = QHBoxLayout()
         save_btn = QPushButton("Salvar")
@@ -479,9 +487,35 @@ class NewDemandDialog(QDialog):
         btns.addWidget(save_btn)
         btns.addWidget(cancel_btn)
 
+        obrig_box = QGroupBox("Campos obrigatórios")
+        obrig_form = QFormLayout()
+        obrig_form.addRow("Status*", self.status)
+        obrig_form.addRow("Prioridade*", self.prioridade)
+        obrig_form.addRow("Data de Registro*", self.data_registro)
+        obrig_form.addRow("Responsável*", self.responsavel)
+        obrig_form.addRow("Descrição*", self.descricao)
+        obrig_box.setLayout(obrig_form)
+
+        opc_box = QGroupBox("Controle e identificação")
+        opc_form = QFormLayout()
+        opc_form.addRow("É Urgente?", self.urgente)
+        opc_form.addRow("Projeto", self.projeto)
+        opc_form.addRow("ID Azure", self.id_azure)
+        opc_form.addRow("% Conclusão", self.perc)
+        opc_form.addRow("Data Conclusão", conc_row)
+        opc_form.addRow("Reportar?", self.reportar)
+        opc_form.addRow("Nome", self.nome)
+        opc_form.addRow("Time/Função", self.time_funcao)
+        opc_box.setLayout(opc_form)
+
+        prazo_group = QGroupBox("Planejamento de prazo")
+        prazo_group.setLayout(prazo_box)
+
         root = QVBoxLayout()
-        root.addLayout(form)
-        root.addLayout(prazo_box)
+        root.addWidget(obrig_box)
+        root.addWidget(opc_box)
+        root.addWidget(prazo_group)
+        root.addWidget(self.inline_error)
         root.addLayout(btns)
         self.setLayout(root)
 
@@ -510,28 +544,37 @@ class NewDemandDialog(QDialog):
             self.prazo_list.takeItem(self.prazo_list.row(it))
 
     def _on_save(self):
-        missing = []
-        if not self.descricao.toPlainText().strip():
-            missing.append("Descrição")
-        if not self.prioridade.currentText().strip():
-            missing.append("Prioridade")
-        if not self.status.currentText().strip():
-            missing.append("Status")
-        if not self.responsavel.text().strip():
-            missing.append("Responsável")
-        if self.prazo_list.count() == 0:
-            missing.append("Prazo (adicione ao menos uma data)")
+        payload = {
+            "Descrição": self.descricao.toPlainText(),
+            "Prioridade": self.prioridade.currentText(),
+            "Status": self.status.currentText(),
+            "Responsável": self.responsavel.text(),
+            "% Conclusão": self.perc.currentText(),
+            "Data Conclusão": self._conclusao_txt,
+        }
+        missing = required_fields(payload, self.prazo_list.count())
 
-        wants_concluded = (self.status.currentText().strip() == "Concluído") or (self.perc.currentText().startswith("100%"))
-        if wants_concluded and not self._conclusao_txt.strip():
-            missing.append("Data Conclusão (obrigatória quando Concluído/100%)")
+        self.inline_error.setText("")
+        self.responsavel.setStyleSheet("")
+        self.descricao.setStyleSheet("")
+        self.prioridade.setStyleSheet("")
+        self.status.setStyleSheet("")
+        self.conclusao_value.setStyleSheet("padding: 4px; border: 1px solid #ccc;")
+
+        if "Responsável" in missing:
+            self.responsavel.setStyleSheet("border: 1px solid #d92d20;")
+        if "Descrição" in missing:
+            self.descricao.setStyleSheet("border: 1px solid #d92d20;")
+        if "Prioridade" in missing:
+            self.prioridade.setStyleSheet("border: 1px solid #d92d20;")
+        if "Status" in missing:
+            self.status.setStyleSheet("border: 1px solid #d92d20;")
+        if "Data Conclusão" in missing:
+            self.conclusao_value.setStyleSheet("padding: 4px; border: 1px solid #d92d20;")
 
         if missing:
-            QMessageBox.warning(
-                self,
-                "Campos obrigatórios",
-                "Os seguintes campos obrigatórios não foram preenchidos:\n\n- " + "\n- ".join(missing)
-            )
+            friendly = [m if m != "Prazo" else "Prazo (adicione ao menos uma data)" for m in missing]
+            self.inline_error.setText("Preencha os campos: " + ", ".join(friendly))
             return
 
         self.accept()
@@ -578,12 +621,15 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
 
+        self._prefs = load_prefs(self.store.base_dir)
+
         self._init_tab1()
         self._init_tab3()
         self._init_tab4()
 
         self.refresh_all()
         self.tabs.currentChanged.connect(self._on_tab_changed)
+        self._restore_preferences()
 
     def _make_table(self) -> QTableWidget:
         table = QTableWidget(0, len(VISIBLE_COLUMNS))
@@ -600,6 +646,10 @@ class MainWindow(QMainWindow):
         col_map[VISIBLE_COLUMNS.index("% Conclusão")] = PERCENT_COMBO_OPTIONS
 
         table.setItemDelegate(ColumnComboDelegate(table, col_map))
+        table.setAlternatingRowColors(True)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setSelectionMode(QTableWidget.SingleSelection)
+        table.verticalHeader().setVisible(False)
         table.resizeColumnsToContents()
         return table
 
@@ -615,6 +665,13 @@ class MainWindow(QMainWindow):
         # guarda valor anterior do status
         if colname == "Status":
             it.setData(Qt.UserRole + 1, text or "")
+
+        if colname == "Status":
+            rr, gg, bb = status_color(text)
+            it.setBackground(QColor(rr, gg, bb))
+        if colname == "Timing":
+            rr, gg, bb = timing_color(text)
+            it.setBackground(QColor(rr, gg, bb))
 
         table.setItem(r, c, it)
 
@@ -786,7 +843,27 @@ class MainWindow(QMainWindow):
             debug_msg("Erro ao salvar", str(e))
         self.refresh_all()
 
+    def _restore_preferences(self):
+        idx = int(self._prefs.get("tab_index", 0) or 0)
+        if 0 <= idx < self.tabs.count():
+            self.tabs.setCurrentIndex(idx)
+        self.t3_search.setText(str(self._prefs.get("t3_search", "") or ""))
+        self.t3_status.setCurrentText(str(self._prefs.get("t3_status", "") or ""))
+        self.t3_prioridade.setCurrentText(str(self._prefs.get("t3_prioridade", "") or ""))
+        self.t3_responsavel.setText(str(self._prefs.get("t3_responsavel", "") or ""))
+
+    def _save_preferences(self):
+        data = {
+            "tab_index": self.tabs.currentIndex(),
+            "t3_search": self.t3_search.text(),
+            "t3_status": self.t3_status.currentText(),
+            "t3_prioridade": self.t3_prioridade.currentText(),
+            "t3_responsavel": self.t3_responsavel.text(),
+        }
+        save_prefs(self.store.base_dir, data)
+
     def _on_tab_changed(self, idx: int):
+        self._save_preferences()
         self.refresh_current()
 
     # Tabs
@@ -800,9 +877,11 @@ class MainWindow(QMainWindow):
         btn.clicked.connect(self.refresh_tab1)
 
         new_btn = QPushButton("Nova demanda")
+        new_btn.setObjectName("primaryAction")
         new_btn.clicked.connect(self.new_demand)
 
         del_btn = QPushButton("Excluir demanda")
+        del_btn.setObjectName("dangerAction")
         del_btn.clicked.connect(self.delete_demand)
 
         self.t1_table = self._make_table()
@@ -823,8 +902,46 @@ class MainWindow(QMainWindow):
 
     def _init_tab3(self):
         tab = QWidget()
+        self.t3_search = QLineEdit()
+        self.t3_search.setPlaceholderText("Buscar em Projeto, Descrição ou Responsável")
+        self.t3_status = QComboBox()
+        self.t3_status.addItem("")
+        self.t3_status.addItems(STATUS_EDIT_OPTIONS)
+        self.t3_prioridade = QComboBox()
+        self.t3_prioridade.addItem("")
+        self.t3_prioridade.addItems(PRIORIDADE_EDIT_OPTIONS)
+        self.t3_responsavel = QLineEdit()
+        self.t3_responsavel.setPlaceholderText("Filtrar por responsável")
+
+        apply_btn = QPushButton("Aplicar filtros")
+        apply_btn.clicked.connect(self.refresh_tab3)
+
+        self.t3_pending_card = QLabel("Pendentes: 0")
+        self.t3_delayed_card = QLabel("Em atraso: 0")
+        self.t3_done_card = QLabel("Concluídas: 0")
+
         self.t3_table = self._make_table()
+
+        filters = QHBoxLayout()
+        filters.addWidget(QLabel("Busca:"))
+        filters.addWidget(self.t3_search, 2)
+        filters.addWidget(QLabel("Status:"))
+        filters.addWidget(self.t3_status)
+        filters.addWidget(QLabel("Prioridade:"))
+        filters.addWidget(self.t3_prioridade)
+        filters.addWidget(QLabel("Responsável:"))
+        filters.addWidget(self.t3_responsavel)
+        filters.addWidget(apply_btn)
+
+        cards = QHBoxLayout()
+        cards.addWidget(self.t3_pending_card)
+        cards.addWidget(self.t3_delayed_card)
+        cards.addWidget(self.t3_done_card)
+        cards.addStretch()
+
         layout = QVBoxLayout()
+        layout.addLayout(filters)
+        layout.addLayout(cards)
         layout.addWidget(self.t3_table)
         tab.setLayout(layout)
         self.tabs.addTab(tab, "Todas demandas pendentes")
@@ -878,7 +995,20 @@ class MainWindow(QMainWindow):
         self._fill(self.t1_table, self.store.tab1_by_prazo_date(d))
 
     def refresh_tab3(self):
-        self._fill(self.t3_table, self.store.tab_pending_all())
+        rows = self.store.tab_pending_all()
+        filtered = filter_rows(
+            rows,
+            text_query=self.t3_search.text(),
+            status=self.t3_status.currentText(),
+            prioridade=self.t3_prioridade.currentText(),
+            responsavel=self.t3_responsavel.text(),
+        )
+        counts = summary_counts(rows)
+        self.t3_pending_card.setText(f"Pendentes: {counts['pending']}")
+        self.t3_delayed_card.setText(f"Em atraso: {counts['delayed']}")
+        self.t3_done_card.setText(f"Concluídas: {counts['concluded']}")
+        self._fill(self.t3_table, filtered)
+        self._save_preferences()
 
     def refresh_tab4(self):
         s = qdate_to_date(self.t4_start.date())
@@ -903,10 +1033,27 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
 
+    def closeEvent(self, event):
+        self._save_preferences()
+        super().closeEvent(event)
+
 
 def main():
     app = QApplication(sys.argv)
-    base_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    app.setStyleSheet(APP_STYLESHEET)
+    storage_root = resolve_storage_root(sys.argv[0])
+    base_dir = ensure_storage_root(storage_root)
+    if not base_dir:
+        QMessageBox.critical(
+            None,
+            "Primeira instalação",
+            (
+                f"Não foi possível criar a pasta obrigatória em '{storage_root}'.\n\n"
+                "Crie essa pasta manualmente e abra o software novamente."
+            ),
+        )
+        sys.exit(1)
+
     store = CsvStore(base_dir)
     win = MainWindow(store)
     win.resize(1280, 720)
