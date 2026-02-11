@@ -968,6 +968,7 @@ class MainWindow(QMainWindow):
         del_btn.setObjectName("dangerAction")
         del_btn.clicked.connect(self.delete_demand)
 
+        export_btn = self._build_export_button()
 
         self.t1_table = self._make_table()
 
@@ -977,6 +978,7 @@ class MainWindow(QMainWindow):
         top.addWidget(btn)
         top.addStretch()
         top.addWidget(new_btn)
+        top.addWidget(export_btn)
         top.addWidget(del_btn)
 
         layout = QVBoxLayout()
