@@ -10,7 +10,7 @@ from PySide6.QtGui import QColor, QLinearGradient, QGradient, QBrush
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QTabWidget,
-    QLabel, QPushButton,
+    QLabel, QPushButton, QToolButton, QFileDialog,
     QTableWidget, QTableWidgetItem,
     QMessageBox, QInputDialog,
     QDialog, QFormLayout,
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QListWidget, QGroupBox
 )
 from PySide6.QtWidgets import QStyledItemDelegate
-from PySide6.QtWidgets import QHeaderView
+from PySide6.QtWidgets import QHeaderView, QStyle
 
 from csv_store import CsvStore, parse_prazos_list
 from validation import ValidationError, normalize_prazo_text, validate_payload
@@ -940,6 +940,15 @@ class MainWindow(QMainWindow):
         self._save_preferences()
         self.refresh_current()
 
+    def _build_export_button(self) -> QToolButton:
+        btn = QToolButton()
+        btn.setObjectName("exportAction")
+        btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        btn.setText("Exportar")
+        btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowDown))
+        btn.clicked.connect(self.export_demands_csv)
+        return btn
+
     # Tabs
     def _init_tab1(self):
         tab = QWidget()
@@ -958,6 +967,8 @@ class MainWindow(QMainWindow):
         del_btn.setObjectName("dangerAction")
         del_btn.clicked.connect(self.delete_demand)
 
+        export_btn = self._build_export_button()
+
         self.t1_table = self._make_table()
 
         top = QHBoxLayout()
@@ -966,6 +977,7 @@ class MainWindow(QMainWindow):
         top.addWidget(btn)
         top.addStretch()
         top.addWidget(new_btn)
+        top.addWidget(export_btn)
         top.addWidget(del_btn)
 
         layout = QVBoxLayout()
@@ -1101,6 +1113,29 @@ class MainWindow(QMainWindow):
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
             self.refresh_all()
+
+    def export_demands_csv(self):
+        default_name = "demandas_export.csv"
+        default_path = os.path.join(self.store.base_dir, default_name)
+        export_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Exportar demandas",
+            default_path,
+            "CSV (*.csv)",
+        )
+        if not export_path:
+            return
+
+        if not export_path.lower().endswith(".csv"):
+            export_path = f"{export_path}.csv"
+
+        try:
+            total = self.store.export_all_to_csv(export_path)
+        except Exception as e:
+            QMessageBox.warning(self, "Falha na exportação", f"Não foi possível exportar o CSV.\n\n{e}")
+            return
+
+        QMessageBox.information(self, "Exportação concluída", f"CSV exportado com sucesso.\nTotal de demandas: {total}")
 
     def delete_demand(self):
         dlg = DeleteDemandDialog(self, self.store)
