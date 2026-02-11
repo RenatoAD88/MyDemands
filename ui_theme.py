@@ -50,6 +50,21 @@ QPushButton#dangerAction {
     border: 1px solid #efb1b1;
 }
 
+QToolButton#exportAction {
+    background: #dbeafe;
+    color: #0b3b8c;
+    border: 1px solid #93c5fd;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-weight: 600;
+}
+QToolButton#exportAction:hover {
+    background: #bfdbfe;
+}
+QToolButton#exportAction::menu-indicator {
+    image: none;
+}
+
 QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget {
     background: #ffffff;
     color: #111827;
