@@ -436,3 +436,16 @@ class CsvStore:
             if cd and start <= cd <= end:
                 out.append(x)
         return out
+
+    def export_all_to_csv(self, export_path: str, delimiter: str = ",") -> int:
+        """
+        Exporta todas as demandas existentes para um CSV de saída.
+        Retorna a quantidade de linhas exportadas.
+        """
+        rows = self.build_view()
+        with open(export_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=DISPLAY_COLUMNS, delimiter=delimiter)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow({col: row.get(col, "") for col in DISPLAY_COLUMNS})
+        return len(rows)
