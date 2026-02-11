@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QHeaderView
 
-from csv_store import CsvStore
+from csv_store import CsvStore, parse_prazos_list
 from validation import ValidationError, normalize_prazo_text, validate_payload
 from bootstrap import resolve_storage_root, ensure_storage_root
 from ui_theme import APP_STYLESHEET, status_color, timing_color
@@ -31,6 +31,7 @@ from form_rules import required_fields
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
 DATE_FMT_QT = "dd/MM/yyyy"
+PRAZO_TODAY_BG = (255, 249, 196)  # amarelo claro
 
 
 def debug_msg(title: str, text: str):
@@ -41,6 +42,14 @@ def debug_msg(title: str, text: str):
 
 def qdate_to_date(qd: QDate) -> date:
     return date(qd.year(), qd.month(), qd.day())
+
+
+def prazo_contains_today(prazo_text: str, today: Optional[date] = None) -> bool:
+    if not prazo_text:
+        return False
+    ref = today or date.today()
+    normalized = prazo_text.replace("*", "").replace("\n", ",")
+    return ref in parse_prazos_list(normalized)
 
 
 VISIBLE_COLUMNS = [
@@ -682,6 +691,9 @@ class MainWindow(QMainWindow):
             it.setBackground(QColor(rr, gg, bb))
         if colname == "Timing":
             rr, gg, bb = timing_color(text)
+            it.setBackground(QColor(rr, gg, bb))
+        if colname == "Prazo" and prazo_contains_today(text):
+            rr, gg, bb = PRAZO_TODAY_BG
             it.setBackground(QColor(rr, gg, bb))
 
         table.setItem(r, c, it)
