@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QListWidget, QGroupBox
 )
 from PySide6.QtWidgets import QStyledItemDelegate
+from PySide6.QtWidgets import QHeaderView
 
 from csv_store import CsvStore
 from validation import ValidationError, normalize_prazo_text, validate_payload
@@ -54,6 +55,7 @@ PICKER_ONLY = {"Data de Registro", "Prazo", "Data Conclusão"}
 
 # Timing e Linha não editáveis
 NON_EDITABLE = {"Linha", "Timing"} | PICKER_ONLY
+DESC_COLUMN_MAX_CHARS = 45
 
 STATUS_EDIT_OPTIONS = [
     "Não iniciada",
@@ -650,7 +652,16 @@ class MainWindow(QMainWindow):
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
         table.verticalHeader().setVisible(False)
-        table.resizeColumnsToContents()
+        table.setWordWrap(True)
+
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+
+        desc_col = VISIBLE_COLUMNS.index("Descrição")
+        desc_width = table.fontMetrics().horizontalAdvance("M" * DESC_COLUMN_MAX_CHARS)
+        header.setSectionResizeMode(desc_col, QHeaderView.Interactive)
+        table.setColumnWidth(desc_col, desc_width)
+
         return table
 
     def _set_item(self, table: QTableWidget, r: int, c: int, text: str, _id: str):
@@ -687,6 +698,8 @@ class MainWindow(QMainWindow):
                     self._set_item(table, r, c, str(row.get(col, "") or ""), _id)
         finally:
             self._filling = False
+
+        table.resizeRowsToContents()
 
     def _prompt_conclusao_date_required(self) -> Optional[str]:
         dlg = DatePickDialog(self, "Data de Conclusão", "Selecione a data de conclusão:", allow_clear=False)
