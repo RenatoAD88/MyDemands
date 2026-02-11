@@ -96,6 +96,13 @@ PERCENT_QUICK_PICK = [
     ("75%", "0.75"),
 ]
 
+PRIORIDADE_TEXT_COLORS: Dict[str, Tuple[int, int, int]] = {
+    "alta": (220, 38, 38),   # vermelho
+    "média": (202, 138, 4),  # amarelo
+    "media": (202, 138, 4),  # fallback sem acento
+    "baixa": (22, 163, 74),  # verde
+}
+
 
 def _normalize_percent_to_decimal_str(raw: str) -> str:
     """
@@ -701,6 +708,11 @@ class MainWindow(QMainWindow):
         if colname == "Status":
             rr, gg, bb = status_color(text)
             it.setBackground(QColor(rr, gg, bb))
+        if colname == "Prioridade":
+            color = PRIORIDADE_TEXT_COLORS.get((text or "").strip().lower())
+            if color:
+                rr, gg, bb = color
+                it.setForeground(QColor(rr, gg, bb))
         if colname == "Timing":
             rr, gg, bb = timing_color(text)
             it.setBackground(QColor(rr, gg, bb))
