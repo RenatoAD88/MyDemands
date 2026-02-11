@@ -957,8 +957,8 @@ class MainWindow(QMainWindow):
         self.t1_date.setCalendarPopup(True)
         self.t1_date.setDisplayFormat(DATE_FMT_QT)
 
-        btn = QPushButton("Consultar")
-        btn.clicked.connect(self.refresh_tab1)
+        consult_btn = QPushButton("Consultar")
+        consult_btn.clicked.connect(self.refresh_tab1)
 
         new_btn = QPushButton("Nova demanda")
         new_btn.setObjectName("primaryAction")
@@ -975,7 +975,7 @@ class MainWindow(QMainWindow):
         self.t1_actions_layout = top
         top.addWidget(QLabel("Selecionar data de consulta:"))
         top.addWidget(self.t1_date)
-        top.addWidget(btn)
+        top.addWidget(consult_btn)
         top.addStretch()
         top.addWidget(new_btn)
         top.addWidget(export_btn)
