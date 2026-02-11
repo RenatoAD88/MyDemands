@@ -53,7 +53,7 @@ def prazo_contains_today(prazo_text: str, today: Optional[date] = None) -> bool:
 
 
 VISIBLE_COLUMNS = [
-    "Linha", "É Urgente?", "Status", "Timing", "Prioridade",
+    "ID", "É Urgente?", "Status", "Timing", "Prioridade",
     "Data de Registro", "Prazo", "Data Conclusão",
     "Projeto", "Descrição", "ID Azure", "% Conclusão",
     "Responsável", "Reportar?", "Nome", "Time/Função"
@@ -62,8 +62,8 @@ VISIBLE_COLUMNS = [
 # Campos que só podem ser editados via picker
 PICKER_ONLY = {"Data de Registro", "Prazo", "Data Conclusão"}
 
-# Timing e Linha não editáveis
-NON_EDITABLE = {"Linha", "Timing"} | PICKER_ONLY
+# Timing e ID não editáveis
+NON_EDITABLE = {"ID", "Timing"} | PICKER_ONLY
 DESC_COLUMN_MAX_CHARS = 45
 
 STATUS_EDIT_OPTIONS = [
@@ -293,8 +293,8 @@ class PrazoMultiDialog(QDialog):
 
 class DeleteDemandDialog(QDialog):
     """
-    Exclusão por Linha:
-    - usuário informa Linha
+    Exclusão por ID:
+    - usuário informa ID
     - app carrega Projeto, Prazo e Descrição
     - confirma excluir
     - bloqueia se Status == Concluído
@@ -323,7 +323,7 @@ class DeleteDemandDialog(QDialog):
         self._loaded_line: Optional[int] = None
 
         form = QFormLayout()
-        form.addRow("Número da Linha*", self.line_input)
+        form.addRow("Número do ID*", self.line_input)
 
         top = QHBoxLayout()
         top.addWidget(self.load_btn)
@@ -347,7 +347,7 @@ class DeleteDemandDialog(QDialog):
     def _load_line(self):
         raw = (self.line_input.text() or "").strip()
         if not raw.isdigit():
-            QMessageBox.warning(self, "Inválido", "Informe um número de linha válido.")
+            QMessageBox.warning(self, "Inválido", "Informe um número de ID válido.")
             self._loaded_id = None
             self._loaded_line = None
             self.delete_btn.setEnabled(False)
@@ -359,7 +359,7 @@ class DeleteDemandDialog(QDialog):
         view = self.store.build_view()
 
         if line < 1 or line > len(view):
-            QMessageBox.warning(self, "Não encontrado", f"Nenhuma demanda encontrada na Linha {line}.")
+            QMessageBox.warning(self, "Não encontrado", f"Nenhuma demanda encontrada no ID {line}.")
             self._loaded_id = None
             self._loaded_line = None
             self.delete_btn.setEnabled(False)
@@ -378,7 +378,7 @@ class DeleteDemandDialog(QDialog):
         desc = row.get("Descrição", "")
 
         self.info_label.setText(
-            f"**Linha {line}**\n"
+            f"**ID {line}**\n"
             f"Projeto: {projeto}\n"
             f"Prazo: {prazo}\n"
             f"Descrição: {desc}\n"
@@ -404,7 +404,7 @@ class DeleteDemandDialog(QDialog):
 
         ok = self.store.delete_by_id(self._loaded_id)
         if not ok:
-            QMessageBox.warning(self, "Falha", "Não foi possível excluir. Verifique a Linha e tente novamente.")
+            QMessageBox.warning(self, "Falha", "Não foi possível excluir. Verifique o ID e tente novamente.")
             self.reject()
             return
 

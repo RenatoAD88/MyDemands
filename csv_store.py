@@ -13,7 +13,7 @@ CSV_NAME = "data.csv"
 DELIMITER = ";"
 
 DISPLAY_COLUMNS = [
-    "Linha",
+    "ID",
     "É Urgente?",
     "Status",
     "Timing",
@@ -340,7 +340,7 @@ class CsvStore:
         
     def delete_by_line(self, line: int) -> bool:
         """
-        Exclui pela 'Linha' conforme exibida na UI (ordem do build_view()).
+        Exclui pelo 'ID' conforme exibido na UI (ordem do build_view()).
         Retorna False se a linha for inválida ou se a demanda não puder ser excluída.
         """
         try:
@@ -383,7 +383,7 @@ class CsvStore:
 
             out.append({
                 "_id": dr._id,
-                "Linha": str(i),
+                "ID": str(i),
                 "É Urgente?": data.get("É Urgente?", ""),
                 "Status": data.get("Status", ""),
                 "Timing": timing,
