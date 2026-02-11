@@ -10,7 +10,7 @@ from PySide6.QtGui import QColor, QLinearGradient, QGradient, QBrush
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QTabWidget,
-    QLabel, QPushButton,
+    QLabel, QPushButton, QToolButton, QFileDialog,
     QTableWidget, QTableWidgetItem,
     QMessageBox, QInputDialog,
     QDialog, QFormLayout,
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QListWidget, QGroupBox
 )
 from PySide6.QtWidgets import QStyledItemDelegate
-from PySide6.QtWidgets import QHeaderView
+from PySide6.QtWidgets import QHeaderView, QStyle
 
 from csv_store import CsvStore, parse_prazos_list
 from validation import ValidationError, normalize_prazo_text, validate_payload
@@ -658,6 +658,7 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
+        self.tabs.setCornerWidget(self._build_export_button(), Qt.TopLeftCorner)
 
         self._prefs = load_prefs(self.store.base_dir)
 
@@ -940,6 +941,15 @@ class MainWindow(QMainWindow):
         self._save_preferences()
         self.refresh_current()
 
+    def _build_export_button(self) -> QToolButton:
+        btn = QToolButton()
+        btn.setObjectName("exportAction")
+        btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        btn.setText("Exportar")
+        btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowDown))
+        btn.clicked.connect(self.export_demands_csv)
+        return btn
+
     # Tabs
     def _init_tab1(self):
         tab = QWidget()
@@ -947,8 +957,8 @@ class MainWindow(QMainWindow):
         self.t1_date.setCalendarPopup(True)
         self.t1_date.setDisplayFormat(DATE_FMT_QT)
 
-        btn = QPushButton("Consultar")
-        btn.clicked.connect(self.refresh_tab1)
+        consult_btn = QPushButton("Consultar")
+        consult_btn.clicked.connect(self.refresh_tab1)
 
         new_btn = QPushButton("Nova demanda")
         new_btn.setObjectName("primaryAction")
@@ -958,12 +968,14 @@ class MainWindow(QMainWindow):
         del_btn.setObjectName("dangerAction")
         del_btn.clicked.connect(self.delete_demand)
 
+
         self.t1_table = self._make_table()
 
         top = QHBoxLayout()
+        self.t1_actions_layout = top  # mantém apenas ações de consulta/nova/excluir (sem export_btn)
         top.addWidget(QLabel("Selecionar data de consulta:"))
         top.addWidget(self.t1_date)
-        top.addWidget(btn)
+        top.addWidget(consult_btn)
         top.addStretch()
         top.addWidget(new_btn)
         top.addWidget(del_btn)
@@ -1101,6 +1113,29 @@ class MainWindow(QMainWindow):
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
             self.refresh_all()
+
+    def export_demands_csv(self):
+        default_name = "demandas_export.csv"
+        default_path = os.path.join(self.store.base_dir, default_name)
+        export_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Exportar demandas",
+            default_path,
+            "CSV (*.csv)",
+        )
+        if not export_path:
+            return
+
+        if not export_path.lower().endswith(".csv"):
+            export_path = f"{export_path}.csv"
+
+        try:
+            total = self.store.export_all_to_csv(export_path)
+        except Exception as e:
+            QMessageBox.warning(self, "Falha na exportação", f"Não foi possível exportar o CSV.\n\n{e}")
+            return
+
+        QMessageBox.information(self, "Exportação concluída", f"CSV exportado com sucesso.\nTotal de demandas: {total}")
 
     def delete_demand(self):
         dlg = DeleteDemandDialog(self, self.store)
