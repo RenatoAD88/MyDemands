@@ -4,14 +4,14 @@ from typing import Tuple
 
 APP_STYLESHEET = """
 QWidget { font-size: 13px; }
-QMainWindow { background: #f5f7fb; }
+QMainWindow { background: #008080; }
 QTabWidget::pane { border: 1px solid #d4d9e2; background: #ffffff; }
 QTabBar::tab { background: #e9edf5; padding: 8px 14px; margin-right: 2px; }
 QTabBar::tab:selected { background: #ffffff; font-weight: 600; }
 QPushButton { background: #e7ebf4; border: 1px solid #c8d0df; border-radius: 6px; padding: 6px 12px; }
-QPushButton#primaryAction { background: #1e6fff; color: #ffffff; border: 1px solid #1e6fff; font-weight: 600; }
+QPushButton#primaryAction { background: #1e6fff; color: #000000; border: 1px solid #1e6fff; font-weight: 600; }
 QPushButton#dangerAction { background: #ffe8e8; color: #9b1c1c; border: 1px solid #f0baba; }
-QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget { background: #ffffff; border: 1px solid #ffffff; border-radius: 6px; padding: 4px; }
+QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget { background: #ffffff; border: 1px solid #000000; border-radius: 6px; padding: 4px; }
 QTableWidget { gridline-color: #e6ebf5; alternate-background-color: #f8faff; }
 QHeaderView::section { background: #edf2fa; border: none; border-bottom: 1px solid #d4d9e2; padding: 6px; font-weight: 600; }
 QLabel#errorText { color: #b42318; }
