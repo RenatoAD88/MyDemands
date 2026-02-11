@@ -62,6 +62,9 @@ QComboBox, QDateEdit {
     padding-top: 3px;
     padding-bottom: 3px;
 }
+QDateEdit {
+    min-width: 130px;
+}
 QComboBox::drop-down, QDateEdit::drop-down {
     width: 22px;
     border-left: 1px solid #bccae3;
