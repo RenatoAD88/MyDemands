@@ -684,6 +684,11 @@ class MainWindow(QMainWindow):
         it = QTableWidgetItem(text or "")
         colname = VISIBLE_COLUMNS[c]
 
+        if colname == "Descrição":
+            it.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        else:
+            it.setTextAlignment(Qt.AlignCenter)
+
         if colname in NON_EDITABLE:
             it.setFlags(it.flags() & ~Qt.ItemIsEditable)
 
