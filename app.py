@@ -978,6 +978,7 @@ class MainWindow(QMainWindow):
         top.addWidget(btn)
         top.addStretch()
         top.addWidget(new_btn)
+        top.addWidget(export_btn)
         top.addWidget(del_btn)
 
         layout = QVBoxLayout()
