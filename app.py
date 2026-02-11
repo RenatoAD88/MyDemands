@@ -146,7 +146,14 @@ class ColumnComboDelegate(QStyledItemDelegate):
         if col in self.column_to_options:
             combo = QComboBox(parent)
             combo.setEditable(False)
-            combo.addItems(self.column_to_options[col])
+            items = self.column_to_options[col]
+            combo.addItems(items)
+            combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+
+            if items:
+                text_width = max(combo.fontMetrics().horizontalAdvance(item) for item in items)
+                popup_width = text_width + 36  # folga para padding, borda e barra de rolagem
+                combo.view().setMinimumWidth(popup_width)
             return combo
         return super().createEditor(parent, option, index)
 
