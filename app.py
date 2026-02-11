@@ -972,12 +972,13 @@ class MainWindow(QMainWindow):
         self.t1_table = self._make_table()
 
         top = QHBoxLayout()
-        self.t1_actions_layout = top  # mantém apenas ações de consulta/nova/excluir (sem export_btn)
+        self.t1_actions_layout = top
         top.addWidget(QLabel("Selecionar data de consulta:"))
         top.addWidget(self.t1_date)
         top.addWidget(consult_btn)
         top.addStretch()
         top.addWidget(new_btn)
+        top.addWidget(export_btn)
         top.addWidget(del_btn)
 
         layout = QVBoxLayout()
