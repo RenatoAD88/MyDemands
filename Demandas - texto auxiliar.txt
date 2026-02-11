@@ -3,9 +3,12 @@ py -m PyInstaller --noconfirm --onefile --windowed --name DemandasApp app.py
 dist\DemandasApp.exe
 
 Melhorias:
-Aumentar a largura da linha da descrição quando passar de 45 caractéres e quebrar o texto automaticamente dentro da mesma célula.
 Criar tela de monitoramento
 criar tela de dados importantes
 criar senha de acesso
 criptrografar os dados
-colocar os arquivos na pasta c
+icones na barra de tarefas
+trocar o menu de Linha para ID
+
+Ok - Aumentar a largura da linha da descrição quando passar de 45 caractéres e quebrar o texto automaticamente dentro da mesma célula.
+Ok - colocar os arquivos na pasta c

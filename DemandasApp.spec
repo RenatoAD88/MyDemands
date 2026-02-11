@@ -1,17 +1,12 @@
+# -*- mode: python ; coding: utf-8 -*-
+
+
 a = Analysis(
     ['app.py'],
-    pathex=['.'],
+    pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=[
-        "bootstrap",
-        "ui_theme",
-        "ui_filters",
-        "ui_prefs",
-        "form_rules",
-        "csv_store",
-        "validation",
-    ],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
