@@ -658,6 +658,7 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
+        self.tabs.setCornerWidget(self._build_export_button(), Qt.TopLeftCorner)
 
         self._prefs = load_prefs(self.store.base_dir)
 
