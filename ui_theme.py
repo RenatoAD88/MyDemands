@@ -3,8 +3,15 @@ from __future__ import annotations
 from typing import Tuple
 
 APP_STYLESHEET = """
-QWidget { font-size: 13px; color: #1f2937; }
+QWidget {
+    font-size: 13px;
+    color: #1f2937;
+    background: #f3f6fb;
+}
 QMainWindow { background: #f3f6fb; }
+QDialog { background: #f3f6fb; }
+
+QLabel { color: #1f2937; }
 
 QTabWidget::pane {
     border: 1px solid #c7d4ea;
