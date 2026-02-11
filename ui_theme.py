@@ -85,12 +85,6 @@ QComboBox::drop-down, QDateEdit::drop-down {
     border-left: 1px solid #bccae3;
 }
 QComboBox::down-arrow, QDateEdit::down-arrow {
-    image: none;
-    width: 0px;
-    height: 0px;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 7px solid #111827;
     margin-right: 6px;
 }
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDateEdit:focus, QListWidget:focus {
