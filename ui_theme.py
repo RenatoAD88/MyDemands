@@ -3,20 +3,87 @@ from __future__ import annotations
 from typing import Tuple
 
 APP_STYLESHEET = """
-QWidget { font-size: 13px; color: #000000; }
-QMainWindow { background: #f4f4f4; }
-QTabWidget::pane { border: 1px solid #000000; background: #ffffff; }
-QTabBar::tab { background: #e6e6e6; color: #000000; border: 1px solid #000000; padding: 8px 14px; margin-right: 2px; }
-QTabBar::tab:selected { background: #ffffff; color: #000000; font-weight: 600; }
-QPushButton { background: #efefef; color: #000000; border: 1px solid #000000; border-radius: 0px; padding: 6px 12px; }
-QPushButton#primaryAction { background: #d9d9d9; color: #000000; border: 1px solid #000000; font-weight: 600; }
-QPushButton#dangerAction { background: #f2dede; color: #000000; border: 1px solid #000000; }
-QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget { background: #ffffff; color: #000000; border: 1px solid #000000; border-radius: 0px; padding: 4px; }
-QTableWidget { color: #000000; gridline-color: #000000; alternate-background-color: #f7f7f7; border: 1px solid #000000; }
-QHeaderView::section { background: #e6e6e6; color: #000000; border: 1px solid #000000; padding: 6px; font-weight: 600; }
-QGroupBox { color: #000000; border: 1px solid #000000; margin-top: 8px; padding-top: 8px; }
-QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 4px 0 4px; }
-QLabel#errorText { color: #000000; }
+QWidget { font-size: 13px; color: #1f2937; }
+QMainWindow { background: #f3f6fb; }
+
+QTabWidget::pane {
+    border: 1px solid #c7d4ea;
+    background: #ffffff;
+}
+QTabBar::tab {
+    background: #e8eef9;
+    color: #334155;
+    border: 1px solid #c7d4ea;
+    padding: 8px 14px;
+    margin-right: 2px;
+}
+QTabBar::tab:selected {
+    background: #ffffff;
+    color: #0f172a;
+    border: 1px solid #7aa2e3;
+    font-weight: 600;
+}
+
+QPushButton {
+    background: #eef2fa;
+    color: #1f2937;
+    border: 1px solid #bccae3;
+    border-radius: 6px;
+    padding: 6px 12px;
+}
+QPushButton#primaryAction {
+    background: #2f6fe4;
+    color: #ffffff;
+    border: 1px solid #1f5bca;
+    font-weight: 600;
+}
+QPushButton#dangerAction {
+    background: #fdecec;
+    color: #9f1f1f;
+    border: 1px solid #efb1b1;
+}
+
+QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget {
+    background: #ffffff;
+    color: #111827;
+    border: 1px solid #bccae3;
+    border-radius: 6px;
+    padding: 4px;
+}
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDateEdit:focus, QListWidget:focus {
+    border: 1px solid #2f6fe4;
+}
+
+QTableWidget {
+    background: #ffffff;
+    color: #111827;
+    gridline-color: #d7e0ef;
+    alternate-background-color: #f8fbff;
+    border: 1px solid #c7d4ea;
+}
+QHeaderView::section {
+    background: #dde7f8;
+    color: #1e293b;
+    border: none;
+    border-bottom: 1px solid #c7d4ea;
+    padding: 6px;
+    font-weight: 600;
+}
+
+QGroupBox {
+    color: #1e293b;
+    border: 1px solid #c7d4ea;
+    border-radius: 8px;
+    margin-top: 8px;
+    padding-top: 10px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 8px;
+    padding: 0 4px 0 4px;
+}
+
+QLabel#errorText { color: #b42318; }
 """
 
 

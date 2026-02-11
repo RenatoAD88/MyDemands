@@ -11,6 +11,16 @@ def test_timing_color_maps_delay_and_default():
     assert timing_color("Sem Prazo Definido") == (243, 244, 246)
 
 
-def test_stylesheet_uses_black_text_and_black_borders():
-    assert "QWidget { font-size: 13px; color: #000000; }" in APP_STYLESHEET
-    assert "border: 1px solid #000000" in APP_STYLESHEET
+def test_stylesheet_has_ergonomic_header_palette():
+    assert "QMainWindow { background: #f3f6fb; }" in APP_STYLESHEET
+    assert "QTabBar::tab {" in APP_STYLESHEET
+    assert "background: #e8eef9;" in APP_STYLESHEET
+    assert "QTabBar::tab:selected {" in APP_STYLESHEET
+    assert "border: 1px solid #7aa2e3;" in APP_STYLESHEET
+
+
+def test_stylesheet_has_readable_inputs_and_table():
+    assert "QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget {" in APP_STYLESHEET
+    assert "color: #111827;" in APP_STYLESHEET
+    assert "QHeaderView::section {" in APP_STYLESHEET
+    assert "background: #dde7f8;" in APP_STYLESHEET
