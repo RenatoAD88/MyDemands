@@ -60,6 +60,18 @@ QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget {
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDateEdit:focus, QListWidget:focus {
     border: 1px solid #2f6fe4;
 }
+QComboBox QAbstractItemView {
+    background: #ffffff;
+    color: #111827;
+    border: 1px solid #bccae3;
+    selection-background-color: #dbeafe;
+    selection-color: #0f172a;
+    outline: 0;
+}
+QComboBox QAbstractItemView::item {
+    min-height: 24px;
+    padding: 4px 8px;
+}
 
 QTableWidget {
     background: #ffffff;
