@@ -6,7 +6,7 @@ from datetime import date
 from typing import Dict, Any, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QDate
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QLinearGradient, QGradient, QBrush
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QTabWidget,
@@ -103,6 +103,8 @@ PRIORIDADE_TEXT_COLORS: Dict[str, Tuple[int, int, int]] = {
     "baixa": (22, 163, 74),  # verde
 }
 
+PROGRESS_FILL_COLOR = (3, 141, 220)
+
 
 def _normalize_percent_to_decimal_str(raw: str) -> str:
     """
@@ -141,6 +143,17 @@ def _normalize_percent_to_decimal_str(raw: str) -> str:
 
 def _is_percent_100(raw: str) -> bool:
     return _normalize_percent_to_decimal_str(raw) == "1"
+
+
+def _percent_to_fraction(raw: str) -> Optional[float]:
+    normalized = _normalize_percent_to_decimal_str(raw)
+    if not normalized:
+        return None
+    try:
+        value = float(normalized)
+    except Exception:
+        return None
+    return max(0.0, min(1.0, value))
 
 
 class ColumnComboDelegate(QStyledItemDelegate):
@@ -719,6 +732,18 @@ class MainWindow(QMainWindow):
         if colname == "Prazo" and prazo_contains_today(text):
             rr, gg, bb = PRAZO_TODAY_BG
             it.setBackground(QColor(rr, gg, bb))
+        if colname == "% Conclusão":
+            fraction = _percent_to_fraction(text)
+            if fraction and fraction > 0:
+                rr, gg, bb = PROGRESS_FILL_COLOR
+                grad = QLinearGradient(0, 0, 1, 0)
+                grad.setCoordinateMode(QGradient.ObjectBoundingMode)
+                grad.setColorAt(0.0, QColor(rr, gg, bb))
+                grad.setColorAt(fraction, QColor(rr, gg, bb))
+                # mantém o restante da célula sem preenchimento.
+                grad.setColorAt(min(fraction + 0.001, 1.0), QColor(0, 0, 0, 0))
+                grad.setColorAt(1.0, QColor(0, 0, 0, 0))
+                it.setBackground(QBrush(grad))
 
         table.setItem(r, c, it)
 
