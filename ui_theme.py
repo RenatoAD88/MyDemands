@@ -115,6 +115,29 @@ QGroupBox::title {
 }
 
 QLabel#errorText { color: #b42318; }
+
+/* Ajustes do cabeçalho do calendário do QDateEdit */
+QCalendarWidget QWidget#qt_calendar_navigationbar {
+    min-height: 32px;
+}
+QCalendarWidget QToolButton {
+    min-width: 34px;
+    padding: 0 6px;
+    color: #0f172a;
+    font-weight: 600;
+}
+QCalendarWidget QToolButton#qt_calendar_monthbutton {
+    min-width: 120px;
+    qproperty-autoRaise: true;
+}
+QCalendarWidget QToolButton#qt_calendar_yearbutton {
+    min-width: 56px;
+    qproperty-autoRaise: true;
+}
+QCalendarWidget QToolButton::menu-indicator {
+    image: none;
+    width: 0px;
+}
 """
 
 
