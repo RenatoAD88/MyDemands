@@ -22,5 +22,8 @@ def test_stylesheet_has_ergonomic_header_palette():
 def test_stylesheet_has_readable_inputs_and_table():
     assert "QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget {" in APP_STYLESHEET
     assert "color: #111827;" in APP_STYLESHEET
+    assert "QComboBox QAbstractItemView {" in APP_STYLESHEET
+    assert "selection-background-color: #dbeafe;" in APP_STYLESHEET
+    assert "selection-color: #0f172a;" in APP_STYLESHEET
     assert "QHeaderView::section {" in APP_STYLESHEET
     assert "background: #dde7f8;" in APP_STYLESHEET
