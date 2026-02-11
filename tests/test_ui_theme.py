@@ -27,3 +27,9 @@ def test_stylesheet_has_readable_inputs_and_table():
     assert "selection-color: #0f172a;" in APP_STYLESHEET
     assert "QHeaderView::section {" in APP_STYLESHEET
     assert "background: #dde7f8;" in APP_STYLESHEET
+
+
+def test_stylesheet_keeps_native_dropdown_arrows_visible():
+    assert "QComboBox::down-arrow, QDateEdit::down-arrow {" in APP_STYLESHEET
+    block = APP_STYLESHEET.split("QComboBox::down-arrow, QDateEdit::down-arrow {", 1)[1].split("}", 1)[0]
+    assert "image: none;" not in block
