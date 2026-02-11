@@ -968,11 +968,11 @@ class MainWindow(QMainWindow):
         del_btn.setObjectName("dangerAction")
         del_btn.clicked.connect(self.delete_demand)
 
-        export_btn = self._build_export_button()
 
         self.t1_table = self._make_table()
 
         top = QHBoxLayout()
+        self.t1_actions_layout = top
         top.addWidget(QLabel("Selecionar data de consulta:"))
         top.addWidget(self.t1_date)
         top.addWidget(btn)
