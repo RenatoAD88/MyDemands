@@ -8,6 +8,7 @@ from csv_store import CsvStore
 
 QApplication = qtwidgets.QApplication
 QToolButton = qtwidgets.QToolButton
+QLabel = qtwidgets.QLabel
 
 
 def _get_app():
@@ -23,8 +24,14 @@ def test_export_button_is_not_between_new_and_delete(tmp_path):
     win = MainWindow(store)
 
     corner = win.tabs.cornerWidget()
-    assert isinstance(corner, QToolButton)
-    assert corner.objectName() == "exportAction"
+    assert corner is not None
+
+    label = corner.findChild(QLabel, "exportShortcutLabel")
+    assert label is not None
+    assert label.text() == "Exportar"
+
+    button = corner.findChild(QToolButton, "exportAction")
+    assert button is not None
 
     for i in range(win.t1_actions_layout.count()):
         item = win.t1_actions_layout.itemAt(i)
