@@ -14,7 +14,7 @@ def test_prazo_multi_dates_has_star_in_display(tmp_path):
     })
 
     row = next(x for x in store.build_view() if x["_id"] == _id)
-    assert row["Prazo"] == "05/02/2026*, 06/02/2026*"
+    assert row["Prazo"] == "05/02/2026*,\n06/02/2026*"
 
     # aparece em ambas as datas no filtro
     rows_0502 = store.tab1_by_prazo_date(date(2026, 2, 5))

@@ -164,7 +164,10 @@ def prazo_display(raw_prazo: str) -> str:
     parts = [x.strip() for x in p.split(",") if x.strip()]
     if len(parts) <= 1:
         return parts[0] if parts else ""
-    return ", ".join(f"{x}*" for x in parts)
+    return "\n".join(
+        f"{x}*{',' if i < len(parts) - 1 else ''}"
+        for i, x in enumerate(parts)
+    )
 
 
 def _require_conclusao_date_if_needed(status: str, perc: str, concl: str):
