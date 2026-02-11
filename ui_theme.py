@@ -57,6 +57,15 @@ QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget {
     border-radius: 6px;
     padding: 4px;
 }
+QComboBox, QDateEdit {
+    min-height: 26px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+QComboBox::drop-down, QDateEdit::drop-down {
+    width: 22px;
+    border-left: 1px solid #bccae3;
+}
 QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDateEdit:focus, QListWidget:focus {
     border: 1px solid #2f6fe4;
 }
