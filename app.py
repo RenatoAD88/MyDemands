@@ -658,7 +658,7 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
-        self.tabs.setCornerWidget(self._build_export_button(), Qt.TopLeftCorner)
+        self.tabs.setCornerWidget(self._build_export_shortcut(), Qt.TopLeftCorner)
 
         self._prefs = load_prefs(self.store.base_dir)
 
@@ -941,14 +941,27 @@ class MainWindow(QMainWindow):
         self._save_preferences()
         self.refresh_current()
 
-    def _build_export_button(self) -> QToolButton:
+    def _build_export_shortcut(self) -> QWidget:
+        wrapper = QWidget()
+        layout = QVBoxLayout(wrapper)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        label = QLabel("Exportar")
+        label.setObjectName("exportShortcutLabel")
+        label.setAlignment(Qt.AlignCenter)
+
         btn = QToolButton()
         btn.setObjectName("exportAction")
-        btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        btn.setToolTip("Exportar CSV")
         btn.setText("Exportar")
         btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowDown))
         btn.clicked.connect(self.export_demands_csv)
-        return btn
+
+        layout.addWidget(label)
+        layout.addWidget(btn, alignment=Qt.AlignHCenter)
+        return wrapper
 
     # Tabs
     def _init_tab1(self):
@@ -978,7 +991,6 @@ class MainWindow(QMainWindow):
         top.addWidget(consult_btn)
         top.addStretch()
         top.addWidget(new_btn)
-        top.addWidget(export_btn)
         top.addWidget(del_btn)
 
         layout = QVBoxLayout()
