@@ -6,15 +6,15 @@ APP_STYLESHEET = """
 QWidget { font-size: 13px; }
 QMainWindow { background: #ffffff; }
 QTabWidget::pane { border: 1px solid #d4d9e2; background: #000000; }
-QTabBar::tab { background: #e9edf5; padding: 8px 14px; margin-right: 2px; }
+QTabBar::tab { background: #4D4857; padding: 8px 14px; margin-right: 2px; }
 QTabBar::tab:selected { background: #000000; font-weight: 600; }
 QPushButton { background: #e7ebf4; border: 1px solid #c8d0df; border-radius: 6px; padding: 6px 12px; }
 QPushButton#primaryAction { background: #1e6fff; color: #000000; border: 1px solid #ffffff; font-weight: 600; }
 QPushButton#dangerAction { background: #ffe8e8; color: #9b1c1c; border: 1px solid #ffffff; }
 QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget { background: #000000; border: 1px solid #000000; border-radius: 6px; padding: 4px; }
-QTableWidget { gridline-color: #e6ebf5; alternate-background-color: #f8faff; }
-QHeaderView::section { background: #edf2fa; border: none; border-bottom: 1px solid #d4d9e2; padding: 6px; font-weight: 600; }
-QLabel#errorText { color: #b42318; }
+QTableWidget { gridline-color: #e6ebf5; alternate-background-color: #34446E; }
+QHeaderView::section { background: #edf2fa; border: none; border-bottom: 1px solid #80868A; padding: 6px; font-weight: 600; }
+QLabel#errorText { color: #ED1111; }
 """
 
 
