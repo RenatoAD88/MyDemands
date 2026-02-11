@@ -1,3 +1,4 @@
+cd C:\MyDemands
 py -m PyInstaller --noconfirm --onefile --windowed --name DemandasApp app.py
 dist\DemandasApp.exe
 
