@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 from calendar import monthrange
 from dataclasses import dataclass
@@ -229,6 +230,10 @@ def monthly_k_count(member: TeamMember, year: int, month: int) -> int:
     count = 0
     for d in range(1, total_days + 1):
         key = date(year, month, d).isoformat()
-        if (member.entries.get(key) or "").strip().upper() == "K":
+        if (member.entries.get(key) or "").strip().upper() in {"K", "P"}:
             count += 1
     return count
+
+
+def split_member_names(raw_names: str) -> List[str]:
+    return [piece.strip() for piece in re.split(r"[,\n]+", raw_names or "") if piece.strip()]

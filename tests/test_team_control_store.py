@@ -1,6 +1,6 @@
 from datetime import date
 
-from team_control import TeamControlStore, participation_for_date, build_team_control_report_rows
+from team_control import TeamControlStore, participation_for_date, build_team_control_report_rows, monthly_k_count, split_member_names
 
 
 def test_create_section_member_and_entries(tmp_path):
@@ -96,3 +96,26 @@ def test_limit_members_to_twenty_per_team(tmp_path):
         assert False, "Deveria bloquear após 20 funcionários"
     except ValueError as e:
         assert "20" in str(e)
+
+
+def test_monthly_participation_counts_k_and_p(tmp_path):
+    store = TeamControlStore(str(tmp_path))
+    section = store.create_section("Time Verde")
+    m = store.add_member(section.id, "Bruna")
+
+    store.set_entry(section.id, m.id, date(2026, 2, 2), "K")
+    store.set_entry(section.id, m.id, date(2026, 2, 3), "P")
+    store.set_entry(section.id, m.id, date(2026, 2, 4), "A")
+
+    assert monthly_k_count(m, 2026, 2) == 2
+
+
+def test_split_member_names_supports_commas_and_new_lines():
+    raw = "Octávio Mangabira Sobrinho,\nLewander Rodrigues Dias,\nCaio Coutinho Covos,\nRenato Augusto Dândalo"
+
+    assert split_member_names(raw) == [
+        "Octávio Mangabira Sobrinho",
+        "Lewander Rodrigues Dias",
+        "Caio Coutinho Covos",
+        "Renato Augusto Dândalo",
+    ]
