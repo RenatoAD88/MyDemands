@@ -1277,8 +1277,6 @@ class MainWindow(QMainWindow):
             return
 
         dlg = DeleteDemandDialog(self, self.store)
-        if selected_rows and self.tabs.currentIndex() in (0, 1):
-            dlg.preload_selected_rows(selected_rows)
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
 
