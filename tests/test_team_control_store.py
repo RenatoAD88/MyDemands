@@ -58,7 +58,7 @@ def test_store_scopes_teams_by_month_and_year(tmp_path):
 
 
 
-def test_report_rows_include_team_name_footer_and_minimum_ten_names(tmp_path):
+def test_report_rows_include_team_name_footer_and_monthly_participation(tmp_path):
     store = TeamControlStore(str(tmp_path))
     section = store.create_section("Time Azul")
     m = store.add_member(section.id, "Alice")
@@ -73,8 +73,25 @@ def test_report_rows_include_team_name_footer_and_minimum_ten_names(tmp_path):
 
     section_rows = rows[team_header_index + 2 :]
     footer_index = next(i for i, row in enumerate(section_rows) if row and row[0] == "Participação")
-    member_and_blank_rows = section_rows[:footer_index]
-    assert len(member_and_blank_rows) >= 10
+    member_rows = section_rows[:footer_index]
+    assert len(member_rows) == 1
+
+    member_row = member_rows[0]
+    assert member_row[-1] == "1"
 
     footer = section_rows[footer_index]
     assert footer[2] == "1"  # 02/02/2026
+    assert footer[-1] == ""
+
+
+def test_limit_members_to_twenty_per_team(tmp_path):
+    store = TeamControlStore(str(tmp_path))
+    section = store.create_section("Time Roxo")
+    for i in range(20):
+        store.add_member(section.id, f"Pessoa {i}")
+
+    try:
+        store.add_member(section.id, "Excedente")
+        assert False, "Deveria bloquear após 20 funcionários"
+    except ValueError as e:
+        assert "20" in str(e)
