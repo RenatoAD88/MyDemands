@@ -534,6 +534,13 @@ class CsvStore:
         Retorna a quantidade de linhas exportadas.
         """
         rows = self.build_view()
+        return self.export_rows_to_csv(export_path, rows, delimiter=delimiter)
+
+    def export_rows_to_csv(self, export_path: str, rows: List[Dict[str, Any]], delimiter: str = ",") -> int:
+        """
+        Exporta as linhas informadas para um CSV de saída.
+        Retorna a quantidade de linhas exportadas.
+        """
         # utf-8-sig adiciona BOM para melhorar compatibilidade com Excel,
         # evitando caracteres acentuados corrompidos ao abrir o CSV.
         with open(export_path, "w", newline="", encoding="utf-8-sig") as f:
