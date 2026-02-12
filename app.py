@@ -1205,7 +1205,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(legend)
         layout.addWidget(self.tc_scroll)
         tab.setLayout(layout)
-        self.tabs.addTab(tab, "Controle do time")
+        self.tabs.addTab(tab, "Presenças do Time")
 
     def _selected_year_month(self) -> tuple[int, int]:
         return int(self.tc_year.currentText()), int(self.tc_month.currentText())
@@ -1270,6 +1270,8 @@ class MainWindow(QMainWindow):
             for d in range(1, total_days + 1):
                 table.setColumnWidth(d, 38)
 
+            weekend_bg = QColor(229, 231, 235)
+
             for member in section.members:
                 r = table.rowCount()
                 table.insertRow(r)
@@ -1282,7 +1284,9 @@ class MainWindow(QMainWindow):
                     value = member.entries.get(key, "")
                     it = QTableWidgetItem(value)
                     it.setTextAlignment(Qt.AlignCenter)
-                    if value in STATUS_COLORS:
+                    if curr.weekday() >= 5:
+                        it.setBackground(weekend_bg)
+                    elif value in STATUS_COLORS:
                         br, bg, bb, fr, fg, fb = STATUS_COLORS[value]
                         it.setBackground(QColor(br, bg, bb))
                         it.setForeground(QColor(fr, fg, fb))
@@ -1298,6 +1302,9 @@ class MainWindow(QMainWindow):
                     empty = QTableWidgetItem("")
                     empty.setTextAlignment(Qt.AlignCenter)
                     empty.setFlags(empty.flags() & ~Qt.ItemIsEditable)
+                    curr = date(year, month, d)
+                    if curr.weekday() >= 5:
+                        empty.setBackground(weekend_bg)
                     table.setItem(r, d, empty)
 
             footer_row = table.rowCount()
@@ -1305,12 +1312,16 @@ class MainWindow(QMainWindow):
             part = QTableWidgetItem("Participação")
             part.setFlags(part.flags() & ~Qt.ItemIsEditable)
             part.setTextAlignment(Qt.AlignCenter)
-            part.setBackground(QColor(229, 231, 235))
+            part.setBackground(QColor(255, 255, 255))
             table.setItem(footer_row, 0, part)
             for d in range(1, total_days + 1):
                 curr = date(year, month, d)
                 if curr.weekday() >= 5:
-                    table.setItem(footer_row, d, QTableWidgetItem(""))
+                    weekend_item = QTableWidgetItem("")
+                    weekend_item.setTextAlignment(Qt.AlignCenter)
+                    weekend_item.setFlags(weekend_item.flags() & ~Qt.ItemIsEditable)
+                    weekend_item.setBackground(weekend_bg)
+                    table.setItem(footer_row, d, weekend_item)
                     continue
                 col_entries = []
                 for member in section.members:
@@ -1320,7 +1331,7 @@ class MainWindow(QMainWindow):
                 pit = QTableWidgetItem(text)
                 pit.setTextAlignment(Qt.AlignCenter)
                 pit.setFlags(pit.flags() & ~Qt.ItemIsEditable)
-                pit.setBackground(QColor(255, 255, 255) if text else QColor(229, 231, 235))
+                pit.setBackground(QColor(255, 255, 255) if text else weekend_bg)
                 table.setItem(footer_row, d, pit)
 
             table.itemChanged.connect(self._on_team_table_item_changed)
@@ -1495,7 +1506,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(top)
         layout.addWidget(self.t1_table)
         tab.setLayout(layout)
-        self.tabs.addTab(tab, "Consulta de pendências por data")
+        self.tabs.addTab(tab, "Consultar Pendências")
 
     def _init_tab3(self):
         tab = QWidget()
@@ -1569,7 +1580,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(top)
         layout.addWidget(self.t4_table)
         tab.setLayout(layout)
-        self.tabs.addTab(tab, "Consultar demandas concluídas entre datas")
+        self.tabs.addTab(tab, "Consultar Demandas Concluídas")
 
     # Refresh
     def refresh_all(self):
