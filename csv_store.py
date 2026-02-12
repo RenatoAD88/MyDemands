@@ -460,3 +460,60 @@ class CsvStore:
                 payload["Prazo"] = ",".join([p.strip() for p in flat_prazo.split(",") if p.strip()])
                 writer.writerow(payload)
         return len(rows)
+
+    def import_from_exported_csv(self, import_path: str, delimiter: str = ",") -> int:
+        """
+        Importa demandas de um CSV no mesmo formato gerado por export_all_to_csv.
+        Substitui as demandas atuais apenas quando todas as linhas são válidas.
+        Retorna a quantidade de linhas importadas.
+        """
+        with open(import_path, "r", newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f, delimiter=delimiter)
+            incoming_columns = reader.fieldnames or []
+            if incoming_columns != DISPLAY_COLUMNS:
+                raise ValidationError(
+                    "Formato de CSV inválido. Use um arquivo exportado pelo sistema, com as mesmas colunas e ordem."
+                )
+
+            imported_rows: List[DemandRow] = []
+            for i, row in enumerate(reader, start=2):
+                payload = {
+                    "É Urgente?": (row.get("É Urgente?") or "").strip(),
+                    "Status": (row.get("Status") or "").strip(),
+                    "Prioridade": (row.get("Prioridade") or "").strip(),
+                    "Data de Registro": (row.get("Data de Registro") or "").strip(),
+                    "Prazo": (row.get("Prazo") or "").strip(),
+                    "Data Conclusão": (row.get("Data Conclusão") or "").strip(),
+                    "Projeto": row.get("Projeto") or "",
+                    "Descrição": row.get("Descrição") or "",
+                    "ID Azure": row.get("ID Azure") or "",
+                    "% Conclusão": (row.get("% Conclusão") or "").strip(),
+                    "Responsável": row.get("Responsável") or "",
+                    "Reportar?": (row.get("Reportar?") or "").strip(),
+                    "Nome": row.get("Nome") or "",
+                    "Time/Função": row.get("Time/Função") or "",
+                }
+
+                try:
+                    normalized = validate_payload(payload, mode="create")
+                    normalized = _autofix_consistency(normalized)
+                    _require_conclusao_date_if_needed(
+                        normalized.get("Status", ""),
+                        normalized.get("% Conclusão", ""),
+                        normalized.get("Data Conclusão", ""),
+                    )
+                except ValidationError as e:
+                    raise ValidationError(f"Erro na linha {i}: {e}") from e
+
+                new_id = str(uuid.uuid4())
+                data = {c: "" for c in CSV_COLUMNS}
+                data["_id"] = new_id
+                for c in CSV_COLUMNS:
+                    if c == "_id":
+                        continue
+                    data[c] = normalized.get(c, "")
+                imported_rows.append(DemandRow(_id=new_id, data=data))
+
+        self.rows = imported_rows
+        self.save()
+        return len(imported_rows)

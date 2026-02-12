@@ -964,6 +964,16 @@ class MainWindow(QMainWindow):
         btn.clicked.connect(self.export_demands_csv)
         return btn
 
+    def _build_import_shortcut(self) -> QWidget:
+        btn = QToolButton()
+        btn.setObjectName("importAction")
+        btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        btn.setToolTip("Importar demandas")
+        btn.setIcon(self._icon_from_img("exp.png", QStyle.SP_ArrowUp))
+        btn.setIconSize(QSize(28, 28))
+        btn.clicked.connect(self.import_demands_csv)
+        return btn
+
     def _build_icon_action_button(self, object_name: str, tooltip: str, img_name: str, fallback_icon: QStyle.StandardPixmap, on_click) -> QToolButton:
         btn = QToolButton()
         btn.setObjectName(object_name)
@@ -1003,10 +1013,12 @@ class MainWindow(QMainWindow):
         )
 
         export_shortcut = self._build_export_shortcut()
+        import_shortcut = self._build_import_shortcut()
 
         layout.addWidget(new_btn)
         layout.addWidget(delete_btn)
         layout.addWidget(export_shortcut)
+        layout.addWidget(import_shortcut)
         layout.addStretch()
         return section
 
@@ -1185,6 +1197,29 @@ class MainWindow(QMainWindow):
             return
 
         QMessageBox.information(self, "Exportação concluída", f"CSV exportado com sucesso.\nTotal de demandas: {total}")
+
+    def import_demands_csv(self):
+        default_path = self.store.base_dir
+        import_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Importar demandas",
+            default_path,
+            "CSV (*.csv)",
+        )
+        if not import_path:
+            return
+
+        try:
+            total = self.store.import_from_exported_csv(import_path)
+        except ValidationError as ve:
+            QMessageBox.warning(self, "Falha na importação", str(ve))
+            return
+        except Exception as e:
+            QMessageBox.warning(self, "Falha na importação", f"Não foi possível importar o CSV.\n\n{e}")
+            return
+
+        self.refresh_all()
+        QMessageBox.information(self, "Importação concluída", f"CSV importado com sucesso.\nTotal de demandas: {total}")
 
     def delete_demand(self):
         dlg = DeleteDemandDialog(self, self.store)
