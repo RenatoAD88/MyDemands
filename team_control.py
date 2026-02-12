@@ -40,7 +40,16 @@ class TeamControlStore:
     def __init__(self, base_dir: str):
         self.path = os.path.join(base_dir, TEAM_CONTROL_FILE)
         self.sections: List[TeamSection] = []
+        self._period_sections: Dict[str, List[TeamSection]] = {}
+        self._active_period = self._period_key(date.today().year, date.today().month)
         self.load()
+
+    def _period_key(self, year: int, month: int) -> str:
+        return f"{int(year):04d}-{int(month):02d}"
+
+    def set_period(self, year: int, month: int) -> None:
+        self._active_period = self._period_key(year, month)
+        self.sections = self._period_sections.get(self._active_period, [])
 
     def load(self) -> None:
         if not os.path.exists(self.path):
@@ -48,8 +57,25 @@ class TeamControlStore:
             return
         with open(self.path, "r", encoding="utf-8") as f:
             raw = json.load(f)
+        periods_raw = raw.get("periods")
+        if isinstance(periods_raw, dict):
+            self._period_sections = {
+                str(period): self._parse_sections(data.get("sections", []))
+                for period, data in periods_raw.items()
+                if isinstance(data, dict)
+            }
+        else:
+            # Compatibilidade com formato legado.
+            legacy_sections = self._parse_sections(raw.get("sections", []))
+            self._period_sections = {}
+            if legacy_sections:
+                self._period_sections[self._active_period] = legacy_sections
+
+        self.sections = self._period_sections.get(self._active_period, [])
+
+    def _parse_sections(self, raw_sections: List[dict]) -> List[TeamSection]:
         out: List[TeamSection] = []
-        for s in raw.get("sections", []):
+        for s in raw_sections:
             members: List[TeamMember] = []
             for m in s.get("members", []):
                 members.append(
@@ -66,35 +92,38 @@ class TeamControlStore:
                     members=members,
                 )
             )
-        self.sections = out
+        return out
 
     def save(self) -> None:
-        payload = {
-            "sections": [
-                {
-                    "id": s.id,
-                    "name": s.name,
-                    "members": [
-                        {
-                            "id": m.id,
-                            "name": m.name,
-                            "entries": m.entries,
-                        }
-                        for m in s.members
-                    ],
-                }
-                for s in self.sections
-            ]
-        }
+        self._period_sections[self._active_period] = self.sections
+        payload = {"periods": {}}
+        for period, sections in self._period_sections.items():
+            payload["periods"][period] = {
+                "sections": [
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "members": [
+                            {
+                                "id": m.id,
+                                "name": m.name,
+                                "entries": m.entries,
+                            }
+                            for m in s.members
+                        ],
+                    }
+                    for s in sections
+                ]
+            }
         with open(self.path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
 
     def create_section(self, name: str) -> TeamSection:
         cleaned = (name or "").strip()
         if not cleaned:
-            raise ValueError("Nome da seção é obrigatório.")
+            raise ValueError("Nome do time é obrigatório.")
         if len(self.sections) >= MAX_SECTIONS:
-            raise ValueError("Limite de 10 seções atingido.")
+            raise ValueError("Limite de 10 times atingido.")
         section = TeamSection(id=uuid.uuid4().hex, name=cleaned, members=[])
         self.sections.append(section)
         self.save()
@@ -141,7 +170,7 @@ class TeamControlStore:
         for s in self.sections:
             if s.id == section_id:
                 return s
-        raise ValueError("Seção não encontrada.")
+        raise ValueError("Time não encontrado.")
 
     def _get_member(self, section_id: str, member_id: str) -> TeamMember:
         section = self._get_section(section_id)

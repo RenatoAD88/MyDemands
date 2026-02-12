@@ -33,3 +33,25 @@ def test_limit_sections_to_ten(tmp_path):
 def test_participation_counts_k_and_p_only():
     assert participation_for_date(["", "A", "D"]) == 0
     assert participation_for_date(["K", "P", "A", "R"]) == 2
+
+
+def test_store_scopes_teams_by_month_and_year(tmp_path):
+    store = TeamControlStore(str(tmp_path))
+
+    store.set_period(2026, 2)
+    feb_team = store.create_section("Time Fevereiro")
+    store.add_member(feb_team.id, "Maria")
+
+    store.set_period(2026, 3)
+    assert store.sections == []
+    mar_team = store.create_section("Time Março")
+    store.add_member(mar_team.id, "João")
+
+    reloaded = TeamControlStore(str(tmp_path))
+    reloaded.set_period(2026, 2)
+    assert [s.name for s in reloaded.sections] == ["Time Fevereiro"]
+    assert [m.name for m in reloaded.sections[0].members] == ["Maria"]
+
+    reloaded.set_period(2026, 3)
+    assert [s.name for s in reloaded.sections] == ["Time Março"]
+    assert [m.name for m in reloaded.sections[0].members] == ["João"]
