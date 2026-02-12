@@ -7,7 +7,7 @@ from datetime import date
 from typing import Dict, Any, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QDate, QSize
-from PySide6.QtGui import QColor, QLinearGradient, QGradient, QBrush, QIcon
+from PySide6.QtGui import QColor, QLinearGradient, QGradient, QBrush, QIcon, QKeyEvent
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QTabWidget,
@@ -202,6 +202,36 @@ class ColumnComboDelegate(QStyledItemDelegate):
             model.setData(index, editor.currentText(), Qt.EditRole)
             return
         super().setModelData(editor, model, index)
+
+
+class TeamSectionTable(QTableWidget):
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._bulk_edit_handler = None
+
+    def set_bulk_edit_handler(self, handler):
+        self._bulk_edit_handler = handler
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if not callable(self._bulk_edit_handler):
+            return super().keyPressEvent(event)
+
+        key = event.key()
+        text = (event.text() or "").strip().upper()
+        code: Optional[str] = None
+        if key in {Qt.Key_Delete, Qt.Key_Backspace}:
+            code = ""
+        elif len(text) == 1 and text in STATUS_COLORS:
+            code = text
+
+        if code is None:
+            return super().keyPressEvent(event)
+
+        if self._bulk_edit_handler(self, self.selectedIndexes(), code):
+            event.accept()
+            return
+
+        super().keyPressEvent(event)
 
 
 class DatePickDialog(QDialog):
@@ -1242,7 +1272,9 @@ class MainWindow(QMainWindow):
             table.setProperty("sectionId", section.id)
             table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
             table.setSelectionBehavior(QAbstractItemView.SelectItems)
+            table.setSelectionMode(QAbstractItemView.ExtendedSelection)
             table.setContextMenuPolicy(Qt.CustomContextMenu)
+            table.set_bulk_edit_handler(self._bulk_fill_team_cells)
             table.customContextMenuRequested.connect(self._open_member_context_menu)
             table.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
             table.horizontalHeader().setMinimumSectionSize(48)
@@ -1292,12 +1324,12 @@ class MainWindow(QMainWindow):
                     value = member.entries.get(key, "")
                     it = QTableWidgetItem(value)
                     it.setTextAlignment(Qt.AlignCenter)
-                    if curr.weekday() >= 5:
-                        it.setBackground(weekend_bg)
-                    elif value in STATUS_COLORS:
+                    if value in STATUS_COLORS:
                         br, bg, bb, fr, fg, fb = STATUS_COLORS[value]
                         it.setBackground(QColor(br, bg, bb))
                         it.setForeground(QColor(fr, fg, fb))
+                    elif curr.weekday() >= 5:
+                        it.setBackground(weekend_bg)
                     table.setItem(r, d, it)
 
                 month_total = QTableWidgetItem(str(monthly_k_count(member, year, month)))
@@ -1309,20 +1341,13 @@ class MainWindow(QMainWindow):
 
             footer_row = table.rowCount()
             table.insertRow(footer_row)
-            part = QTableWidgetItem("Participação")
+            part = QTableWidgetItem("Participação Dia")
             part.setFlags(part.flags() & ~Qt.ItemIsEditable)
             part.setTextAlignment(Qt.AlignCenter)
             part.setBackground(QColor(255, 255, 255))
             table.setItem(footer_row, 0, part)
             for d in range(1, total_days + 1):
                 curr = date(year, month, d)
-                if curr.weekday() >= 5:
-                    weekend_item = QTableWidgetItem("")
-                    weekend_item.setTextAlignment(Qt.AlignCenter)
-                    weekend_item.setFlags(weekend_item.flags() & ~Qt.ItemIsEditable)
-                    weekend_item.setBackground(weekend_bg)
-                    table.setItem(footer_row, d, weekend_item)
-                    continue
                 col_entries = []
                 for member in section.members:
                     col_entries.append(member.entries.get(curr.isoformat(), ""))
@@ -1408,6 +1433,59 @@ class MainWindow(QMainWindow):
             return
         self.refresh_team_control()
 
+    def _bulk_fill_team_cells(self, table: QTableWidget, indexes, code: str) -> bool:
+        if not indexes:
+            return False
+
+        footer_row = table.rowCount() - 1
+        targets: List[tuple[int, int]] = []
+        for idx in indexes:
+            row = idx.row()
+            col = idx.column()
+            if row < 0 or col <= 0 or row >= footer_row:
+                continue
+            member_item = table.item(row, 0)
+            if not member_item or not str(member_item.data(Qt.UserRole) or ""):
+                continue
+            targets.append((row, col))
+
+        if not targets:
+            return False
+
+        table.blockSignals(True)
+        try:
+            for row, col in targets:
+                it = table.item(row, col)
+                if it is None:
+                    it = QTableWidgetItem("")
+                    it.setTextAlignment(Qt.AlignCenter)
+                    table.setItem(row, col, it)
+                it.setText(code)
+        finally:
+            table.blockSignals(False)
+
+        year, month = self._selected_year_month()
+        self.team_store.set_period(year, month)
+        section_id = str(table.property("sectionId") or "")
+        if not section_id:
+            return False
+
+        updates: List[tuple[str, int, str]] = []
+        for row, col in targets:
+            member_item = table.item(row, 0)
+            member_id = str(member_item.data(Qt.UserRole) or "")
+            if member_id:
+                updates.append((member_id, col, code))
+
+        if not updates:
+            return False
+
+        for member_id, day, value in updates:
+            self.team_store.set_entry(section_id, member_id, date(year, month, day), value)
+
+        self.refresh_team_control()
+        return True
+
     def _on_team_table_item_changed(self, item: QTableWidgetItem):
         table = self.sender()
         if not isinstance(table, QTableWidget):
@@ -1445,6 +1523,11 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Legenda inválida", "Use apenas: F, A, P, D, R, H, K.")
             self.refresh_team_control()
             return
+
+        if code != (item.text() or ""):
+            table.blockSignals(True)
+            item.setText(code)
+            table.blockSignals(False)
 
         try:
             self.team_store.set_entry(section_id, member_id, date(year, month, day), code)

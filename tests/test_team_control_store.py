@@ -80,6 +80,7 @@ def test_report_rows_include_team_name_footer_and_monthly_participation(tmp_path
     assert member_row[-1] == "1"
 
     footer = section_rows[footer_index]
+    assert footer[1] == ""  # 01/02/2026 (domingo sem preenchimento)
     assert footer[2] == "1"  # 02/02/2026
     assert footer[-1] == ""
 
