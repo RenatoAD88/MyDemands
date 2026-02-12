@@ -1267,7 +1267,8 @@ class MainWindow(QMainWindow):
             box = QGroupBox(section.name)
             box_layout = QVBoxLayout(box)
 
-            table = QTableWidget(0, total_days + 2)
+            table = TeamSectionTable()
+            table.setColumnCount(total_days + 2)
             table.setObjectName(f"teamSectionTable::{section.id}")
             table.setProperty("sectionId", section.id)
             table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
