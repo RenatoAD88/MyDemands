@@ -416,7 +416,7 @@ class DeleteDemandDialog(QDialog):
             self.delete_btn.setEnabled(True)
 
     def _do_delete(self):
-        if not self._loaded_id or not self._loaded_line:
+        if not self._loaded_id:
             return
 
         self.store.load()
@@ -433,6 +433,34 @@ class DeleteDemandDialog(QDialog):
             return
 
         self.accept()
+
+    def preload_selected(self, row_data: Dict[str, Any]):
+        line_txt = str(row_data.get("ID", "") or "")
+        self.line_input.setText(line_txt)
+        self.line_input.setEnabled(False)
+        self.load_btn.setEnabled(False)
+
+        self._loaded_id = row_data.get("_id")
+        self._loaded_line = int(line_txt) if line_txt.isdigit() else None
+
+        projeto = row_data.get("Projeto", "")
+        prazo = row_data.get("Prazo", "")
+        desc = row_data.get("Descrição", "")
+        status = (row_data.get("Status") or "").strip()
+
+        self.info_label.setText(
+            f"**ID {line_txt}**\n"
+            f"Projeto: {projeto}\n"
+            f"Prazo: {prazo}\n"
+            f"Descrição: {desc}\n"
+            f"Status: {status}"
+        )
+
+        if status == "Concluído":
+            self.delete_btn.setEnabled(False)
+            QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
+        else:
+            self.delete_btn.setEnabled(True)
 
 
 class NewDemandDialog(QDialog):
@@ -1227,9 +1255,49 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Importação concluída", f"CSV importado com sucesso.\nTotal de demandas: {total}")
 
     def delete_demand(self):
+        selected = self._selected_row_from_current_tab()
+        if selected and self.tabs.currentIndex() == 2:
+            QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
+            return
+
         dlg = DeleteDemandDialog(self, self.store)
+        if selected and self.tabs.currentIndex() in (0, 1):
+            dlg.preload_selected(selected)
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
+
+    def _selected_row_from_current_tab(self) -> Optional[Dict[str, Any]]:
+        table: Optional[QTableWidget] = None
+        current_tab = self.tabs.currentIndex()
+        if current_tab == 0:
+            table = self.t1_table
+        elif current_tab == 1:
+            table = self.t3_table
+        elif current_tab == 2:
+            table = self.t4_table
+
+        if not table:
+            return None
+
+        row_idx = table.currentRow()
+        if row_idx < 0:
+            return None
+
+        row_data: Dict[str, Any] = {}
+        for col_idx, col_name in enumerate(VISIBLE_COLUMNS):
+            item = table.item(row_idx, col_idx)
+            if not item:
+                continue
+            row_data[col_name] = item.text()
+            if "_id" not in row_data:
+                _id = item.data(Qt.UserRole)
+                if _id:
+                    row_data["_id"] = _id
+
+        if not row_data.get("_id"):
+            return None
+
+        return row_data
 
     def closeEvent(self, event):
         self._save_preferences()
