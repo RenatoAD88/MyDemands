@@ -986,7 +986,7 @@ class MainWindow(QMainWindow):
 
     def _icon_from_img(self, img_name: str, fallback_icon: QStyle.StandardPixmap) -> QIcon:
         img_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "img", img_name)
-        if os.path.exists(img_path):
+        if img_name and os.path.exists(img_path):
             return QIcon(img_path)
         return self.style().standardIcon(fallback_icon)
 
@@ -1007,7 +1007,7 @@ class MainWindow(QMainWindow):
         delete_btn = self._build_icon_action_button(
             object_name="dangerAction",
             tooltip="Remover demandas",
-            img_name="rem.png",
+            img_name="",
             fallback_icon=QStyle.SP_TrashIcon,
             on_click=self.delete_demand,
         )
