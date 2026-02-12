@@ -1277,7 +1277,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Importação concluída", f"CSV importado com sucesso.\nTotal de demandas: {total}")
 
     def delete_demand(self):
-        selected_rows = self._selected_rows_from_current_tab()
+        selected_rows = self._selected_rows_from_current_tab(include_current=False)
         if selected_rows and self.tabs.currentIndex() == 2:
             QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
             return
@@ -1288,17 +1288,19 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
 
-    def _selected_rows_from_current_tab(self) -> List[Dict[str, Any]]:
+    def _selected_rows_from_current_tab(self, include_current: bool = True) -> List[Dict[str, Any]]:
         table = self._table_from_current_tab()
         if not table:
             return []
 
         selected_indexes = table.selectionModel().selectedRows()
-        if not selected_indexes:
+        if not selected_indexes and include_current:
             row_idx = table.currentRow()
             if row_idx < 0:
                 return []
             selected_indexes = [table.model().index(row_idx, 0)]
+        elif not selected_indexes:
+            return []
 
         row_numbers = sorted(idx.row() for idx in selected_indexes)
         rows_data: List[Dict[str, Any]] = []
