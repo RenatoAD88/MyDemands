@@ -443,7 +443,9 @@ class CsvStore:
         Retorna a quantidade de linhas exportadas.
         """
         rows = self.build_view()
-        with open(export_path, "w", newline="", encoding="utf-8") as f:
+        # utf-8-sig adiciona BOM para melhorar compatibilidade com Excel,
+        # evitando caracteres acentuados corrompidos ao abrir o CSV.
+        with open(export_path, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.DictWriter(f, fieldnames=DISPLAY_COLUMNS, delimiter=delimiter)
             writer.writeheader()
             for row in rows:
