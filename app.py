@@ -15,12 +15,14 @@ from PySide6.QtWidgets import (
     QMessageBox, QInputDialog,
     QDialog, QFormLayout,
     QDateEdit, QLineEdit, QTextEdit, QComboBox,
-    QListWidget, QGroupBox, QAbstractItemView
+    QListWidget, QGroupBox, QAbstractItemView,
+    QMenu, QScrollArea
 )
 from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QHeaderView, QStyle
 
 from csv_store import CsvStore, parse_prazos_list
+from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS
 from validation import ValidationError, normalize_prazo_text, validate_payload
 from bootstrap import resolve_storage_root, ensure_storage_root
 from ui_theme import APP_STYLESHEET, status_color, timing_color
@@ -699,6 +701,66 @@ class NewDemandDialog(QDialog):
         return validate_payload(payload, mode="create")
 
 
+class AddTeamMemberDialog(QDialog):
+    def __init__(self, parent: QWidget, section_names: List[str]):
+        super().__init__(parent)
+        self.setWindowTitle("Adicionar funcionário")
+
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("Nome do funcionário")
+
+        self.section_combo = QComboBox()
+        self.section_combo.addItems(section_names)
+        self.section_combo.addItem("+ Criar nova seção")
+
+        self.new_section_input = QLineEdit()
+        self.new_section_input.setPlaceholderText("Nome da nova seção")
+        self.new_section_input.setVisible(False)
+
+        self.inline_error = QLabel("")
+        self.inline_error.setStyleSheet("color: #d92d20;")
+
+        self.section_combo.currentTextChanged.connect(self._on_section_change)
+
+        form = QFormLayout()
+        form.addRow("Nome*", self.name_input)
+        form.addRow("Seção", self.section_combo)
+        form.addRow("Nova seção", self.new_section_input)
+
+        actions = QHBoxLayout()
+        ok = QPushButton("Adicionar")
+        cancel = QPushButton("Cancelar")
+        ok.clicked.connect(self._submit)
+        cancel.clicked.connect(self.reject)
+        actions.addStretch()
+        actions.addWidget(cancel)
+        actions.addWidget(ok)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(self.inline_error)
+        layout.addLayout(actions)
+
+    def _on_section_change(self, text: str):
+        self.new_section_input.setVisible(text == "+ Criar nova seção")
+
+    def _submit(self):
+        if not self.name_input.text().strip():
+            self.inline_error.setText("Nome é obrigatório.")
+            return
+        if self.section_combo.currentText() == "+ Criar nova seção" and not self.new_section_input.text().strip():
+            self.inline_error.setText("Informe o nome da nova seção.")
+            return
+        self.accept()
+
+    def payload(self) -> Dict[str, str]:
+        return {
+            "name": self.name_input.text().strip(),
+            "section_name": self.section_combo.currentText(),
+            "new_section_name": self.new_section_input.text().strip(),
+        }
+
+
 class MainWindow(QMainWindow):
     def __init__(self, store: CsvStore):
         super().__init__()
@@ -721,8 +783,10 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         self._prefs = load_prefs(self.store.base_dir)
+        self.team_store = TeamControlStore(self.store.base_dir)
 
         self._init_tab1()
+        self._init_tab2()
         self._init_tab3()
         self._init_tab4()
 
@@ -1062,6 +1126,297 @@ class MainWindow(QMainWindow):
         layout.addStretch()
         return section
 
+    def _init_tab2(self):
+        tab = QWidget()
+
+        self.tc_year = QComboBox()
+        current_year = date.today().year
+        for y in range(current_year - 2, current_year + 6):
+            self.tc_year.addItem(str(y))
+        self.tc_year.setCurrentText(str(current_year))
+
+        self.tc_month = QComboBox()
+        for m in range(1, 13):
+            self.tc_month.addItem(f"{m:02d}")
+        self.tc_month.setCurrentText(f"{date.today().month:02d}")
+
+        refresh_btn = QPushButton("Atualizar")
+        refresh_btn.clicked.connect(self.refresh_team_control)
+
+        add_section_btn = QPushButton("Nova seção")
+        add_section_btn.clicked.connect(self._create_team_section)
+
+        del_section_btn = QPushButton("Excluir seção")
+        del_section_btn.clicked.connect(self._delete_team_section)
+
+        add_member_btn = QPushButton("Adicionar nome")
+        add_member_btn.clicked.connect(self._open_add_team_member_dialog)
+
+        top = QHBoxLayout()
+        top.addWidget(QLabel("Ano:"))
+        top.addWidget(self.tc_year)
+        top.addWidget(QLabel("Mês:"))
+        top.addWidget(self.tc_month)
+        top.addWidget(refresh_btn)
+        top.addSpacing(20)
+        top.addWidget(add_section_btn)
+        top.addWidget(del_section_btn)
+        top.addWidget(add_member_btn)
+        top.addStretch()
+
+        self.tc_scroll = QScrollArea()
+        self.tc_scroll.setWidgetResizable(True)
+        self.tc_scroll_host = QWidget()
+        self.tc_sections_layout = QVBoxLayout(self.tc_scroll_host)
+        self.tc_sections_layout.setContentsMargins(0, 0, 0, 0)
+        self.tc_sections_layout.setSpacing(14)
+        self.tc_scroll.setWidget(self.tc_scroll_host)
+
+        layout = QVBoxLayout()
+        layout.addLayout(top)
+        layout.addWidget(self.tc_scroll)
+        tab.setLayout(layout)
+        self.tabs.addTab(tab, "Controle do time")
+
+    def _selected_year_month(self) -> tuple[int, int]:
+        return int(self.tc_year.currentText()), int(self.tc_month.currentText())
+
+    def _clear_layout(self, layout: QVBoxLayout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            child_layout = item.layout()
+            if widget:
+                widget.deleteLater()
+            if child_layout:
+                self._clear_layout(child_layout)
+
+    def refresh_team_control(self):
+        self.team_store.load()
+        self._clear_layout(self.tc_sections_layout)
+        if not self.team_store.sections:
+            self.tc_sections_layout.addWidget(QLabel("Nenhuma seção criada. Clique em 'Nova seção'."))
+            self.tc_sections_layout.addStretch()
+            return
+
+        year, month = self._selected_year_month()
+        total_days = month_days(year, month)
+        today = date.today()
+
+        for section in self.team_store.sections:
+            box = QGroupBox(section.name)
+            box_layout = QVBoxLayout(box)
+
+            table = QTableWidget(0, total_days + 1)
+            table.setObjectName(f"teamSectionTable::{section.id}")
+            table.setProperty("sectionId", section.id)
+            table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
+            table.setSelectionBehavior(QAbstractItemView.SelectItems)
+            table.setContextMenuPolicy(Qt.CustomContextMenu)
+            table.customContextMenuRequested.connect(self._open_member_context_menu)
+
+            headers_top = ["Time"]
+            headers_bottom = ["Nomes"]
+            for d in range(1, total_days + 1):
+                curr = date(year, month, d)
+                headers_top.append(WEEKDAY_LABELS[curr.weekday()])
+                headers_bottom.append(curr.strftime("%d/%m"))
+            table.setHorizontalHeaderLabels(headers_bottom)
+
+            for c, text in enumerate(headers_top):
+                item = table.horizontalHeaderItem(c)
+                if not item:
+                    item = QTableWidgetItem()
+                    table.setHorizontalHeaderItem(c, item)
+                item.setText(f"{text}\n{headers_bottom[c] if c > 0 else ""}".strip())
+                curr_is_today = c > 0 and date(year, month, c) == today
+                if curr_is_today:
+                    item.setBackground(QColor(220, 38, 38))
+                    item.setForeground(QColor(255, 255, 255))
+                elif c > 0 and date(year, month, c).weekday() >= 5:
+                    item.setBackground(QColor(229, 231, 235))
+
+            table.setColumnWidth(0, 220)
+
+            for member in section.members:
+                r = table.rowCount()
+                table.insertRow(r)
+                name_item = QTableWidgetItem(member.name)
+                name_item.setData(Qt.UserRole, member.id)
+                table.setItem(r, 0, name_item)
+                for d in range(1, total_days + 1):
+                    curr = date(year, month, d)
+                    key = curr.isoformat()
+                    value = member.entries.get(key, "")
+                    it = QTableWidgetItem(value)
+                    it.setTextAlignment(Qt.AlignCenter)
+                    if value in STATUS_COLORS:
+                        br, bg, bb, fr, fg, fb = STATUS_COLORS[value]
+                        it.setBackground(QColor(br, bg, bb))
+                        it.setForeground(QColor(fr, fg, fb))
+                    table.setItem(r, d, it)
+
+            footer_row = table.rowCount()
+            table.insertRow(footer_row)
+            part = QTableWidgetItem("Participação")
+            part.setFlags(part.flags() & ~Qt.ItemIsEditable)
+            part.setTextAlignment(Qt.AlignCenter)
+            table.setItem(footer_row, 0, part)
+            for d in range(1, total_days + 1):
+                curr = date(year, month, d)
+                if curr.weekday() >= 5:
+                    table.setItem(footer_row, d, QTableWidgetItem(""))
+                    continue
+                col_entries = []
+                for member in section.members:
+                    col_entries.append(member.entries.get(curr.isoformat(), ""))
+                total = participation_for_date(col_entries)
+                text = str(total) if total > 0 else ""
+                pit = QTableWidgetItem(text)
+                pit.setTextAlignment(Qt.AlignCenter)
+                pit.setFlags(pit.flags() & ~Qt.ItemIsEditable)
+                table.setItem(footer_row, d, pit)
+
+            table.itemChanged.connect(self._on_team_table_item_changed)
+            box_layout.addWidget(table)
+            self.tc_sections_layout.addWidget(box)
+
+        self.tc_sections_layout.addStretch()
+
+    def _create_team_section(self):
+        name, ok = QInputDialog.getText(self, "Nova seção", "Nome do projeto/time:")
+        if not ok:
+            return
+        try:
+            self.team_store.create_section(name)
+        except ValueError as e:
+            QMessageBox.warning(self, "Seção", str(e))
+            return
+        self.refresh_team_control()
+
+    def _delete_team_section(self):
+        names = [s.name for s in self.team_store.sections]
+        if not names:
+            QMessageBox.information(self, "Seções", "Não há seções para excluir.")
+            return
+        chosen, ok = QInputDialog.getItem(self, "Excluir seção", "Selecione a seção:", names, 0, False)
+        if not ok:
+            return
+        section = next((s for s in self.team_store.sections if s.name == chosen), None)
+        if not section:
+            return
+        confirm = QMessageBox.question(self, "Excluir seção", f"Deseja excluir a seção '{section.name}'?")
+        if confirm != QMessageBox.Yes:
+            return
+        self.team_store.delete_section(section.id)
+        self.refresh_team_control()
+
+    def _open_add_team_member_dialog(self):
+        names = [s.name for s in self.team_store.sections]
+        dlg = AddTeamMemberDialog(self, names)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        payload = dlg.payload()
+
+        section_name = payload["section_name"]
+        if section_name == "+ Criar nova seção":
+            try:
+                section = self.team_store.create_section(payload["new_section_name"])
+            except ValueError as e:
+                QMessageBox.warning(self, "Adicionar funcionário", str(e))
+                return
+        else:
+            section = next((s for s in self.team_store.sections if s.name == section_name), None)
+            if not section:
+                QMessageBox.warning(self, "Adicionar funcionário", "Seção não encontrada.")
+                return
+
+        try:
+            self.team_store.add_member(section.id, payload["name"])
+        except ValueError as e:
+            QMessageBox.warning(self, "Adicionar funcionário", str(e))
+            return
+        self.refresh_team_control()
+
+    def _on_team_table_item_changed(self, item: QTableWidgetItem):
+        table = self.sender()
+        if not isinstance(table, QTableWidget):
+            return
+        section_id = str(table.property("sectionId") or "")
+        if not section_id:
+            return
+
+        footer_row = table.rowCount() - 1
+        if item.row() == footer_row:
+            return
+
+        member_item = table.item(item.row(), 0)
+        if not member_item:
+            return
+        member_id = str(member_item.data(Qt.UserRole) or "")
+        if not member_id:
+            return
+
+        if item.column() == 0:
+            try:
+                self.team_store.rename_member(section_id, member_id, item.text())
+            except ValueError as e:
+                QMessageBox.warning(self, "Nome", str(e))
+            self.refresh_team_control()
+            return
+
+        year, month = self._selected_year_month()
+        day = item.column()
+        if day < 1:
+            return
+        code = (item.text() or "").strip().upper()
+        if code and code not in STATUS_COLORS:
+            QMessageBox.warning(self, "Legenda inválida", "Use apenas: F, A, P, D, R, H, K.")
+            self.refresh_team_control()
+            return
+
+        try:
+            self.team_store.set_entry(section_id, member_id, date(year, month, day), code)
+        except ValueError as e:
+            QMessageBox.warning(self, "Legenda", str(e))
+            return
+        self.refresh_team_control()
+
+    def _open_member_context_menu(self, pos):
+        table = self.sender()
+        if not isinstance(table, QTableWidget):
+            return
+        row = table.rowAt(pos.y())
+        if row < 0 or row == table.rowCount() - 1:
+            return
+        member_item = table.item(row, 0)
+        if not member_item:
+            return
+
+        menu = QMenu(table)
+        delete_action = menu.addAction("Excluir")
+        picked = menu.exec(table.viewport().mapToGlobal(pos))
+        if picked != delete_action:
+            return
+
+        section_id = str(table.property("sectionId") or "")
+        member_id = str(member_item.data(Qt.UserRole) or "")
+        member_name = member_item.text()
+
+        box = QMessageBox(self)
+        box.setWindowTitle("Excluir funcionário")
+        box.setIcon(QMessageBox.Warning)
+        box.setText("Atenção: Funcionário será excluído permanentemente do controle")
+        box.setInformativeText(f"Nome: '{member_name}'")
+        confirm_btn = box.addButton("Confirmar", QMessageBox.AcceptRole)
+        box.addButton("Cancelar", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is not confirm_btn:
+            return
+
+        self.team_store.remove_member(section_id, member_id)
+        self.refresh_team_control()
+
     # Tabs
     def _init_tab1(self):
         tab = QWidget()
@@ -1165,6 +1520,7 @@ class MainWindow(QMainWindow):
     def refresh_all(self):
         self.store.load()
         self.refresh_tab1()
+        self.refresh_team_control()
         self.refresh_tab3()
         self.refresh_tab4()
 
@@ -1173,8 +1529,10 @@ class MainWindow(QMainWindow):
         if i == 0:
             self.refresh_tab1()
         elif i == 1:
-            self.refresh_tab3()
+            self.refresh_team_control()
         elif i == 2:
+            self.refresh_tab3()
+        elif i == 3:
             self.refresh_tab4()
 
     def refresh_tab1(self):
@@ -1278,12 +1636,12 @@ class MainWindow(QMainWindow):
 
     def delete_demand(self):
         selected_rows = self._selected_rows_from_current_tab(include_current=False)
-        if selected_rows and self.tabs.currentIndex() == 2:
+        if selected_rows and self.tabs.currentIndex() == 3:
             QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
             return
 
         dlg = DeleteDemandDialog(self, self.store)
-        if selected_rows and self.tabs.currentIndex() in (0, 1):
+        if selected_rows and self.tabs.currentIndex() in (0, 2):
             dlg.preload_selected_rows(selected_rows)
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
@@ -1324,9 +1682,9 @@ class MainWindow(QMainWindow):
         current_tab = self.tabs.currentIndex()
         if current_tab == 0:
             return self.t1_table
-        if current_tab == 1:
-            return self.t3_table
         if current_tab == 2:
+            return self.t3_table
+        if current_tab == 3:
             return self.t4_table
         return None
 
