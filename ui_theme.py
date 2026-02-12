@@ -38,29 +38,22 @@ QPushButton {
     border-radius: 6px;
     padding: 6px 12px;
 }
-QPushButton#primaryAction {
-    background: #2f6fe4;
-    color: #ffffff;
-    border: 1px solid #1f5bca;
-    font-weight: 600;
-}
-QPushButton#dangerAction {
-    background: #fdecec;
-    color: #9f1f1f;
-    border: 1px solid #efb1b1;
-}
-
+QToolButton#primaryAction,
+QToolButton#dangerAction,
 QToolButton#exportAction {
-    background: #dbeafe;
-    color: #0b3b8c;
-    border: 1px solid #93c5fd;
+    background: #eef2fa;
+    border: 1px solid #bccae3;
     border-radius: 8px;
-    padding: 4px 8px;
-    font-weight: 600;
+    padding: 6px;
 }
+QToolButton#primaryAction:hover,
+QToolButton#dangerAction:hover,
 QToolButton#exportAction:hover {
-    background: #bfdbfe;
+    background: #dbeafe;
+    border: 1px solid #93c5fd;
 }
+QToolButton#primaryAction::menu-indicator,
+QToolButton#dangerAction::menu-indicator,
 QToolButton#exportAction::menu-indicator {
     image: none;
 }

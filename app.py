@@ -5,8 +5,8 @@ import sys
 from datetime import date
 from typing import Dict, Any, List, Optional, Tuple
 
-from PySide6.QtCore import Qt, QDate
-from PySide6.QtGui import QColor, QLinearGradient, QGradient, QBrush
+from PySide6.QtCore import Qt, QDate, QSize
+from PySide6.QtGui import QColor, QLinearGradient, QGradient, QBrush, QIcon
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QTabWidget,
@@ -948,26 +948,30 @@ class MainWindow(QMainWindow):
         self.refresh_current()
 
     def _build_export_shortcut(self) -> QWidget:
-        wrapper = QWidget()
-        layout = QVBoxLayout(wrapper)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
-
-        label = QLabel("Exportar")
-        label.setObjectName("exportShortcutLabel")
-        label.setAlignment(Qt.AlignCenter)
-
         btn = QToolButton()
         btn.setObjectName("exportAction")
         btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        btn.setToolTip("Exportar CSV")
-        btn.setText("Exportar")
-        btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowDown))
+        btn.setToolTip("Exportar demandas")
+        btn.setIcon(self._icon_from_img("exp.png", QStyle.SP_ArrowDown))
+        btn.setIconSize(QSize(28, 28))
         btn.clicked.connect(self.export_demands_csv)
+        return btn
 
-        layout.addWidget(label)
-        layout.addWidget(btn, alignment=Qt.AlignHCenter)
-        return wrapper
+    def _build_icon_action_button(self, object_name: str, tooltip: str, img_name: str, fallback_icon: QStyle.StandardPixmap, on_click) -> QToolButton:
+        btn = QToolButton()
+        btn.setObjectName(object_name)
+        btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        btn.setToolTip(tooltip)
+        btn.setIcon(self._icon_from_img(img_name, fallback_icon))
+        btn.setIconSize(QSize(28, 28))
+        btn.clicked.connect(on_click)
+        return btn
+
+    def _icon_from_img(self, img_name: str, fallback_icon: QStyle.StandardPixmap) -> QIcon:
+        img_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "img", img_name)
+        if os.path.exists(img_path):
+            return QIcon(img_path)
+        return self.style().standardIcon(fallback_icon)
 
     def _build_shortcuts_section(self) -> QWidget:
         section = QWidget()
@@ -975,20 +979,24 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        title = QLabel("Atalhos")
-        title.setObjectName("shortcutsSectionLabel")
+        new_btn = self._build_icon_action_button(
+            object_name="primaryAction",
+            tooltip="Adicionar demandas",
+            img_name="add.png",
+            fallback_icon=QStyle.SP_FileDialogNewFolder,
+            on_click=self.new_demand,
+        )
 
-        new_btn = QPushButton("Nova demanda")
-        new_btn.setObjectName("primaryAction")
-        new_btn.clicked.connect(self.new_demand)
-
-        delete_btn = QPushButton("Excluir demanda")
-        delete_btn.setObjectName("dangerAction")
-        delete_btn.clicked.connect(self.delete_demand)
+        delete_btn = self._build_icon_action_button(
+            object_name="dangerAction",
+            tooltip="Remover demandas",
+            img_name="rem.png",
+            fallback_icon=QStyle.SP_TrashIcon,
+            on_click=self.delete_demand,
+        )
 
         export_shortcut = self._build_export_shortcut()
 
-        layout.addWidget(title)
         layout.addWidget(new_btn)
         layout.addWidget(delete_btn)
         layout.addWidget(export_shortcut)
