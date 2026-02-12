@@ -5,7 +5,7 @@ import pytest
 qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
 
 import app as app_module
-from app import MainWindow
+from app import DeleteDemandDialog, MainWindow
 from csv_store import CsvStore
 
 QApplication = qtwidgets.QApplication
@@ -104,3 +104,38 @@ def test_delete_on_concluded_tab_is_blocked_with_same_message(tmp_path, monkeypa
     assert warnings == [("Bloqueado", "Demandas concluídas não podem ser excluídas.")]
 
     win.close()
+
+
+def test_delete_dialog_cancel_clears_loaded_data_and_reenables_input(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    today = date.today().strftime("%d/%m/%Y")
+    store.add(
+        {
+            "Projeto": "Projeto Z",
+            "Descrição": "Demanda para cancelar exclusão",
+            "Prioridade": "Baixa",
+            "Prazo": today,
+            "Data de Registro": today,
+            "Status": "Em andamento",
+            "Responsável": "Caio",
+        }
+    )
+
+    dlg = DeleteDemandDialog(None, store)
+    dlg.line_input.setText("1")
+    dlg._load_line()
+
+    assert dlg._loaded_rows
+    assert dlg.delete_btn.isEnabled()
+
+    dlg._cancel_delete_action()
+
+    assert dlg._loaded_rows == []
+    assert dlg.info_label.text() == ""
+    assert dlg.line_input.text() == ""
+    assert dlg.line_input.isEnabled()
+    assert dlg.load_btn.isEnabled()
+    assert not dlg.delete_btn.isEnabled()
+
+    dlg.close()
