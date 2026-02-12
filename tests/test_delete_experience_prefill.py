@@ -19,7 +19,7 @@ def _get_app():
     return app
 
 
-def test_delete_dialog_preloads_selected_row_on_pending_tabs(tmp_path, monkeypatch):
+def test_delete_dialog_opens_without_prefilled_data_on_pending_tabs(tmp_path, monkeypatch):
     _get_app()
     store = CsvStore(str(tmp_path))
     _id = store.add(
@@ -39,14 +39,13 @@ def test_delete_dialog_preloads_selected_row_on_pending_tabs(tmp_path, monkeypat
     win.refresh_tab1()
     win.t1_table.setCurrentCell(0, 0)
 
-    capture = {"preloaded": None}
+    capture = {"line_input": None, "loaded_rows": None}
 
     class FakeDeleteDialog:
         def __init__(self, parent, used_store):
             assert used_store is store
-
-        def preload_selected(self, row_data):
-            capture["preloaded"] = row_data
+            capture["line_input"] = ""
+            capture["loaded_rows"] = []
 
         def exec(self):
             return QDialog.Rejected
@@ -55,9 +54,8 @@ def test_delete_dialog_preloads_selected_row_on_pending_tabs(tmp_path, monkeypat
 
     win.delete_demand()
 
-    assert capture["preloaded"] is not None
-    assert capture["preloaded"]["_id"] == _id
-    assert capture["preloaded"]["Descrição"] == "Demanda pendente"
+    assert capture["line_input"] == ""
+    assert capture["loaded_rows"] == []
 
     win.close()
 
