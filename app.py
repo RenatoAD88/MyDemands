@@ -828,6 +828,85 @@ class AddTeamMemberDialog(QDialog):
         }
 
 
+class CopyTeamMembersDialog(QDialog):
+    def __init__(self, parent: QWidget, team_store: TeamControlStore, selected_names: List[str], default_year: int, default_month: int):
+        super().__init__(parent)
+        self.setWindowTitle("Copiar Nome(s)")
+        self.team_store = team_store
+        self.selected_names = selected_names
+
+        self.year_combo = QComboBox()
+        current_year = date.today().year
+        for y in range(current_year - 2, current_year + 6):
+            self.year_combo.addItem(str(y))
+        self.year_combo.setCurrentText(str(default_year))
+
+        self.month_combo = QComboBox()
+        for m in range(1, 13):
+            self.month_combo.addItem(f"{m:02d}")
+        self.month_combo.setCurrentText(f"{default_month:02d}")
+
+        self.team_combo = QComboBox()
+
+        self.inline_error = QLabel("")
+        self.inline_error.setStyleSheet("color: #d92d20;")
+
+        self.year_combo.currentTextChanged.connect(self._refresh_teams)
+        self.month_combo.currentTextChanged.connect(self._refresh_teams)
+
+        form = QFormLayout()
+        form.addRow("Nome(s)", QLabel(", ".join(selected_names)))
+        form.addRow("Ano", self.year_combo)
+        form.addRow("Mês", self.month_combo)
+        form.addRow("Time", self.team_combo)
+
+        actions = QHBoxLayout()
+        ok = QPushButton("Copiar")
+        cancel = QPushButton("Cancelar")
+        ok.clicked.connect(self._submit)
+        cancel.clicked.connect(self.reject)
+        actions.addStretch()
+        actions.addWidget(ok)
+        actions.addWidget(cancel)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(self.inline_error)
+        layout.addLayout(actions)
+
+        self._refresh_teams()
+
+    def _refresh_teams(self):
+        year = int(self.year_combo.currentText())
+        month = int(self.month_combo.currentText())
+        sections = self.team_store.get_sections_for_period(year, month)
+
+        self.team_combo.clear()
+        for section in sections:
+            self.team_combo.addItem(section.name, section.id)
+
+        has_teams = bool(sections)
+        self.team_combo.setEnabled(has_teams)
+        if not has_teams:
+            self.inline_error.setText("Crie o time desejado no ano e mês selecionado antes de copiar os nomes desejados")
+        else:
+            self.inline_error.setText("")
+
+    def _submit(self):
+        if self.team_combo.count() == 0:
+            self.inline_error.setText("Crie o time desejado no ano e mês selecionado antes de copiar os nomes desejados")
+            return
+        self.accept()
+
+    def payload(self) -> Dict[str, str]:
+        return {
+            "year": self.year_combo.currentText(),
+            "month": self.month_combo.currentText(),
+            "section_id": str(self.team_combo.currentData() or ""),
+            "section_name": self.team_combo.currentText(),
+        }
+
+
 class MainWindow(QMainWindow):
     def __init__(self, store: CsvStore):
         super().__init__()
@@ -1592,16 +1671,39 @@ class MainWindow(QMainWindow):
             return
 
         menu = QMenu(table)
-        copy_names_action = menu.addAction("Copiar nomes selecionados")
+        copy_names_action = menu.addAction("Copiar Nome(s)")
         delete_action = menu.addAction("Excluir")
         picked = menu.exec(table.viewport().mapToGlobal(pos))
         if picked == copy_names_action:
             names = selected_member_names(table)
             if not names:
-                QMessageBox.information(self, "Copiar nomes", "Selecione ao menos um nome para copiar.")
+                QMessageBox.information(self, "Copiar Nome(s)", "Selecione ao menos um nome para copiar.")
                 return
-            QApplication.clipboard().setText(", ".join(names))
-            QMessageBox.information(self, "Copiar nomes", f"{len(names)} nome(s) copiado(s) para a área de transferência.")
+
+            year, month = self._selected_year_month()
+            dlg = CopyTeamMembersDialog(self, self.team_store, names, year, month)
+            if dlg.exec() != QDialog.Accepted:
+                return
+
+            payload = dlg.payload()
+            try:
+                copied = self.team_store.copy_members_to_section(
+                    target_year=int(payload["year"]),
+                    target_month=int(payload["month"]),
+                    target_section_id=payload["section_id"],
+                    names=names,
+                )
+            except ValueError as e:
+                QMessageBox.warning(self, "Copiar Nome(s)", str(e))
+                return
+
+            if copied > 0:
+                QMessageBox.information(
+                    self,
+                    "Copiar Nome(s)",
+                    f"{copied} nome(s) copiado(s) para o time '{payload['section_name']}'.",
+                )
+            self.refresh_team_control()
             return
         if picked != delete_action:
             return
