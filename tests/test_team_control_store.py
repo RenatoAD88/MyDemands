@@ -1,6 +1,6 @@
 from datetime import date
 
-from team_control import TeamControlStore, participation_for_date
+from team_control import TeamControlStore, participation_for_date, build_team_control_report_rows
 
 
 def test_create_section_member_and_entries(tmp_path):
@@ -55,3 +55,26 @@ def test_store_scopes_teams_by_month_and_year(tmp_path):
     reloaded.set_period(2026, 3)
     assert [s.name for s in reloaded.sections] == ["Time Março"]
     assert [m.name for m in reloaded.sections[0].members] == ["João"]
+
+
+
+def test_report_rows_include_team_name_footer_and_minimum_ten_names(tmp_path):
+    store = TeamControlStore(str(tmp_path))
+    section = store.create_section("Time Azul")
+    m = store.add_member(section.id, "Alice")
+    store.set_entry(section.id, m.id, date(2026, 2, 2), "K")
+
+    rows = build_team_control_report_rows(store.sections, 2026, 2)
+
+    assert ["Time Azul"] in rows
+    team_header_index = rows.index(["Time Azul"])
+    names_header = rows[team_header_index + 1]
+    assert names_header[0] == "Nome"
+
+    section_rows = rows[team_header_index + 2 :]
+    footer_index = next(i for i, row in enumerate(section_rows) if row and row[0] == "Participação")
+    member_and_blank_rows = section_rows[:footer_index]
+    assert len(member_and_blank_rows) >= 10
+
+    footer = section_rows[footer_index]
+    assert footer[2] == "1"  # 02/02/2026
