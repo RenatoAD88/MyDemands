@@ -10,12 +10,12 @@ from typing import Dict, List, Optional
 
 TEAM_CONTROL_FILE = "team_control.json"
 MAX_SECTIONS = 10
-
-MIN_TEAM_ROWS = 10
+MAX_MEMBERS_PER_SECTION = 20
 
 
 def build_team_control_report_rows(sections: List[TeamSection], year: int, month: int) -> List[List[str]]:
     total_days = month_days(year, month)
+    month_participation_header = "Participação\nMês"
     rows: List[List[str]] = [
         ["Ano", str(year), "Mês", f"{month:02d}"],
         ["Use", "P - Presente", "A - Ausente", "K - Com demanda", "F - Férias", "D - Day-off", "H - Feriado", "R - Recesso"],
@@ -24,24 +24,22 @@ def build_team_control_report_rows(sections: List[TeamSection], year: int, month
     for section in sections:
         rows.append([])
         rows.append([section.name])
-        headers = ["Nome"] + [f"{d:02d}/{month:02d}" for d in range(1, total_days + 1)]
+        headers = ["Nome"] + [f"{d:02d}/{month:02d}" for d in range(1, total_days + 1)] + [month_participation_header]
         rows.append(headers)
 
         for member in section.members:
             row = [member.name]
             for d in range(1, total_days + 1):
                 row.append(member.entries.get(date(year, month, d).isoformat(), ""))
+            row.append(str(monthly_k_count(member, year, month)))
             rows.append(row)
 
-        empty_member_row = [""] * (total_days + 1)
-        for _ in range(max(0, MIN_TEAM_ROWS - len(section.members))):
-            rows.append(empty_member_row.copy())
-
-        footer = ["Participação Dia"]
+        footer = ["Participação"]
         for d in range(1, total_days + 1):
             curr = date(year, month, d)
             total = participation_for_date([member.entries.get(curr.isoformat(), "") for member in section.members])
             footer.append(str(total) if total > 0 else "")
+        footer.append("")
         rows.append(footer)
 
     return rows
@@ -174,6 +172,8 @@ class TeamControlStore:
         if not cleaned:
             raise ValueError("Nome do funcionário é obrigatório.")
         section = self._get_section(section_id)
+        if len(section.members) >= MAX_MEMBERS_PER_SECTION:
+            raise ValueError("Limite de 20 funcionários por time atingido.")
         member = TeamMember(id=uuid.uuid4().hex, name=cleaned, entries={})
         section.members.append(member)
         self.save()
@@ -222,3 +222,13 @@ def month_days(year: int, month: int) -> int:
 
 def participation_for_date(entries: List[str]) -> int:
     return sum(1 for e in entries if (e or "").strip().upper() in {"K", "P"})
+
+
+def monthly_k_count(member: TeamMember, year: int, month: int) -> int:
+    total_days = month_days(year, month)
+    count = 0
+    for d in range(1, total_days + 1):
+        key = date(year, month, d).isoformat()
+        if (member.entries.get(key) or "").strip().upper() == "K":
+            count += 1
+    return count

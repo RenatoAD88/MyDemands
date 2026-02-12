@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QHeaderView, QStyle
 
 from csv_store import CsvStore, parse_prazos_list
-from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, MIN_TEAM_ROWS, build_team_control_report_rows
+from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, build_team_control_report_rows, monthly_k_count
 from validation import ValidationError, normalize_prazo_text, validate_payload
 from bootstrap import resolve_storage_root, ensure_storage_root
 from ui_theme import APP_STYLESHEET, status_color, timing_color
@@ -1267,7 +1267,7 @@ class MainWindow(QMainWindow):
             box = QGroupBox(section.name)
             box_layout = QVBoxLayout(box)
 
-            table = TeamSectionTable(0, total_days + 1)
+            table = QTableWidget(0, total_days + 2)
             table.setObjectName(f"teamSectionTable::{section.id}")
             table.setProperty("sectionId", section.id)
             table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
@@ -1280,12 +1280,15 @@ class MainWindow(QMainWindow):
             table.horizontalHeader().setMinimumSectionSize(48)
             table.horizontalHeader().setFixedHeight(42)
 
+            month_part_col = total_days + 1
             headers_top = [section.name]
             headers_bottom = ["Nomes"]
             for d in range(1, total_days + 1):
                 curr = date(year, month, d)
                 headers_top.append(WEEKDAY_LABELS[curr.weekday()])
                 headers_bottom.append(curr.strftime("%d/%m"))
+            headers_top.append("Participação")
+            headers_bottom.append("Mês")
             table.setHorizontalHeaderLabels(headers_bottom)
 
             for c, text in enumerate(headers_top):
@@ -1304,8 +1307,10 @@ class MainWindow(QMainWindow):
             table.setColumnWidth(0, 170)
             for d in range(1, total_days + 1):
                 table.setColumnWidth(d, 52)
+            table.setColumnWidth(month_part_col, 90)
 
             weekend_bg = QColor(229, 231, 235)
+            month_participation_bg = QColor(229, 231, 235)
 
             for member in section.members:
                 r = table.rowCount()
@@ -1327,20 +1332,12 @@ class MainWindow(QMainWindow):
                         it.setBackground(weekend_bg)
                     table.setItem(r, d, it)
 
-            for _ in range(max(0, MIN_TEAM_ROWS - len(section.members))):
-                r = table.rowCount()
-                table.insertRow(r)
-                placeholder = QTableWidgetItem("")
-                placeholder.setFlags(placeholder.flags() & ~Qt.ItemIsEditable)
-                table.setItem(r, 0, placeholder)
-                for d in range(1, total_days + 1):
-                    empty = QTableWidgetItem("")
-                    empty.setTextAlignment(Qt.AlignCenter)
-                    empty.setFlags(empty.flags() & ~Qt.ItemIsEditable)
-                    curr = date(year, month, d)
-                    if curr.weekday() >= 5:
-                        empty.setBackground(weekend_bg)
-                    table.setItem(r, d, empty)
+                month_total = QTableWidgetItem(str(monthly_k_count(member, year, month)))
+                month_total.setTextAlignment(Qt.AlignCenter)
+                month_total.setFlags(month_total.flags() & ~Qt.ItemIsEditable)
+                month_total.setBackground(month_participation_bg)
+                month_total.setForeground(QColor(0, 0, 0))
+                table.setItem(r, month_part_col, month_total)
 
             footer_row = table.rowCount()
             table.insertRow(footer_row)
@@ -1361,6 +1358,13 @@ class MainWindow(QMainWindow):
                 pit.setFlags(pit.flags() & ~Qt.ItemIsEditable)
                 pit.setBackground(QColor(255, 255, 255) if text else weekend_bg)
                 table.setItem(footer_row, d, pit)
+
+            footer_month = QTableWidgetItem("")
+            footer_month.setTextAlignment(Qt.AlignCenter)
+            footer_month.setFlags(footer_month.flags() & ~Qt.ItemIsEditable)
+            footer_month.setBackground(month_participation_bg)
+            footer_month.setForeground(QColor(0, 0, 0))
+            table.setItem(footer_row, month_part_col, footer_month)
 
             table.itemChanged.connect(self._on_team_table_item_changed)
             box_layout.addWidget(table)
