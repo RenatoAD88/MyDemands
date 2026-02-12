@@ -106,6 +106,10 @@ PRIORIDADE_TEXT_COLORS: Dict[str, Tuple[int, int, int]] = {
 PROGRESS_FILL_COLOR = (3, 141, 220)
 
 
+def _app_icon_path() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "img", "icondemand.png")
+
+
 def _normalize_percent_to_decimal_str(raw: str) -> str:
     """
     Converte entradas comuns em string decimal:
@@ -653,6 +657,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.store = store
         self.setWindowTitle("DemandasApp")
+        icon_path = _app_icon_path()
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         self._filling = False
 
@@ -1192,6 +1199,9 @@ class MainWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setStyleSheet(APP_STYLESHEET)
+    icon_path = _app_icon_path()
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
     storage_root = resolve_storage_root(sys.argv[0])
     base_dir = ensure_storage_root(storage_root)
     if not base_dir:
