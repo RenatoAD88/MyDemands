@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QHeaderView, QStyle
+from PySide6.QtWidgets import QSizePolicy
 
 from csv_store import CsvStore, parse_prazos_list
 from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, build_team_control_report_rows, monthly_k_count, split_member_names
@@ -253,6 +254,15 @@ class TeamSectionTable(QTableWidget):
             return
 
         super().keyPressEvent(event)
+
+    def fit_height_to_rows(self):
+        self.resizeRowsToContents()
+        rows_height = sum(self.rowHeight(row) for row in range(self.rowCount()))
+        headers_height = self.horizontalHeader().height() if self.horizontalHeader() else 0
+        frame_height = self.frameWidth() * 2
+        total_height = rows_height + headers_height + frame_height
+        self.setMinimumHeight(total_height)
+        self.setMaximumHeight(total_height)
 
 
 class DatePickDialog(QDialog):
@@ -1292,6 +1302,8 @@ class MainWindow(QMainWindow):
             table.setColumnCount(total_days + 2)
             table.setObjectName(f"teamSectionTable::{section.id}")
             table.setProperty("sectionId", section.id)
+            table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed | QAbstractItemView.AnyKeyPressed)
             table.setSelectionBehavior(QAbstractItemView.SelectItems)
             table.setSelectionMode(QAbstractItemView.ExtendedSelection)
@@ -1301,6 +1313,7 @@ class MainWindow(QMainWindow):
             table.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
             table.horizontalHeader().setMinimumSectionSize(48)
             table.horizontalHeader().setFixedHeight(42)
+            table.verticalHeader().setVisible(False)
 
             month_part_col = total_days + 1
             headers_top = [section.name]
@@ -1388,6 +1401,8 @@ class MainWindow(QMainWindow):
             footer_month.setBackground(month_participation_bg)
             footer_month.setForeground(QColor(0, 0, 0))
             table.setItem(footer_row, month_part_col, footer_month)
+
+            table.fit_height_to_rows()
 
             table.itemChanged.connect(self._on_team_table_item_changed)
             box_layout.addWidget(table)
