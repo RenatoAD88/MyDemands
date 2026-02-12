@@ -462,7 +462,7 @@ class DeleteDemandDialog(QDialog):
         self.line_input.clear()
         self.line_input.setEnabled(True)
         self.load_btn.setEnabled(True)
-        self.line_input.setFocus()
+        self.reject()
 
     def preload_selected(self, row_data: Dict[str, Any]):
         self.preload_selected_rows([row_data])

@@ -106,7 +106,7 @@ def test_delete_on_concluded_tab_is_blocked_with_same_message(tmp_path, monkeypa
     win.close()
 
 
-def test_delete_dialog_cancel_clears_loaded_data_and_reenables_input(tmp_path):
+def test_delete_dialog_cancel_discards_loaded_data_and_closes_modal(tmp_path):
     _get_app()
     store = CsvStore(str(tmp_path))
     today = date.today().strftime("%d/%m/%Y")
@@ -123,6 +123,7 @@ def test_delete_dialog_cancel_clears_loaded_data_and_reenables_input(tmp_path):
     )
 
     dlg = DeleteDemandDialog(None, store)
+    dlg.show()
     dlg.line_input.setText("1")
     dlg._load_line()
 
@@ -131,11 +132,9 @@ def test_delete_dialog_cancel_clears_loaded_data_and_reenables_input(tmp_path):
 
     dlg._cancel_delete_action()
 
+    assert dlg.result() == QDialog.Rejected
     assert dlg._loaded_rows == []
     assert dlg.info_label.text() == ""
     assert dlg.line_input.text() == ""
-    assert dlg.line_input.isEnabled()
-    assert dlg.load_btn.isEnabled()
     assert not dlg.delete_btn.isEnabled()
-
-    dlg.close()
+    assert not dlg.isVisible()
