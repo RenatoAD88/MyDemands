@@ -1044,14 +1044,14 @@ class MainWindow(QMainWindow):
             object_name="exportAction",
             tooltip="Exportar demandas",
             img_name="exp.png",
-            fallback_icon=QStyle.SP_ArrowDown,
+            fallback_icon=QStyle.SP_ArrowUp,
             on_click=self.export_demands_csv,
         )
         import_shortcut = self._build_toolbar_action_button(
             object_name="importAction",
             tooltip="Importar demandas",
             img_name="exp.png",
-            fallback_icon=QStyle.SP_ArrowUp,
+            fallback_icon=QStyle.SP_ArrowDown,
             on_click=self.import_demands_csv,
         )
 
