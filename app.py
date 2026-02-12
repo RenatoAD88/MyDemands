@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import os
 import sys
 from datetime import date
@@ -702,30 +703,32 @@ class NewDemandDialog(QDialog):
 
 
 class AddTeamMemberDialog(QDialog):
-    def __init__(self, parent: QWidget, section_names: List[str]):
+    def __init__(self, parent: QWidget, team_names: List[str]):
         super().__init__(parent)
         self.setWindowTitle("Adicionar funcionário")
 
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("Nome do funcionário")
 
-        self.section_combo = QComboBox()
-        self.section_combo.addItems(section_names)
-        self.section_combo.addItem("+ Criar nova seção")
+        self.team_combo = QComboBox()
+        self.team_combo.addItems(team_names)
+        self.team_combo.addItem("+ Novo time")
 
-        self.new_section_input = QLineEdit()
-        self.new_section_input.setPlaceholderText("Nome da nova seção")
-        self.new_section_input.setVisible(False)
+        self.new_team_label = QLabel("Novo Time")
+        self.new_team_input = QLineEdit()
+        self.new_team_input.setPlaceholderText("Nome do novo time")
+        self.new_team_label.setVisible(False)
+        self.new_team_input.setVisible(False)
 
         self.inline_error = QLabel("")
         self.inline_error.setStyleSheet("color: #d92d20;")
 
-        self.section_combo.currentTextChanged.connect(self._on_section_change)
+        self.team_combo.currentTextChanged.connect(self._on_team_change)
 
         form = QFormLayout()
         form.addRow("Nome*", self.name_input)
-        form.addRow("Seção", self.section_combo)
-        form.addRow("Nova seção", self.new_section_input)
+        form.addRow("Time", self.team_combo)
+        form.addRow(self.new_team_label, self.new_team_input)
 
         actions = QHBoxLayout()
         ok = QPushButton("Adicionar")
@@ -733,31 +736,36 @@ class AddTeamMemberDialog(QDialog):
         ok.clicked.connect(self._submit)
         cancel.clicked.connect(self.reject)
         actions.addStretch()
-        actions.addWidget(cancel)
         actions.addWidget(ok)
+        actions.addWidget(cancel)
+
+        self.name_input.returnPressed.connect(self._submit)
+        self.new_team_input.returnPressed.connect(self._submit)
 
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(self.inline_error)
         layout.addLayout(actions)
 
-    def _on_section_change(self, text: str):
-        self.new_section_input.setVisible(text == "+ Criar nova seção")
+    def _on_team_change(self, text: str):
+        is_new = text == "+ Novo time"
+        self.new_team_label.setVisible(is_new)
+        self.new_team_input.setVisible(is_new)
 
     def _submit(self):
         if not self.name_input.text().strip():
             self.inline_error.setText("Nome é obrigatório.")
             return
-        if self.section_combo.currentText() == "+ Criar nova seção" and not self.new_section_input.text().strip():
-            self.inline_error.setText("Informe o nome da nova seção.")
+        if self.team_combo.currentText() == "+ Novo time" and not self.new_team_input.text().strip():
+            self.inline_error.setText("Informe o nome do novo time.")
             return
         self.accept()
 
     def payload(self) -> Dict[str, str]:
         return {
             "name": self.name_input.text().strip(),
-            "section_name": self.section_combo.currentText(),
-            "new_section_name": self.new_section_input.text().strip(),
+            "team_name": self.team_combo.currentText(),
+            "new_team_name": self.new_team_input.text().strip(),
         }
 
 
@@ -773,6 +781,8 @@ class MainWindow(QMainWindow):
         self._filling = False
 
         self.tabs = QTabWidget()
+        self.tabs.setMovable(True)
+        self.tabs.tabBar().tabMoved.connect(self._save_preferences)
 
         central = QWidget()
         central_layout = QVBoxLayout(central)
@@ -1051,6 +1061,10 @@ class MainWindow(QMainWindow):
         self.t3_prioridade.setCurrentText(str(self._prefs.get("t3_prioridade", "") or ""))
         self.t3_responsavel.setText(str(self._prefs.get("t3_responsavel", "") or ""))
 
+        tab_order = self._prefs.get("tab_order")
+        if isinstance(tab_order, list):
+            self._restore_tab_order(tab_order)
+
     def _save_preferences(self):
         data = {
             "tab_index": self.tabs.currentIndex(),
@@ -1058,8 +1072,15 @@ class MainWindow(QMainWindow):
             "t3_status": self.t3_status.currentText(),
             "t3_prioridade": self.t3_prioridade.currentText(),
             "t3_responsavel": self.t3_responsavel.text(),
+            "tab_order": [self.tabs.tabText(i) for i in range(self.tabs.count())],
         }
         save_prefs(self.store.base_dir, data)
+
+    def _restore_tab_order(self, tab_order: List[str]):
+        for target_idx, title in enumerate(tab_order):
+            current_idx = next((i for i in range(self.tabs.count()) if self.tabs.tabText(i) == title), -1)
+            if current_idx >= 0 and current_idx != target_idx:
+                self.tabs.tabBar().moveTab(current_idx, target_idx)
 
     def _on_tab_changed(self, idx: int):
         self._save_preferences()
@@ -1139,18 +1160,25 @@ class MainWindow(QMainWindow):
         for m in range(1, 13):
             self.tc_month.addItem(f"{m:02d}")
         self.tc_month.setCurrentText(f"{date.today().month:02d}")
+        self.tc_year.setMinimumContentsLength(5)
+        self.tc_month.setMinimumContentsLength(4)
+        self.tc_year.setMinimumWidth(int(self.tc_year.sizeHint().width() * 1.25))
+        self.tc_month.setMinimumWidth(int(self.tc_month.sizeHint().width() * 1.25))
 
         refresh_btn = QPushButton("Atualizar")
         refresh_btn.clicked.connect(self.refresh_team_control)
 
-        add_section_btn = QPushButton("Nova seção")
+        add_section_btn = QPushButton("Novo time")
         add_section_btn.clicked.connect(self._create_team_section)
 
-        del_section_btn = QPushButton("Excluir seção")
+        del_section_btn = QPushButton("Excluir time")
         del_section_btn.clicked.connect(self._delete_team_section)
 
         add_member_btn = QPushButton("Adicionar nome")
         add_member_btn.clicked.connect(self._open_add_team_member_dialog)
+
+        export_team_btn = QPushButton("Baixar relatório")
+        export_team_btn.clicked.connect(self.export_team_control_csv)
 
         top = QHBoxLayout()
         top.addWidget(QLabel("Ano:"))
@@ -1162,6 +1190,7 @@ class MainWindow(QMainWindow):
         top.addWidget(add_section_btn)
         top.addWidget(del_section_btn)
         top.addWidget(add_member_btn)
+        top.addWidget(export_team_btn)
         top.addStretch()
 
         self.tc_scroll = QScrollArea()
@@ -1173,7 +1202,9 @@ class MainWindow(QMainWindow):
         self.tc_scroll.setWidget(self.tc_scroll_host)
 
         layout = QVBoxLayout()
+        legend = QLabel("Use: P - Presente, A - Ausente, K - Com demanda, F - Férias, D - Day-off, H - Feriado e R - Recesso")
         layout.addLayout(top)
+        layout.addWidget(legend)
         layout.addWidget(self.tc_scroll)
         tab.setLayout(layout)
         self.tabs.addTab(tab, "Controle do time")
@@ -1192,14 +1223,15 @@ class MainWindow(QMainWindow):
                 self._clear_layout(child_layout)
 
     def refresh_team_control(self):
+        year, month = self._selected_year_month()
         self.team_store.load()
+        self.team_store.set_period(year, month)
         self._clear_layout(self.tc_sections_layout)
         if not self.team_store.sections:
-            self.tc_sections_layout.addWidget(QLabel("Nenhuma seção criada. Clique em 'Nova seção'."))
+            self.tc_sections_layout.addWidget(QLabel("Nenhum time criado. Clique em 'Novo time'."))
             self.tc_sections_layout.addStretch()
             return
 
-        year, month = self._selected_year_month()
         total_days = month_days(year, month)
         today = date.today()
 
@@ -1232,11 +1264,13 @@ class MainWindow(QMainWindow):
                 curr_is_today = c > 0 and date(year, month, c) == today
                 if curr_is_today:
                     item.setBackground(QColor(220, 38, 38))
-                    item.setForeground(QColor(255, 255, 255))
+                    item.setForeground(QColor(0, 0, 0))
                 elif c > 0 and date(year, month, c).weekday() >= 5:
                     item.setBackground(QColor(229, 231, 235))
 
-            table.setColumnWidth(0, 220)
+            table.setColumnWidth(0, 170)
+            for d in range(1, total_days + 1):
+                table.setColumnWidth(d, 34)
 
             for member in section.members:
                 r = table.rowCount()
@@ -1258,9 +1292,10 @@ class MainWindow(QMainWindow):
 
             footer_row = table.rowCount()
             table.insertRow(footer_row)
-            part = QTableWidgetItem("Participação")
+            part = QTableWidgetItem("")
             part.setFlags(part.flags() & ~Qt.ItemIsEditable)
             part.setTextAlignment(Qt.AlignCenter)
+            part.setBackground(QColor(229, 231, 235))
             table.setItem(footer_row, 0, part)
             for d in range(1, total_days + 1):
                 curr = date(year, month, d)
@@ -1275,6 +1310,7 @@ class MainWindow(QMainWindow):
                 pit = QTableWidgetItem(text)
                 pit.setTextAlignment(Qt.AlignCenter)
                 pit.setFlags(pit.flags() & ~Qt.ItemIsEditable)
+                pit.setBackground(QColor(255, 255, 255) if text else QColor(229, 231, 235))
                 table.setItem(footer_row, d, pit)
 
             table.itemChanged.connect(self._on_team_table_item_changed)
@@ -1284,51 +1320,57 @@ class MainWindow(QMainWindow):
         self.tc_sections_layout.addStretch()
 
     def _create_team_section(self):
-        name, ok = QInputDialog.getText(self, "Nova seção", "Nome do projeto/time:")
+        year, month = self._selected_year_month()
+        self.team_store.set_period(year, month)
+        name, ok = QInputDialog.getText(self, "Novo time", "Nome do time:")
         if not ok:
             return
         try:
             self.team_store.create_section(name)
         except ValueError as e:
-            QMessageBox.warning(self, "Seção", str(e))
+            QMessageBox.warning(self, "Time", str(e))
             return
         self.refresh_team_control()
 
     def _delete_team_section(self):
+        year, month = self._selected_year_month()
+        self.team_store.set_period(year, month)
         names = [s.name for s in self.team_store.sections]
         if not names:
-            QMessageBox.information(self, "Seções", "Não há seções para excluir.")
+            QMessageBox.information(self, "Times", "Não há times para excluir.")
             return
-        chosen, ok = QInputDialog.getItem(self, "Excluir seção", "Selecione a seção:", names, 0, False)
+        chosen, ok = QInputDialog.getItem(self, "Excluir time", "Selecione o time:", names, 0, False)
         if not ok:
             return
         section = next((s for s in self.team_store.sections if s.name == chosen), None)
         if not section:
             return
-        confirm = QMessageBox.question(self, "Excluir seção", f"Deseja excluir a seção '{section.name}'?")
+        confirm = QMessageBox.question(self, "Excluir time", f"Deseja excluir o time '{section.name}'?")
         if confirm != QMessageBox.Yes:
             return
         self.team_store.delete_section(section.id)
         self.refresh_team_control()
 
     def _open_add_team_member_dialog(self):
+        year, month = self._selected_year_month()
+        self.team_store.set_period(year, month)
         names = [s.name for s in self.team_store.sections]
         dlg = AddTeamMemberDialog(self, names)
         if dlg.exec() != QDialog.Accepted:
             return
         payload = dlg.payload()
 
-        section_name = payload["section_name"]
-        if section_name == "+ Criar nova seção":
+        section_name = payload["team_name"]
+        if section_name == "+ Novo time":
             try:
-                section = self.team_store.create_section(payload["new_section_name"])
+                section = self.team_store.create_section(payload["new_team_name"])
             except ValueError as e:
                 QMessageBox.warning(self, "Adicionar funcionário", str(e))
                 return
         else:
             section = next((s for s in self.team_store.sections if s.name == section_name), None)
             if not section:
-                QMessageBox.warning(self, "Adicionar funcionário", "Seção não encontrada.")
+                QMessageBox.warning(self, "Adicionar funcionário", "Time não encontrado.")
                 return
 
         try:
@@ -1342,6 +1384,8 @@ class MainWindow(QMainWindow):
         table = self.sender()
         if not isinstance(table, QTableWidget):
             return
+        year, month = self._selected_year_month()
+        self.team_store.set_period(year, month)
         section_id = str(table.property("sectionId") or "")
         if not section_id:
             return
@@ -1365,7 +1409,6 @@ class MainWindow(QMainWindow):
             self.refresh_team_control()
             return
 
-        year, month = self._selected_year_month()
         day = item.column()
         if day < 1:
             return
@@ -1399,6 +1442,8 @@ class MainWindow(QMainWindow):
         if picked != delete_action:
             return
 
+        year, month = self._selected_year_month()
+        self.team_store.set_period(year, month)
         section_id = str(table.property("sectionId") or "")
         member_id = str(member_item.data(Qt.UserRole) or "")
         member_name = member_item.text()
@@ -1572,6 +1617,40 @@ class MainWindow(QMainWindow):
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
             self.refresh_all()
+
+    def export_team_control_csv(self):
+        year, month = self._selected_year_month()
+        self.team_store.load()
+        self.team_store.set_period(year, month)
+        default_name = f"controle_time_{year}_{month:02d}.csv"
+        export_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Salvar relatório de controle de time",
+            os.path.join(self.store.base_dir, default_name),
+            "CSV (*.csv)",
+        )
+        if not export_path:
+            return
+        if not export_path.lower().endswith(".csv"):
+            export_path = f"{export_path}.csv"
+
+        total_days = month_days(year, month)
+        with open(export_path, "w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.writer(f, delimiter=";")
+            writer.writerow(["Ano", year, "Mês", f"{month:02d}"])
+            writer.writerow(["Use", "P - Presente", "A - Ausente", "K - Com demanda", "F - Férias", "D - Day-off", "H - Feriado", "R - Recesso"])
+            for section in self.team_store.sections:
+                writer.writerow([])
+                writer.writerow(["Time", section.name])
+                headers = ["Nome"] + [f"{d:02d}/{month:02d}" for d in range(1, total_days + 1)]
+                writer.writerow(headers)
+                for member in section.members:
+                    row = [member.name]
+                    for d in range(1, total_days + 1):
+                        row.append(member.entries.get(date(year, month, d).isoformat(), ""))
+                    writer.writerow(row)
+
+        QMessageBox.information(self, "Relatório baixado", "Relatório CSV salvo com sucesso.")
 
     def export_demands_csv(self):
         default_name = "demandas_export.csv"
