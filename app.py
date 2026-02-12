@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem,
     QMessageBox, QInputDialog,
     QDialog, QFormLayout,
-    QDateEdit, QLineEdit, QTextEdit, QComboBox,
+    QDateEdit, QLineEdit, QTextEdit, QPlainTextEdit, QComboBox,
     QListWidget, QGroupBox, QAbstractItemView,
     QMenu, QScrollArea
 )
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QHeaderView, QStyle
 
 from csv_store import CsvStore, parse_prazos_list
-from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, build_team_control_report_rows, monthly_k_count
+from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, build_team_control_report_rows, monthly_k_count, split_member_names
 from validation import ValidationError, normalize_prazo_text, validate_payload
 from bootstrap import resolve_storage_root, ensure_storage_root
 from ui_theme import APP_STYLESHEET, status_color, timing_color
@@ -735,8 +735,9 @@ class AddTeamMemberDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Adicionar funcionário")
 
-        self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Nome do funcionário")
+        self.name_input = QPlainTextEdit()
+        self.name_input.setPlaceholderText("Digite um ou vários nomes (separe por vírgula ou quebra de linha)")
+        self.name_input.setFixedHeight(120)
 
         self.team_combo = QComboBox()
         self.team_combo.addItems(team_names)
@@ -754,7 +755,7 @@ class AddTeamMemberDialog(QDialog):
         self.team_combo.currentTextChanged.connect(self._on_team_change)
 
         form = QFormLayout()
-        form.addRow("Nome*", self.name_input)
+        form.addRow("Nome(s)*", self.name_input)
         form.addRow("Time", self.team_combo)
         form.addRow(self.new_team_label, self.new_team_input)
 
@@ -767,7 +768,6 @@ class AddTeamMemberDialog(QDialog):
         actions.addWidget(ok)
         actions.addWidget(cancel)
 
-        self.name_input.returnPressed.connect(self._submit)
         self.new_team_input.returnPressed.connect(self._submit)
 
         layout = QVBoxLayout(self)
@@ -781,8 +781,8 @@ class AddTeamMemberDialog(QDialog):
         self.new_team_input.setVisible(is_new)
 
     def _submit(self):
-        if not self.name_input.text().strip():
-            self.inline_error.setText("Nome é obrigatório.")
+        if not split_member_names(self.name_input.toPlainText()):
+            self.inline_error.setText("Informe ao menos um nome.")
             return
         if self.team_combo.currentText() == "+ Novo time" and not self.new_team_input.text().strip():
             self.inline_error.setText("Informe o nome do novo time.")
@@ -791,7 +791,7 @@ class AddTeamMemberDialog(QDialog):
 
     def payload(self) -> Dict[str, str]:
         return {
-            "name": self.name_input.text().strip(),
+            "names": self.name_input.toPlainText().strip(),
             "team_name": self.team_combo.currentText(),
             "new_team_name": self.new_team_input.text().strip(),
         }
@@ -1428,8 +1428,14 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Adicionar funcionário", "Time não encontrado.")
                 return
 
+        names = split_member_names(payload["names"])
+        if not names:
+            QMessageBox.warning(self, "Adicionar funcionário", "Informe ao menos um nome válido.")
+            return
+
         try:
-            self.team_store.add_member(section.id, payload["name"])
+            for member_name in names:
+                self.team_store.add_member(section.id, member_name)
         except ValueError as e:
             QMessageBox.warning(self, "Adicionar funcionário", str(e))
             return
