@@ -657,8 +657,14 @@ class MainWindow(QMainWindow):
         self._filling = False
 
         self.tabs = QTabWidget()
-        self.setCentralWidget(self.tabs)
-        self.tabs.setCornerWidget(self._build_export_shortcut(), Qt.TopLeftCorner)
+
+        central = QWidget()
+        central_layout = QVBoxLayout(central)
+        central_layout.setContentsMargins(8, 8, 8, 8)
+        central_layout.setSpacing(8)
+        central_layout.addWidget(self._build_shortcuts_section())
+        central_layout.addWidget(self.tabs)
+        self.setCentralWidget(central)
 
         self._prefs = load_prefs(self.store.base_dir)
 
@@ -963,6 +969,32 @@ class MainWindow(QMainWindow):
         layout.addWidget(btn, alignment=Qt.AlignHCenter)
         return wrapper
 
+    def _build_shortcuts_section(self) -> QWidget:
+        section = QWidget()
+        layout = QHBoxLayout(section)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        title = QLabel("Atalhos")
+        title.setObjectName("shortcutsSectionLabel")
+
+        new_btn = QPushButton("Nova demanda")
+        new_btn.setObjectName("primaryAction")
+        new_btn.clicked.connect(self.new_demand)
+
+        delete_btn = QPushButton("Excluir demanda")
+        delete_btn.setObjectName("dangerAction")
+        delete_btn.clicked.connect(self.delete_demand)
+
+        export_shortcut = self._build_export_shortcut()
+
+        layout.addWidget(title)
+        layout.addWidget(new_btn)
+        layout.addWidget(delete_btn)
+        layout.addWidget(export_shortcut)
+        layout.addStretch()
+        return section
+
     # Tabs
     def _init_tab1(self):
         tab = QWidget()
@@ -973,15 +1005,6 @@ class MainWindow(QMainWindow):
         consult_btn = QPushButton("Consultar")
         consult_btn.clicked.connect(self.refresh_tab1)
 
-        new_btn = QPushButton("Nova demanda")
-        new_btn.setObjectName("primaryAction")
-        new_btn.clicked.connect(self.new_demand)
-
-        del_btn = QPushButton("Excluir demanda")
-        del_btn.setObjectName("dangerAction")
-        del_btn.clicked.connect(self.delete_demand)
-
-
         self.t1_table = self._make_table()
 
         top = QHBoxLayout()
@@ -990,8 +1013,6 @@ class MainWindow(QMainWindow):
         top.addWidget(self.t1_date)
         top.addWidget(consult_btn)
         top.addStretch()
-        top.addWidget(new_btn)
-        top.addWidget(del_btn)
 
         layout = QVBoxLayout()
         layout.addLayout(top)
