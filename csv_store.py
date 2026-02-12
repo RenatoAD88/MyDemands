@@ -447,5 +447,14 @@ class CsvStore:
             writer = csv.DictWriter(f, fieldnames=DISPLAY_COLUMNS, delimiter=delimiter)
             writer.writeheader()
             for row in rows:
-                writer.writerow({col: row.get(col, "") for col in DISPLAY_COLUMNS})
+                payload = {col: row.get(col, "") for col in DISPLAY_COLUMNS}
+                prazo = str(payload.get("Prazo", "") or "")
+                flat_prazo = (
+                    prazo.replace("*", "")
+                    .replace("\r\n", ",")
+                    .replace("\r", ",")
+                    .replace("\n", ",")
+                )
+                payload["Prazo"] = ",".join([p.strip() for p in flat_prazo.split(",") if p.strip()])
+                writer.writerow(payload)
         return len(rows)
