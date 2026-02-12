@@ -339,7 +339,7 @@ class DeleteDemandDialog(QDialog):
         self.delete_btn = QPushButton("Excluir")
         self.cancel_btn = QPushButton("Cancelar")
         self.delete_btn.clicked.connect(self._do_delete)
-        self.cancel_btn.clicked.connect(self.reject)
+        self.cancel_btn.clicked.connect(self._cancel_delete_action)
 
         self.delete_btn.setEnabled(False)
         self._loaded_rows: List[Dict[str, Any]] = []
@@ -456,6 +456,14 @@ class DeleteDemandDialog(QDialog):
                 return
 
         self.accept()
+
+    def _cancel_delete_action(self):
+        self._set_loaded_rows([])
+        self.line_input.clear()
+        self.line_input.setEnabled(True)
+        self.load_btn.setEnabled(True)
+        self.line_input.setFocus()
+        self.reject()
 
     def preload_selected(self, row_data: Dict[str, Any]):
         self.preload_selected_rows([row_data])
