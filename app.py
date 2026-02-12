@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QHeaderView, QStyle
 
 from csv_store import CsvStore, parse_prazos_list
-from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS
+from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, MIN_TEAM_ROWS, build_team_control_report_rows
 from validation import ValidationError, normalize_prazo_text, validate_payload
 from bootstrap import resolve_storage_root, ensure_storage_root
 from ui_theme import APP_STYLESHEET, status_color, timing_color
@@ -35,8 +35,6 @@ EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
 DATE_FMT_QT = "dd/MM/yyyy"
 PRAZO_TODAY_BG = (255, 249, 196)  # amarelo claro
-
-
 def debug_msg(title: str, text: str):
     if DEBUG_MODE:
         QMessageBox.information(None, title, text)
@@ -1247,7 +1245,7 @@ class MainWindow(QMainWindow):
             table.setContextMenuPolicy(Qt.CustomContextMenu)
             table.customContextMenuRequested.connect(self._open_member_context_menu)
 
-            headers_top = ["Time"]
+            headers_top = [section.name]
             headers_bottom = ["Nomes"]
             for d in range(1, total_days + 1):
                 curr = date(year, month, d)
@@ -1270,7 +1268,7 @@ class MainWindow(QMainWindow):
 
             table.setColumnWidth(0, 170)
             for d in range(1, total_days + 1):
-                table.setColumnWidth(d, 34)
+                table.setColumnWidth(d, 38)
 
             for member in section.members:
                 r = table.rowCount()
@@ -1290,9 +1288,21 @@ class MainWindow(QMainWindow):
                         it.setForeground(QColor(fr, fg, fb))
                     table.setItem(r, d, it)
 
+            for _ in range(max(0, MIN_TEAM_ROWS - len(section.members))):
+                r = table.rowCount()
+                table.insertRow(r)
+                placeholder = QTableWidgetItem("")
+                placeholder.setFlags(placeholder.flags() & ~Qt.ItemIsEditable)
+                table.setItem(r, 0, placeholder)
+                for d in range(1, total_days + 1):
+                    empty = QTableWidgetItem("")
+                    empty.setTextAlignment(Qt.AlignCenter)
+                    empty.setFlags(empty.flags() & ~Qt.ItemIsEditable)
+                    table.setItem(r, d, empty)
+
             footer_row = table.rowCount()
             table.insertRow(footer_row)
-            part = QTableWidgetItem("")
+            part = QTableWidgetItem("Participação")
             part.setFlags(part.flags() & ~Qt.ItemIsEditable)
             part.setTextAlignment(Qt.AlignCenter)
             part.setBackground(QColor(229, 231, 235))
@@ -1634,21 +1644,10 @@ class MainWindow(QMainWindow):
         if not export_path.lower().endswith(".csv"):
             export_path = f"{export_path}.csv"
 
-        total_days = month_days(year, month)
         with open(export_path, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f, delimiter=";")
-            writer.writerow(["Ano", year, "Mês", f"{month:02d}"])
-            writer.writerow(["Use", "P - Presente", "A - Ausente", "K - Com demanda", "F - Férias", "D - Day-off", "H - Feriado", "R - Recesso"])
-            for section in self.team_store.sections:
-                writer.writerow([])
-                writer.writerow(["Time", section.name])
-                headers = ["Nome"] + [f"{d:02d}/{month:02d}" for d in range(1, total_days + 1)]
-                writer.writerow(headers)
-                for member in section.members:
-                    row = [member.name]
-                    for d in range(1, total_days + 1):
-                        row.append(member.entries.get(date(year, month, d).isoformat(), ""))
-                    writer.writerow(row)
+            for row in build_team_control_report_rows(self.team_store.sections, year, month):
+                writer.writerow(row)
 
         QMessageBox.information(self, "Relatório baixado", "Relatório CSV salvo com sucesso.")
 

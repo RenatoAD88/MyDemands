@@ -10,6 +10,45 @@ from typing import Dict, List, Optional
 
 TEAM_CONTROL_FILE = "team_control.json"
 MAX_SECTIONS = 10
+
+MIN_TEAM_ROWS = 10
+
+
+def build_team_control_report_rows(sections: List[TeamSection], year: int, month: int) -> List[List[str]]:
+    total_days = month_days(year, month)
+    rows: List[List[str]] = [
+        ["Ano", str(year), "Mês", f"{month:02d}"],
+        ["Use", "P - Presente", "A - Ausente", "K - Com demanda", "F - Férias", "D - Day-off", "H - Feriado", "R - Recesso"],
+    ]
+
+    for section in sections:
+        rows.append([])
+        rows.append([section.name])
+        headers = ["Nome"] + [f"{d:02d}/{month:02d}" for d in range(1, total_days + 1)]
+        rows.append(headers)
+
+        for member in section.members:
+            row = [member.name]
+            for d in range(1, total_days + 1):
+                row.append(member.entries.get(date(year, month, d).isoformat(), ""))
+            rows.append(row)
+
+        empty_member_row = [""] * (total_days + 1)
+        for _ in range(max(0, MIN_TEAM_ROWS - len(section.members))):
+            rows.append(empty_member_row.copy())
+
+        footer = ["Participação"]
+        for d in range(1, total_days + 1):
+            curr = date(year, month, d)
+            if curr.weekday() >= 5:
+                footer.append("")
+                continue
+            total = participation_for_date([member.entries.get(curr.isoformat(), "") for member in section.members])
+            footer.append(str(total) if total > 0 else "")
+        rows.append(footer)
+
+    return rows
+
 WEEKDAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
 STATUS_COLORS: Dict[str, tuple[int, int, int, int, int, int]] = {
     "F": (128, 90, 213, 255, 255, 255),
