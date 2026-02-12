@@ -38,23 +38,17 @@ QPushButton {
     border-radius: 6px;
     padding: 6px 12px;
 }
-QToolButton#primaryAction,
-QToolButton#dangerAction,
-QToolButton#exportAction {
+QToolButton[toolbarAction="true"] {
     background: #eef2fa;
     border: 1px solid #bccae3;
     border-radius: 8px;
     padding: 6px;
 }
-QToolButton#primaryAction:hover,
-QToolButton#dangerAction:hover,
-QToolButton#exportAction:hover {
+QToolButton[toolbarAction="true"]:hover {
     background: #dbeafe;
     border: 1px solid #93c5fd;
 }
-QToolButton#primaryAction::menu-indicator,
-QToolButton#dangerAction::menu-indicator,
-QToolButton#exportAction::menu-indicator {
+QToolButton[toolbarAction="true"]::menu-indicator {
     image: none;
 }
 

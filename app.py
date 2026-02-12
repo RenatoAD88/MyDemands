@@ -954,29 +954,10 @@ class MainWindow(QMainWindow):
         self._save_preferences()
         self.refresh_current()
 
-    def _build_export_shortcut(self) -> QWidget:
-        btn = QToolButton()
-        btn.setObjectName("exportAction")
-        btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        btn.setToolTip("Exportar demandas")
-        btn.setIcon(self._icon_from_img("exp.png", QStyle.SP_ArrowDown))
-        btn.setIconSize(QSize(28, 28))
-        btn.clicked.connect(self.export_demands_csv)
-        return btn
-
-    def _build_import_shortcut(self) -> QWidget:
-        btn = QToolButton()
-        btn.setObjectName("importAction")
-        btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        btn.setToolTip("Importar demandas")
-        btn.setIcon(self._icon_from_img("exp.png", QStyle.SP_ArrowUp))
-        btn.setIconSize(QSize(28, 28))
-        btn.clicked.connect(self.import_demands_csv)
-        return btn
-
-    def _build_icon_action_button(self, object_name: str, tooltip: str, img_name: str, fallback_icon: QStyle.StandardPixmap, on_click) -> QToolButton:
+    def _build_toolbar_action_button(self, object_name: str, tooltip: str, img_name: str, fallback_icon: QStyle.StandardPixmap, on_click) -> QToolButton:
         btn = QToolButton()
         btn.setObjectName(object_name)
+        btn.setProperty("toolbarAction", True)
         btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
         btn.setToolTip(tooltip)
         btn.setIcon(self._icon_from_img(img_name, fallback_icon))
@@ -996,7 +977,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        new_btn = self._build_icon_action_button(
+        new_btn = self._build_toolbar_action_button(
             object_name="primaryAction",
             tooltip="Adicionar demandas",
             img_name="add.png",
@@ -1004,7 +985,7 @@ class MainWindow(QMainWindow):
             on_click=self.new_demand,
         )
 
-        delete_btn = self._build_icon_action_button(
+        delete_btn = self._build_toolbar_action_button(
             object_name="dangerAction",
             tooltip="Remover demandas",
             img_name="",
@@ -1012,8 +993,20 @@ class MainWindow(QMainWindow):
             on_click=self.delete_demand,
         )
 
-        export_shortcut = self._build_export_shortcut()
-        import_shortcut = self._build_import_shortcut()
+        export_shortcut = self._build_toolbar_action_button(
+            object_name="exportAction",
+            tooltip="Exportar demandas",
+            img_name="exp.png",
+            fallback_icon=QStyle.SP_ArrowDown,
+            on_click=self.export_demands_csv,
+        )
+        import_shortcut = self._build_toolbar_action_button(
+            object_name="importAction",
+            tooltip="Importar demandas",
+            img_name="exp.png",
+            fallback_icon=QStyle.SP_ArrowUp,
+            on_click=self.import_demands_csv,
+        )
 
         layout.addWidget(new_btn)
         layout.addWidget(delete_btn)
