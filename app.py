@@ -1202,6 +1202,18 @@ class MainWindow(QMainWindow):
         if not import_path:
             return
 
+        confirm_box = QMessageBox(self)
+        confirm_box.setWindowTitle("Confirmar importação")
+        confirm_box.setIcon(QMessageBox.Warning)
+        confirm_box.setText(
+            "Atenção!\n\nAo fazer a importação todos os dados anteriores serão perdidos.\nDeseja prosseguir?"
+        )
+        import_button = confirm_box.addButton("Importar", QMessageBox.AcceptRole)
+        confirm_box.addButton("Cancelar", QMessageBox.RejectRole)
+        confirm_box.exec()
+        if confirm_box.clickedButton() is not import_button:
+            return
+
         try:
             total = self.store.import_from_exported_csv(import_path)
         except ValidationError as ve:
