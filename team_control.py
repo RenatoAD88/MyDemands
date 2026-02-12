@@ -37,12 +37,9 @@ def build_team_control_report_rows(sections: List[TeamSection], year: int, month
         for _ in range(max(0, MIN_TEAM_ROWS - len(section.members))):
             rows.append(empty_member_row.copy())
 
-        footer = ["Participação"]
+        footer = ["Participação Dia"]
         for d in range(1, total_days + 1):
             curr = date(year, month, d)
-            if curr.weekday() >= 5:
-                footer.append("")
-                continue
             total = participation_for_date([member.entries.get(curr.isoformat(), "") for member in section.members])
             footer.append(str(total) if total > 0 else "")
         rows.append(footer)

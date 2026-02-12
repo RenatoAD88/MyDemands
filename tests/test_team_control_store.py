@@ -72,9 +72,24 @@ def test_report_rows_include_team_name_footer_and_minimum_ten_names(tmp_path):
     assert names_header[0] == "Nome"
 
     section_rows = rows[team_header_index + 2 :]
-    footer_index = next(i for i, row in enumerate(section_rows) if row and row[0] == "Participação")
+    footer_index = next(i for i, row in enumerate(section_rows) if row and row[0] == "Participação Dia")
     member_and_blank_rows = section_rows[:footer_index]
     assert len(member_and_blank_rows) >= 10
 
     footer = section_rows[footer_index]
+    assert footer[1] == ""  # 01/02/2026 (domingo sem preenchimento)
     assert footer[2] == "1"  # 02/02/2026
+
+
+def test_report_footer_counts_weekend_when_filled(tmp_path):
+    store = TeamControlStore(str(tmp_path))
+    section = store.create_section("Time Roxo")
+    m = store.add_member(section.id, "Beto")
+    store.set_entry(section.id, m.id, date(2026, 2, 1), "P")  # domingo
+
+    rows = build_team_control_report_rows(store.sections, 2026, 2)
+    team_header_index = rows.index(["Time Roxo"])
+    section_rows = rows[team_header_index + 2 :]
+    footer_index = next(i for i, row in enumerate(section_rows) if row and row[0] == "Participação Dia")
+    footer = section_rows[footer_index]
+    assert footer[1] == "1"
