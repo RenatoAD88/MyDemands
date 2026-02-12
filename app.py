@@ -53,6 +53,27 @@ def prazo_contains_today(prazo_text: str, today: Optional[date] = None) -> bool:
     return ref in parse_prazos_list(normalized)
 
 
+def selected_member_names(table: QTableWidget) -> List[str]:
+    footer_row = table.rowCount() - 1
+    names: List[str] = []
+    seen_rows = set()
+
+    for idx in table.selectedIndexes():
+        row = idx.row()
+        if row < 0 or row >= footer_row or row in seen_rows:
+            continue
+
+        name_item = table.item(row, 0)
+        name = (name_item.text() if name_item else "").strip()
+        if not name:
+            continue
+
+        names.append(name)
+        seen_rows.add(row)
+
+    return names
+
+
 VISIBLE_COLUMNS = [
     "ID", "É Urgente?", "Status", "Timing", "Prioridade",
     "Data de Registro", "Prazo", "Data Conclusão",
@@ -1556,8 +1577,17 @@ class MainWindow(QMainWindow):
             return
 
         menu = QMenu(table)
+        copy_names_action = menu.addAction("Copiar nomes selecionados")
         delete_action = menu.addAction("Excluir")
         picked = menu.exec(table.viewport().mapToGlobal(pos))
+        if picked == copy_names_action:
+            names = selected_member_names(table)
+            if not names:
+                QMessageBox.information(self, "Copiar nomes", "Selecione ao menos um nome para copiar.")
+                return
+            QApplication.clipboard().setText(", ".join(names))
+            QMessageBox.information(self, "Copiar nomes", f"{len(names)} nome(s) copiado(s) para a área de transferência.")
+            return
         if picked != delete_action:
             return
 
