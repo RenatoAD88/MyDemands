@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QInputDialog,
     QDialog, QFormLayout,
     QDateEdit, QLineEdit, QTextEdit, QComboBox,
-    QListWidget, QGroupBox
+    QListWidget, QGroupBox, QAbstractItemView
 )
 from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QHeaderView, QStyle
@@ -317,11 +317,10 @@ class PrazoMultiDialog(QDialog):
 
 class DeleteDemandDialog(QDialog):
     """
-    Exclusão por ID:
-    - usuário informa ID
-    - app carrega Projeto, Prazo e Descrição
-    - confirma excluir
-    - bloqueia se Status == Concluído
+    Exclusão por ID (único ou múltiplos):
+    - usuário informa IDs e app carrega as demandas
+    - permite preload de seleção múltipla da tabela
+    - bloqueia exclusão de demandas concluídas
     """
     def __init__(self, parent: QWidget, store: CsvStore):
         super().__init__(parent)
@@ -329,7 +328,7 @@ class DeleteDemandDialog(QDialog):
         self.setWindowTitle("Excluir demanda")
 
         self.line_input = QLineEdit()
-        self.line_input.setPlaceholderText("Ex: 12")
+        self.line_input.setPlaceholderText("Ex: 12 ou 1,3,5")
 
         self.info_label = QLabel("")
         self.info_label.setWordWrap(True)
@@ -343,11 +342,10 @@ class DeleteDemandDialog(QDialog):
         self.cancel_btn.clicked.connect(self.reject)
 
         self.delete_btn.setEnabled(False)
-        self._loaded_id: Optional[str] = None
-        self._loaded_line: Optional[int] = None
+        self._loaded_rows: List[Dict[str, Any]] = []
 
         form = QFormLayout()
-        form.addRow("Número do ID*", self.line_input)
+        form.addRow("Número(s) do ID*", self.line_input)
 
         top = QHBoxLayout()
         top.addWidget(self.load_btn)
@@ -368,99 +366,107 @@ class DeleteDemandDialog(QDialog):
         root.addLayout(btns)
         self.setLayout(root)
 
-    def _load_line(self):
-        raw = (self.line_input.text() or "").strip()
-        if not raw.isdigit():
-            QMessageBox.warning(self, "Inválido", "Informe um número de ID válido.")
-            self._loaded_id = None
-            self._loaded_line = None
-            self.delete_btn.setEnabled(False)
-            self.info_label.setText("")
-            return
+    def _parse_input_lines(self, raw: str) -> List[int]:
+        parts = [p.strip() for p in raw.replace(";", ",").split(",") if p.strip()]
+        lines: List[int] = []
+        for part in parts:
+            if not part.isdigit():
+                raise ValueError("Informe apenas números de ID separados por vírgula.")
+            line = int(part)
+            if line < 1:
+                raise ValueError("Os IDs devem ser maiores que zero.")
+            if line not in lines:
+                lines.append(line)
+        if not lines:
+            raise ValueError("Informe ao menos um número de ID.")
+        return lines
 
-        line = int(raw)
-        self.store.load()
-        view = self.store.build_view()
-
-        if line < 1 or line > len(view):
-            QMessageBox.warning(self, "Não encontrado", f"Nenhuma demanda encontrada no ID {line}.")
-            self._loaded_id = None
-            self._loaded_line = None
-            self.delete_btn.setEnabled(False)
-            self.info_label.setText("")
-            return
-
-        row = view[line - 1]
-        _id = row.get("_id")
-        status = (row.get("Status") or "").strip()
-
-        self._loaded_id = _id
-        self._loaded_line = line
-
-        projeto = row.get("Projeto", "")
-        prazo = row.get("Prazo", "")
-        desc = row.get("Descrição", "")
-
-        self.info_label.setText(
-            f"**ID {line}**\n"
-            f"Projeto: {projeto}\n"
-            f"Prazo: {prazo}\n"
-            f"Descrição: {desc}\n"
-            f"Status: {status}"
+    def _format_row_info(self, row: Dict[str, Any]) -> str:
+        return (
+            f"ID {row.get('ID', '')}\n"
+            f"Projeto: {row.get('Projeto', '')}\n"
+            f"Prazo: {row.get('Prazo', '')}\n"
+            f"Descrição: {row.get('Descrição', '')}\n"
+            f"Status: {row.get('Status', '')}"
         )
 
-        if status == "Concluído":
+    def _set_loaded_rows(self, rows: List[Dict[str, Any]]):
+        self._loaded_rows = rows
+        if not rows:
+            self.info_label.setText("")
+            self.delete_btn.setEnabled(False)
+            return
+
+        sections = [self._format_row_info(row) for row in rows]
+        self.info_label.setText("\n\n--------------------\n\n".join(sections))
+
+        has_concluded = any((row.get("Status") or "").strip() == "Concluído" for row in rows)
+        if has_concluded:
             self.delete_btn.setEnabled(False)
             QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
         else:
             self.delete_btn.setEnabled(True)
 
-    def _do_delete(self):
-        if not self._loaded_id:
+    def _load_line(self):
+        raw = (self.line_input.text() or "").strip()
+        try:
+            lines = self._parse_input_lines(raw)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Inválido", str(exc))
+            self._set_loaded_rows([])
             return
 
         self.store.load()
-        dr = self.store.get(self._loaded_id)
-        if dr and (dr.data.get("Status") or "").strip() == "Concluído":
-            QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
-            self.reject()
+        view = self.store.build_view()
+
+        rows: List[Dict[str, Any]] = []
+        for line in lines:
+            if line > len(view):
+                QMessageBox.warning(self, "Não encontrado", f"Nenhuma demanda encontrada no ID {line}.")
+                self._set_loaded_rows([])
+                return
+            rows.append(view[line - 1])
+
+        self._set_loaded_rows(rows)
+
+    def _do_delete(self):
+        if not self._loaded_rows:
             return
 
-        ok = self.store.delete_by_id(self._loaded_id)
-        if not ok:
-            QMessageBox.warning(self, "Falha", "Não foi possível excluir. Verifique o ID e tente novamente.")
-            self.reject()
-            return
+        self.store.load()
+
+        for row in self._loaded_rows:
+            _id = row.get("_id")
+            if not _id:
+                QMessageBox.warning(self, "Falha", "Demanda inválida para exclusão.")
+                self.reject()
+                return
+
+            dr = self.store.get(_id)
+            if dr and (dr.data.get("Status") or "").strip() == "Concluído":
+                QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
+                self.reject()
+                return
+
+        for row in self._loaded_rows:
+            _id = row.get("_id")
+            if not self.store.delete_by_id(_id):
+                QMessageBox.warning(self, "Falha", "Não foi possível excluir uma das demandas selecionadas.")
+                self.reject()
+                return
 
         self.accept()
 
     def preload_selected(self, row_data: Dict[str, Any]):
-        line_txt = str(row_data.get("ID", "") or "")
-        self.line_input.setText(line_txt)
+        self.preload_selected_rows([row_data])
+
+    def preload_selected_rows(self, rows_data: List[Dict[str, Any]]):
+        ids = [str(row.get("ID", "") or "") for row in rows_data if str(row.get("ID", "") or "").isdigit()]
+        self.line_input.setText(", ".join(ids))
         self.line_input.setEnabled(False)
         self.load_btn.setEnabled(False)
 
-        self._loaded_id = row_data.get("_id")
-        self._loaded_line = int(line_txt) if line_txt.isdigit() else None
-
-        projeto = row_data.get("Projeto", "")
-        prazo = row_data.get("Prazo", "")
-        desc = row_data.get("Descrição", "")
-        status = (row_data.get("Status") or "").strip()
-
-        self.info_label.setText(
-            f"**ID {line_txt}**\n"
-            f"Projeto: {projeto}\n"
-            f"Prazo: {prazo}\n"
-            f"Descrição: {desc}\n"
-            f"Status: {status}"
-        )
-
-        if status == "Concluído":
-            self.delete_btn.setEnabled(False)
-            QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
-        else:
-            self.delete_btn.setEnabled(True)
+        self._set_loaded_rows(rows_data)
 
 
 class NewDemandDialog(QDialog):
@@ -728,7 +734,7 @@ class MainWindow(QMainWindow):
         table.setItemDelegate(ColumnComboDelegate(table, col_map))
         table.setAlternatingRowColors(True)
         table.setSelectionBehavior(QTableWidget.SelectRows)
-        table.setSelectionMode(QTableWidget.SingleSelection)
+        table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         table.verticalHeader().setVisible(False)
         table.setWordWrap(True)
 
@@ -1211,8 +1217,11 @@ class MainWindow(QMainWindow):
         if not export_path.lower().endswith(".csv"):
             export_path = f"{export_path}.csv"
 
+        selected_rows = self._selected_rows_from_current_tab()
+        rows_to_export = selected_rows if selected_rows else self.store.build_view()
+
         try:
-            total = self.store.export_all_to_csv(export_path)
+            total = self.store.export_rows_to_csv(export_path, rows_to_export)
         except Exception as e:
             QMessageBox.warning(self, "Falha na exportação", f"Não foi possível exportar o CSV.\n\n{e}")
             return
@@ -1255,49 +1264,56 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Importação concluída", f"CSV importado com sucesso.\nTotal de demandas: {total}")
 
     def delete_demand(self):
-        selected = self._selected_row_from_current_tab()
-        if selected and self.tabs.currentIndex() == 2:
+        selected_rows = self._selected_rows_from_current_tab()
+        if selected_rows and self.tabs.currentIndex() == 2:
             QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
             return
 
         dlg = DeleteDemandDialog(self, self.store)
-        if selected and self.tabs.currentIndex() in (0, 1):
-            dlg.preload_selected(selected)
+        if selected_rows and self.tabs.currentIndex() in (0, 1):
+            dlg.preload_selected_rows(selected_rows)
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
 
-    def _selected_row_from_current_tab(self) -> Optional[Dict[str, Any]]:
-        table: Optional[QTableWidget] = None
+    def _selected_rows_from_current_tab(self) -> List[Dict[str, Any]]:
+        table = self._table_from_current_tab()
+        if not table:
+            return []
+
+        selected_indexes = table.selectionModel().selectedRows()
+        if not selected_indexes:
+            row_idx = table.currentRow()
+            if row_idx < 0:
+                return []
+            selected_indexes = [table.model().index(row_idx, 0)]
+
+        row_numbers = sorted(idx.row() for idx in selected_indexes)
+        rows_data: List[Dict[str, Any]] = []
+        for row_idx in row_numbers:
+            row_data: Dict[str, Any] = {}
+            for col_idx, col_name in enumerate(VISIBLE_COLUMNS):
+                item = table.item(row_idx, col_idx)
+                if not item:
+                    continue
+                row_data[col_name] = item.text()
+                if "_id" not in row_data:
+                    _id = item.data(Qt.UserRole)
+                    if _id:
+                        row_data["_id"] = _id
+            if row_data.get("_id"):
+                rows_data.append(row_data)
+
+        return rows_data
+
+    def _table_from_current_tab(self) -> Optional[QTableWidget]:
         current_tab = self.tabs.currentIndex()
         if current_tab == 0:
-            table = self.t1_table
-        elif current_tab == 1:
-            table = self.t3_table
-        elif current_tab == 2:
-            table = self.t4_table
-
-        if not table:
-            return None
-
-        row_idx = table.currentRow()
-        if row_idx < 0:
-            return None
-
-        row_data: Dict[str, Any] = {}
-        for col_idx, col_name in enumerate(VISIBLE_COLUMNS):
-            item = table.item(row_idx, col_idx)
-            if not item:
-                continue
-            row_data[col_name] = item.text()
-            if "_id" not in row_data:
-                _id = item.data(Qt.UserRole)
-                if _id:
-                    row_data["_id"] = _id
-
-        if not row_data.get("_id"):
-            return None
-
-        return row_data
+            return self.t1_table
+        if current_tab == 1:
+            return self.t3_table
+        if current_tab == 2:
+            return self.t4_table
+        return None
 
     def closeEvent(self, event):
         self._save_preferences()
