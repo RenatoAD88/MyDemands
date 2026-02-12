@@ -366,6 +366,14 @@ class DeleteDemandDialog(QDialog):
         root.addLayout(btns)
         self.setLayout(root)
 
+        self.reset_state()
+
+    def reset_state(self):
+        self._set_loaded_rows([])
+        self.line_input.clear()
+        self.line_input.setEnabled(True)
+        self.load_btn.setEnabled(True)
+
     def _parse_input_lines(self, raw: str) -> List[int]:
         parts = [p.strip() for p in raw.replace(";", ",").split(",") if p.strip()]
         lines: List[int] = []
@@ -454,20 +462,18 @@ class DeleteDemandDialog(QDialog):
                 QMessageBox.warning(self, "Falha", "Não foi possível excluir uma das demandas selecionadas.")
                 self.reject()
                 return
-
+        self.reset_state()
         self.accept()
 
     def _cancel_delete_action(self):
-        self._set_loaded_rows([])
-        self.line_input.clear()
-        self.line_input.setEnabled(True)
-        self.load_btn.setEnabled(True)
+        self.reset_state()
         self.reject()
 
     def preload_selected(self, row_data: Dict[str, Any]):
         self.preload_selected_rows([row_data])
 
     def preload_selected_rows(self, rows_data: List[Dict[str, Any]]):
+        self.reset_state()
         ids = [str(row.get("ID", "") or "") for row in rows_data if str(row.get("ID", "") or "").isdigit()]
         self.line_input.setText(", ".join(ids))
         self.line_input.setEnabled(False)
@@ -1271,26 +1277,30 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Importação concluída", f"CSV importado com sucesso.\nTotal de demandas: {total}")
 
     def delete_demand(self):
-        selected_rows = self._selected_rows_from_current_tab()
+        selected_rows = self._selected_rows_from_current_tab(include_current=False)
         if selected_rows and self.tabs.currentIndex() == 2:
             QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
             return
 
         dlg = DeleteDemandDialog(self, self.store)
+        if selected_rows and self.tabs.currentIndex() in (0, 1):
+            dlg.preload_selected_rows(selected_rows)
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
 
-    def _selected_rows_from_current_tab(self) -> List[Dict[str, Any]]:
+    def _selected_rows_from_current_tab(self, include_current: bool = True) -> List[Dict[str, Any]]:
         table = self._table_from_current_tab()
         if not table:
             return []
 
         selected_indexes = table.selectionModel().selectedRows()
-        if not selected_indexes:
+        if not selected_indexes and include_current:
             row_idx = table.currentRow()
             if row_idx < 0:
                 return []
             selected_indexes = [table.model().index(row_idx, 0)]
+        elif not selected_indexes:
+            return []
 
         row_numbers = sorted(idx.row() for idx in selected_indexes)
         rows_data: List[Dict[str, Any]] = []
