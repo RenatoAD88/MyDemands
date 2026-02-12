@@ -1244,6 +1244,9 @@ class MainWindow(QMainWindow):
             table.setSelectionBehavior(QAbstractItemView.SelectItems)
             table.setContextMenuPolicy(Qt.CustomContextMenu)
             table.customContextMenuRequested.connect(self._open_member_context_menu)
+            table.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
+            table.horizontalHeader().setMinimumSectionSize(48)
+            table.horizontalHeader().setFixedHeight(42)
 
             headers_top = [section.name]
             headers_bottom = ["Nomes"]
@@ -1268,7 +1271,7 @@ class MainWindow(QMainWindow):
 
             table.setColumnWidth(0, 170)
             for d in range(1, total_days + 1):
-                table.setColumnWidth(d, 38)
+                table.setColumnWidth(d, 52)
 
             weekend_bg = QColor(229, 231, 235)
 
