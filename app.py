@@ -1298,11 +1298,12 @@ class MainWindow(QMainWindow):
                     item = QTableWidgetItem()
                     table.setHorizontalHeaderItem(c, item)
                 item.setText(f"{text}\n{headers_bottom[c] if c > 0 else ""}".strip())
-                curr_is_today = c > 0 and date(year, month, c) == today
+                curr_date = date(year, month, c) if 0 < c <= total_days else None
+                curr_is_today = curr_date == today
                 if curr_is_today:
                     item.setBackground(QColor(220, 38, 38))
                     item.setForeground(QColor(0, 0, 0))
-                elif c > 0 and date(year, month, c).weekday() >= 5:
+                elif curr_date and curr_date.weekday() >= 5:
                     item.setBackground(QColor(229, 231, 235))
 
             table.setColumnWidth(0, 170)
