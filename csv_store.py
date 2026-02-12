@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import csv
+import base64
+import hashlib
+import hmac
+import io
 import os
 import uuid
 from dataclasses import dataclass
@@ -11,6 +15,8 @@ from validation import validate_payload, normalize_prazo_text, ValidationError
 
 CSV_NAME = "data.csv"
 DELIMITER = ";"
+ENC_MAGIC = b"MYDEMANDS_ENC_V1"
+KEY_FILE_NAME = ".demandas.key"
 
 DISPLAY_COLUMNS = [
     "ID",
@@ -222,46 +228,131 @@ class CsvStore:
     def __init__(self, base_dir: str):
         self.base_dir = base_dir
         self.csv_path = os.path.join(base_dir, CSV_NAME)
+        self.key_path = os.path.join(base_dir, KEY_FILE_NAME)
         self.rows: List[DemandRow] = []
+        self._crypto_key = self._load_or_create_key()
         self.load()
+
+    def _load_or_create_key(self) -> bytes:
+        env_key = (os.environ.get("DEMANDAS_APP_KEY") or "").strip()
+        if env_key:
+            raw = base64.urlsafe_b64decode(env_key.encode("utf-8"))
+            if len(raw) < 32:
+                raise ValueError("DEMANDAS_APP_KEY inválida: esperado ao menos 32 bytes decodificados em base64")
+            return raw[:32]
+
+        if os.path.exists(self.key_path):
+            with open(self.key_path, "rb") as f:
+                raw = f.read()
+            if len(raw) < 32:
+                raise ValueError("Arquivo de chave inválido")
+            return raw[:32]
+
+        raw = os.urandom(32)
+        with open(self.key_path, "wb") as f:
+            f.write(raw)
+        try:
+            os.chmod(self.key_path, 0o600)
+        except Exception:
+            pass
+        return raw
+
+    def _encrypt_bytes(self, plain: bytes) -> bytes:
+        nonce = os.urandom(16)
+        out = bytearray(len(plain))
+        counter = 0
+        offset = 0
+        while offset < len(plain):
+            block = hashlib.sha256(self._crypto_key + nonce + counter.to_bytes(8, "big")).digest()
+            n = min(32, len(plain) - offset)
+            for i in range(n):
+                out[offset + i] = plain[offset + i] ^ block[i]
+            offset += n
+            counter += 1
+        cipher = bytes(out)
+        mac = hmac.new(self._crypto_key, ENC_MAGIC + nonce + cipher, hashlib.sha256).digest()
+        return ENC_MAGIC + b"\n" + base64.urlsafe_b64encode(nonce + cipher + mac)
+
+    def _decrypt_bytes(self, payload: bytes) -> bytes:
+        if not payload.startswith(ENC_MAGIC + b"\n"):
+            return payload
+
+        packed = payload[len(ENC_MAGIC) + 1 :].strip()
+        raw = base64.urlsafe_b64decode(packed)
+        if len(raw) < 16 + 32:
+            raise ValueError("Arquivo criptografado inválido")
+
+        nonce = raw[:16]
+        mac = raw[-32:]
+        cipher = raw[16:-32]
+        expected = hmac.new(self._crypto_key, ENC_MAGIC + nonce + cipher, hashlib.sha256).digest()
+        if not hmac.compare_digest(mac, expected):
+            raise ValueError("Falha de integridade no arquivo criptografado")
+
+        out = bytearray(len(cipher))
+        counter = 0
+        offset = 0
+        while offset < len(cipher):
+            block = hashlib.sha256(self._crypto_key + nonce + counter.to_bytes(8, "big")).digest()
+            n = min(32, len(cipher) - offset)
+            for i in range(n):
+                out[offset + i] = cipher[offset + i] ^ block[i]
+            offset += n
+            counter += 1
+        return bytes(out)
+
+    def _read_csv_text(self) -> str:
+        if not os.path.exists(self.csv_path):
+            return ""
+        with open(self.csv_path, "rb") as f:
+            payload = f.read()
+        plain = self._decrypt_bytes(payload)
+        return plain.decode("utf-8")
+
+    def _write_csv_text(self, text: str):
+        tmp = self.csv_path + ".tmp"
+        payload = self._encrypt_bytes(text.encode("utf-8"))
+        with open(tmp, "wb") as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, self.csv_path)
 
     def ensure_exists(self):
         if not os.path.exists(self.csv_path):
-            with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
-                w = csv.DictWriter(f, fieldnames=CSV_COLUMNS, delimiter=DELIMITER)
-                w.writeheader()
+            buf = io.StringIO()
+            w = csv.DictWriter(buf, fieldnames=CSV_COLUMNS, delimiter=DELIMITER)
+            w.writeheader()
+            self._write_csv_text(buf.getvalue())
 
     def load(self):
         self.ensure_exists()
         self.rows = []
-        with open(self.csv_path, "r", newline="", encoding="utf-8") as f:
-            r = csv.DictReader(f, delimiter=DELIMITER)
-            for row in r:
-                for old, new in LEGACY_TO_NEW.items():
-                    if old in row and new not in row:
-                        row[new] = row.get(old, "")
+        csv_text = self._read_csv_text()
+        r = csv.DictReader(io.StringIO(csv_text), delimiter=DELIMITER)
+        for row in r:
+            for old, new in LEGACY_TO_NEW.items():
+                if old in row and new not in row:
+                    row[new] = row.get(old, "")
 
-                _id = row.get("_id") or str(uuid.uuid4())
-                row["_id"] = _id
+            _id = row.get("_id") or str(uuid.uuid4())
+            row["_id"] = _id
 
-                for c in CSV_COLUMNS:
-                    row.setdefault(c, "")
+            for c in CSV_COLUMNS:
+                row.setdefault(c, "")
 
-                row["Prazo"] = normalize_prazo_text(row.get("Prazo", ""))
-                self.rows.append(DemandRow(_id=_id, data=row))
+            row["Prazo"] = normalize_prazo_text(row.get("Prazo", ""))
+            self.rows.append(DemandRow(_id=_id, data=row))
 
         self.save()
 
     def _atomic_save(self):
-        tmp = self.csv_path + ".tmp"
-        with open(tmp, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=CSV_COLUMNS, delimiter=DELIMITER)
-            w.writeheader()
-            for dr in self.rows:
-                w.writerow({c: dr.data.get(c, "") for c in CSV_COLUMNS})
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, self.csv_path)
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=CSV_COLUMNS, delimiter=DELIMITER)
+        w.writeheader()
+        for dr in self.rows:
+            w.writerow({c: dr.data.get(c, "") for c in CSV_COLUMNS})
+        self._write_csv_text(buf.getvalue())
 
     def save(self):
         for dr in self.rows:
