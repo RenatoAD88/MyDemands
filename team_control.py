@@ -135,6 +135,11 @@ class TeamControlStore:
 
     def save(self) -> None:
         self._period_sections[self._active_period] = self.sections
+        payload = self.to_payload()
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    def to_payload(self) -> Dict[str, Dict[str, Dict[str, List[dict]]]]:
         payload = {"periods": {}}
         for period, sections in self._period_sections.items():
             payload["periods"][period] = {
@@ -154,8 +159,7 @@ class TeamControlStore:
                     for s in sections
                 ]
             }
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+        return payload
 
     def create_section(self, name: str) -> TeamSection:
         cleaned = (name or "").strip()

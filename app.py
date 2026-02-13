@@ -1132,7 +1132,7 @@ class MainWindow(QMainWindow):
         backup_name = self._backup_file_name_now()
         backup_path = os.path.join(bkp_dir, backup_name)
 
-        team_payload = {"periods": self.team_store._period_sections}
+        team_payload = self.team_store.to_payload()
         self.store.export_encrypted_backup_csv(backup_path, team_payload)
         return backup_name
 
