@@ -14,4 +14,4 @@ def test_build_version_code_uses_first_version_when_git_is_unavailable(monkeypat
         raise RuntimeError("git indisponível")
 
     monkeypatch.setattr("app.subprocess.check_output", _raise)
-    assert build_version_code() == "RAD_2026_1"
+    assert build_version_code() == "RAD_2026_81"

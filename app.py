@@ -220,7 +220,7 @@ def build_version_code(previous_version_number: Optional[int] = None, base_year:
             ).strip()
             version_number = max(1, int(count))
         except Exception:
-            version_number = 1
+            version_number = 81
     return f"RAD_{base_year}_{version_number}"
 
 
