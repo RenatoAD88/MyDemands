@@ -75,6 +75,28 @@ def selected_member_names(table: QTableWidget) -> List[str]:
     return names
 
 
+def selected_members_with_ids(table: QTableWidget) -> List[Tuple[str, str]]:
+    footer_row = table.rowCount() - 1
+    members: List[Tuple[str, str]] = []
+    seen_rows = set()
+
+    for idx in table.selectedIndexes():
+        row = idx.row()
+        if row < 0 or row >= footer_row or row in seen_rows:
+            continue
+
+        name_item = table.item(row, 0)
+        member_name = (name_item.text() if name_item else "").strip()
+        member_id = str(name_item.data(Qt.UserRole) if name_item else "").strip()
+        if not member_name or not member_id:
+            continue
+
+        members.append((member_id, member_name))
+        seen_rows.add(row)
+
+    return members
+
+
 VISIBLE_COLUMNS = [
     "ID", "É Urgente?", "Status", "Timing", "Prioridade",
     "Data de Registro", "Prazo", "Data Conclusão",
@@ -542,6 +564,66 @@ class DeleteDemandDialog(QDialog):
         self.load_btn.setEnabled(False)
 
         self._set_loaded_rows(rows_data)
+
+
+class DeleteTeamMembersDialog(QDialog):
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setWindowTitle("Excluir funcionário")
+
+        self.info_label = QLabel("")
+        self.info_label.setWordWrap(True)
+        self.confirm_btn = QPushButton("Confirmar")
+        self.cancel_btn = QPushButton("Cancelar")
+
+        self.confirm_btn.clicked.connect(self._confirm_delete_action)
+        self.cancel_btn.clicked.connect(self._cancel_delete_action)
+
+        self._selected_members: List[Tuple[str, str]] = []
+
+        btns = QHBoxLayout()
+        btns.addStretch()
+        btns.addWidget(self.confirm_btn)
+        btns.addWidget(self.cancel_btn)
+
+        root = QVBoxLayout()
+        root.addWidget(QLabel("Atenção: Funcionário será excluído permanentemente do controle"))
+        root.addWidget(self.info_label)
+        root.addLayout(btns)
+        self.setLayout(root)
+
+        self.reset_state()
+
+    def reset_state(self):
+        self._selected_members = []
+        self.info_label.setText("")
+        self.confirm_btn.setEnabled(False)
+
+    def preload_members(self, members: List[Tuple[str, str]]):
+        self.reset_state()
+        unique_members: List[Tuple[str, str]] = []
+        seen_member_ids = set()
+        for member_id, member_name in members:
+            if not member_id or member_id in seen_member_ids:
+                continue
+            unique_members.append((member_id, member_name))
+            seen_member_ids.add(member_id)
+
+        self._selected_members = unique_members
+        names_text = "\n".join(f"- {member_name}" for _, member_name in unique_members)
+        self.info_label.setText(f"Nome(s):\n{names_text}" if names_text else "")
+        self.confirm_btn.setEnabled(bool(unique_members))
+
+    def selected_member_ids(self) -> List[str]:
+        return [member_id for member_id, _ in self._selected_members]
+
+    def _confirm_delete_action(self):
+        self.accept()
+        self.reset_state()
+
+    def _cancel_delete_action(self):
+        self.reset_state()
+        self.reject()
 
 
 class NewDemandDialog(QDialog):
@@ -1711,21 +1793,21 @@ class MainWindow(QMainWindow):
         year, month = self._selected_year_month()
         self.team_store.set_period(year, month)
         section_id = str(table.property("sectionId") or "")
-        member_id = str(member_item.data(Qt.UserRole) or "")
-        member_name = member_item.text()
+        members = selected_members_with_ids(table)
+        if not members:
+            selected_member_id = str(member_item.data(Qt.UserRole) or "")
+            selected_member_name = (member_item.text() or "").strip()
+            if not selected_member_id or not selected_member_name:
+                return
+            members = [(selected_member_id, selected_member_name)]
 
-        box = QMessageBox(self)
-        box.setWindowTitle("Excluir funcionário")
-        box.setIcon(QMessageBox.Warning)
-        box.setText("Atenção: Funcionário será excluído permanentemente do controle")
-        box.setInformativeText(f"Nome: '{member_name}'")
-        confirm_btn = box.addButton("Confirmar", QMessageBox.AcceptRole)
-        box.addButton("Cancelar", QMessageBox.RejectRole)
-        box.exec()
-        if box.clickedButton() is not confirm_btn:
+        dlg = DeleteTeamMembersDialog(self)
+        dlg.preload_members(members)
+        if dlg.exec() != QDialog.Accepted:
             return
 
-        self.team_store.remove_member(section_id, member_id)
+        for member_id in dlg.selected_member_ids():
+            self.team_store.remove_member(section_id, member_id)
         self.refresh_team_control()
 
     # Tabs
