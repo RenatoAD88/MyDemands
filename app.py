@@ -1125,6 +1125,7 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(icon_path))
 
         self._filling = False
+        self._restoring_prefs = False
         self._table_sort_state: Dict[str, Optional[Tuple[int, Qt.SortOrder]]] = {
             "t1": None,
             "t3": None,
@@ -1314,11 +1315,16 @@ class MainWindow(QMainWindow):
         table.setWordWrap(True)
 
         header = table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.sectionResized.connect(lambda _idx, _old, _new, t=table: self._on_table_section_resized(t))
+
+        for col in range(len(VISIBLE_COLUMNS)):
+            header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
+            table.resizeColumnToContents(col)
+            header.setSectionResizeMode(col, QHeaderView.Interactive)
 
         desc_col = VISIBLE_COLUMNS.index("Descrição")
         desc_width = table.fontMetrics().horizontalAdvance("M" * DESC_COLUMN_MAX_CHARS)
-        header.setSectionResizeMode(desc_col, QHeaderView.Interactive)
         table.setColumnWidth(desc_col, desc_width)
         self._setup_sortable_header(table)
 
@@ -1572,19 +1578,28 @@ class MainWindow(QMainWindow):
         self.refresh_all()
 
     def _restore_preferences(self):
-        idx = int(self._prefs.get("tab_index", 0) or 0)
-        if 0 <= idx < self.tabs.count():
-            self.tabs.setCurrentIndex(idx)
-        self.t3_search.setText(str(self._prefs.get("t3_search", "") or ""))
-        self.t3_status.setCurrentText(str(self._prefs.get("t3_status", "") or ""))
-        self.t3_prioridade.setCurrentText(str(self._prefs.get("t3_prioridade", "") or ""))
-        self.t3_responsavel.setText(str(self._prefs.get("t3_responsavel", "") or ""))
+        self._restoring_prefs = True
+        try:
+            idx = int(self._prefs.get("tab_index", 0) or 0)
+            if 0 <= idx < self.tabs.count():
+                self.tabs.setCurrentIndex(idx)
+            self.t3_search.setText(str(self._prefs.get("t3_search", "") or ""))
+            self.t3_status.setCurrentText(str(self._prefs.get("t3_status", "") or ""))
+            self.t3_prioridade.setCurrentText(str(self._prefs.get("t3_prioridade", "") or ""))
+            self.t3_responsavel.setText(str(self._prefs.get("t3_responsavel", "") or ""))
 
-        tab_order = self._prefs.get("tab_order")
-        if isinstance(tab_order, list):
-            self._restore_tab_order(tab_order)
+            tab_order = self._prefs.get("tab_order")
+            if isinstance(tab_order, list):
+                self._restore_tab_order(tab_order)
+
+            self._restore_table_column_widths()
+        finally:
+            self._restoring_prefs = False
 
     def _save_preferences(self):
+        if self._restoring_prefs:
+            return
+
         data = {
             "tab_index": self.tabs.currentIndex(),
             "t3_search": self.t3_search.text(),
@@ -1592,8 +1607,45 @@ class MainWindow(QMainWindow):
             "t3_prioridade": self.t3_prioridade.currentText(),
             "t3_responsavel": self.t3_responsavel.text(),
             "tab_order": [self.tabs.tabText(i) for i in range(self.tabs.count())],
+            "table_column_widths": self._collect_table_column_widths(),
         }
         save_prefs(self.store.base_dir, data)
+
+    def _table_column_widths(self, table: QTableWidget) -> Dict[str, int]:
+        return {
+            col_name: table.columnWidth(col_idx)
+            for col_idx, col_name in enumerate(VISIBLE_COLUMNS)
+        }
+
+    def _collect_table_column_widths(self) -> Dict[str, Dict[str, int]]:
+        result: Dict[str, Dict[str, int]] = {}
+        for key in ("t1", "t3", "t4"):
+            table = getattr(self, f"{key}_table", None)
+            if isinstance(table, QTableWidget):
+                result[key] = self._table_column_widths(table)
+        return result
+
+    def _restore_table_column_widths(self) -> None:
+        widths_by_table = self._prefs.get("table_column_widths")
+        if not isinstance(widths_by_table, dict):
+            return
+
+        for key, table in (("t1", self.t1_table), ("t3", self.t3_table), ("t4", self.t4_table)):
+            widths = widths_by_table.get(key)
+            if not isinstance(widths, dict):
+                continue
+            for col_idx, col_name in enumerate(VISIBLE_COLUMNS):
+                width = widths.get(col_name)
+                if isinstance(width, int) and width > 0:
+                    table.setColumnWidth(col_idx, width)
+
+    def _on_table_section_resized(self, table: QTableWidget):
+        if self._restoring_prefs:
+            return
+        table_key = str(table.property("tableSortKey") or "")
+        if table_key not in {"t1", "t3", "t4"}:
+            return
+        self._save_preferences()
 
     def _restore_tab_order(self, tab_order: List[str]):
         for target_idx, title in enumerate(tab_order):
