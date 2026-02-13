@@ -1326,58 +1326,17 @@ class MainWindow(QMainWindow):
 
     def _setup_sortable_header(self, table: QTableWidget):
         header = table.horizontalHeader()
-        for col, name in enumerate(VISIBLE_COLUMNS):
-            host = QWidget(header)
-            host_layout = QHBoxLayout(host)
-            host_layout.setContentsMargins(2, 0, 2, 0)
-            host_layout.setSpacing(2)
+        header.setSectionsClickable(True)
+        header.setSortIndicatorShown(True)
+        header.sectionClicked.connect(lambda col, t=table: self._on_header_section_clicked(t, col))
 
-            title = QLabel(name)
-            title.setAlignment(Qt.AlignCenter)
-
-            up_btn = QToolButton(host)
-            up_btn.setText("▲")
-            up_btn.setAutoRaise(True)
-            up_btn.setToolTip(f"Ordenar {name} crescente")
-            up_btn.setFixedSize(12, 8)
-
-            down_btn = QToolButton(host)
-            down_btn.setText("▼")
-            down_btn.setAutoRaise(True)
-            down_btn.setToolTip(f"Ordenar {name} decrescente")
-            down_btn.setFixedSize(12, 8)
-
-            up_btn.clicked.connect(lambda _=False, t=table, c=col: self._on_header_sort_requested(t, c, Qt.AscendingOrder))
-            down_btn.clicked.connect(lambda _=False, t=table, c=col: self._on_header_sort_requested(t, c, Qt.DescendingOrder))
-
-            arrows_layout = QVBoxLayout()
-            arrows_layout.setContentsMargins(0, 0, 0, 0)
-            arrows_layout.setSpacing(0)
-            arrows_layout.addWidget(up_btn, alignment=Qt.AlignHCenter)
-            arrows_layout.addWidget(down_btn, alignment=Qt.AlignHCenter)
-
-            host_layout.addWidget(title, 1)
-            host_layout.addLayout(arrows_layout)
-
-            table.setHorizontalHeaderItem(col, QTableWidgetItem(""))
-            host.setParent(header.viewport())
-            host.show()
-            table.setProperty(f"headerWidget_{col}", host)
-
-        self._position_header_widgets(table)
-        header.sectionResized.connect(lambda *_args, t=table: self._position_header_widgets(t))
-        header.geometriesChanged.connect(lambda t=table: self._position_header_widgets(t))
-
-    def _position_header_widgets(self, table: QTableWidget):
-        header = table.horizontalHeader()
-        viewport_h = header.height()
-        for col in range(len(VISIBLE_COLUMNS)):
-            host = table.property(f"headerWidget_{col}")
-            if not isinstance(host, QWidget):
-                continue
-            x = header.sectionViewportPosition(col)
-            w = header.sectionSize(col)
-            host.setGeometry(x, 0, w, viewport_h)
+    def _on_header_section_clicked(self, table: QTableWidget, col: int):
+        table_key = str(table.property("tableSortKey") or "")
+        current_sort = self._table_sort_state.get(table_key)
+        order = Qt.AscendingOrder
+        if current_sort and current_sort[0] == col and current_sort[1] == Qt.AscendingOrder:
+            order = Qt.DescendingOrder
+        self._on_header_sort_requested(table, col, order)
 
     def _on_header_sort_requested(self, table: QTableWidget, col: int, order: Qt.SortOrder):
         table_key = str(table.property("tableSortKey") or "")
