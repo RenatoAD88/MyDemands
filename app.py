@@ -1783,12 +1783,8 @@ class MainWindow(QMainWindow):
 
         content.linkActivated.connect(_handle_link)
 
-        close_btn = QPushButton("Fechar", dialog)
-        close_btn.clicked.connect(dialog.accept)
-
         layout = QVBoxLayout(dialog)
         layout.addWidget(content)
-        layout.addWidget(close_btn)
         dialog.setLayout(layout)
         dialog.exec()
 
