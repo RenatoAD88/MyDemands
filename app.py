@@ -159,9 +159,19 @@ def _app_icon_path() -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "img", "icondemand.png")
 
 
-def build_version_code(now: Optional[datetime] = None) -> str:
-    ref = now or datetime.now()
-    return f"RAD{ref.strftime('%Y%m%d%H%M%S')}"
+def build_version_code(previous_commit_hash: Optional[str] = None) -> str:
+    commit_hash = (previous_commit_hash or "").strip()
+    if not commit_hash:
+        try:
+            commit_hash = subprocess.check_output(
+                ["git", "rev-parse", "--short=7", "HEAD~1"],
+                cwd=os.path.dirname(os.path.abspath(__file__)),
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+        except Exception:
+            commit_hash = "desconhecido"
+    return f"RAD_{commit_hash}"
 
 
 def _normalize_percent_to_decimal_str(raw: str) -> str:
