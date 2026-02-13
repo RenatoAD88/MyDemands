@@ -153,6 +153,55 @@ PRIORIDADE_TEXT_COLORS: Dict[str, Tuple[int, int, int]] = {
 }
 
 PROGRESS_FILL_COLOR = (3, 141, 220)
+def _try_parse_date_br(text: str) -> Optional[date]:
+    raw = (text or "").strip().replace("*", "")
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%d/%m/%Y").date()
+    except Exception:
+        return None
+
+
+def _column_sort_key(col_name: str, text: str):
+    raw = (text or "").strip()
+    if not raw:
+        return (1, "")
+
+    if col_name == "ID":
+        try:
+            return (0, int(raw))
+        except Exception:
+            return (0, raw.lower())
+
+    if col_name in {"Data de Registro", "Data Conclusão"}:
+        parsed = _try_parse_date_br(raw)
+        return (0, parsed.toordinal()) if parsed else (0, raw.lower())
+
+    if col_name == "Prazo":
+        prazos = parse_prazos_list(raw.replace("\n", ","))
+        if prazos:
+            return (0, min(p.toordinal() for p in prazos))
+        return (0, raw.lower())
+
+    if col_name == "% Conclusão":
+        pct = _percent_to_fraction(raw)
+        if pct is not None:
+            return (0, pct)
+
+    return (0, raw.lower())
+
+
+class SortableTableItem(QTableWidgetItem):
+    SORT_ROLE = Qt.UserRole + 20
+
+    def __lt__(self, other):
+        if isinstance(other, QTableWidgetItem):
+            left_key = self.data(self.SORT_ROLE)
+            right_key = other.data(self.SORT_ROLE)
+            if left_key is not None and right_key is not None:
+                return left_key < right_key
+        return super().__lt__(other)
 
 
 def _app_icon_path() -> str:
@@ -1066,6 +1115,11 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(icon_path))
 
         self._filling = False
+        self._table_sort_state: Dict[str, Optional[Tuple[int, Qt.SortOrder]]] = {
+            "t1": None,
+            "t3": None,
+            "t4": None,
+        }
 
         self.tabs = QTabWidget()
         self.tabs.setMovable(True)
@@ -1227,9 +1281,10 @@ class MainWindow(QMainWindow):
         self.refresh_all()
         QMessageBox.information(self, "Restauração concluída", "Backup restaurado com sucesso.")
 
-    def _make_table(self) -> QTableWidget:
+    def _make_table(self, table_key: str) -> QTableWidget:
         table = QTableWidget(0, len(VISIBLE_COLUMNS))
         table.setHorizontalHeaderLabels(VISIBLE_COLUMNS)
+        table.setProperty("tableSortKey", table_key)
         table.itemChanged.connect(self._on_item_changed)
         table.cellDoubleClicked.connect(self._on_cell_double_clicked)
 
@@ -1255,12 +1310,73 @@ class MainWindow(QMainWindow):
         desc_width = table.fontMetrics().horizontalAdvance("M" * DESC_COLUMN_MAX_CHARS)
         header.setSectionResizeMode(desc_col, QHeaderView.Interactive)
         table.setColumnWidth(desc_col, desc_width)
+        self._setup_sortable_header(table)
 
         return table
 
+    def _setup_sortable_header(self, table: QTableWidget):
+        header = table.horizontalHeader()
+        for col, name in enumerate(VISIBLE_COLUMNS):
+            host = QWidget(header)
+            host_layout = QHBoxLayout(host)
+            host_layout.setContentsMargins(2, 0, 2, 0)
+            host_layout.setSpacing(2)
+
+            title = QLabel(name)
+            title.setAlignment(Qt.AlignCenter)
+
+            up_btn = QToolButton(host)
+            up_btn.setText("▲")
+            up_btn.setAutoRaise(True)
+            up_btn.setToolTip(f"Ordenar {name} crescente")
+            up_btn.setFixedSize(14, 14)
+
+            down_btn = QToolButton(host)
+            down_btn.setText("▼")
+            down_btn.setAutoRaise(True)
+            down_btn.setToolTip(f"Ordenar {name} decrescente")
+            down_btn.setFixedSize(14, 14)
+
+            up_btn.clicked.connect(lambda _=False, t=table, c=col: self._on_header_sort_requested(t, c, Qt.AscendingOrder))
+            down_btn.clicked.connect(lambda _=False, t=table, c=col: self._on_header_sort_requested(t, c, Qt.DescendingOrder))
+
+            host_layout.addStretch()
+            host_layout.addWidget(title)
+            host_layout.addWidget(up_btn)
+            host_layout.addWidget(down_btn)
+            host_layout.addStretch()
+
+            table.setHorizontalHeaderItem(col, QTableWidgetItem(""))
+            host.setParent(header.viewport())
+            host.show()
+            table.setProperty(f"headerWidget_{col}", host)
+
+        self._position_header_widgets(table)
+        header.sectionResized.connect(lambda *_args, t=table: self._position_header_widgets(t))
+        header.geometriesChanged.connect(lambda t=table: self._position_header_widgets(t))
+
+    def _position_header_widgets(self, table: QTableWidget):
+        header = table.horizontalHeader()
+        viewport_h = header.height()
+        for col in range(len(VISIBLE_COLUMNS)):
+            host = table.property(f"headerWidget_{col}")
+            if not isinstance(host, QWidget):
+                continue
+            x = header.sectionViewportPosition(col)
+            w = header.sectionSize(col)
+            host.setGeometry(x, 0, w, viewport_h)
+
+    def _on_header_sort_requested(self, table: QTableWidget, col: int, order: Qt.SortOrder):
+        table_key = str(table.property("tableSortKey") or "")
+        if not table_key:
+            return
+        self._table_sort_state[table_key] = (col, order)
+        table.sortItems(col, order)
+
     def _set_item(self, table: QTableWidget, r: int, c: int, text: str, _id: str):
-        it = QTableWidgetItem(text or "")
+        it = SortableTableItem(text or "")
         colname = VISIBLE_COLUMNS[c]
+        it.setData(SortableTableItem.SORT_ROLE, _column_sort_key(colname, text or ""))
 
         if colname == "Descrição":
             it.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -1318,7 +1434,15 @@ class MainWindow(QMainWindow):
         finally:
             self._filling = False
 
+        table_key = str(table.property("tableSortKey") or "")
+        active_sort = self._table_sort_state.get(table_key)
+        if active_sort:
+            table.sortItems(active_sort[0], active_sort[1])
+
         table.resizeRowsToContents()
+
+    def _clear_sort(self, table_key: str):
+        self._table_sort_state[table_key] = None
 
     def _prompt_conclusao_date_required(self) -> Optional[str]:
         dlg = DatePickDialog(self, "Data de Conclusão", "Selecione a data de conclusão:", allow_clear=False)
@@ -2090,13 +2214,17 @@ class MainWindow(QMainWindow):
         consult_btn = QPushButton("Consultar")
         consult_btn.clicked.connect(self.refresh_tab1)
 
-        self.t1_table = self._make_table()
+        self.t1_table = self._make_table("t1")
+
+        reset_btn = QPushButton("Resetar Filtros")
+        reset_btn.clicked.connect(self._reset_tab1_filters)
 
         top = QHBoxLayout()
         self.t1_actions_layout = top
         top.addWidget(QLabel("Selecionar data de consulta:"))
         top.addWidget(self.t1_date)
         top.addWidget(consult_btn)
+        top.addWidget(reset_btn)
         top.addStretch()
 
         layout = QVBoxLayout()
@@ -2125,7 +2253,10 @@ class MainWindow(QMainWindow):
         self.t3_delayed_card = QLabel("Em atraso: 0")
         self.t3_done_card = QLabel("Concluídas: 0")
 
-        self.t3_table = self._make_table()
+        self.t3_table = self._make_table("t3")
+
+        reset_btn = QPushButton("Resetar Filtros")
+        reset_btn.clicked.connect(self._reset_tab3_filters)
 
         filters = QHBoxLayout()
         filters.addWidget(QLabel("Busca:"))
@@ -2137,6 +2268,7 @@ class MainWindow(QMainWindow):
         filters.addWidget(QLabel("Responsável:"))
         filters.addWidget(self.t3_responsavel)
         filters.addWidget(apply_btn)
+        filters.addWidget(reset_btn)
 
         cards = QHBoxLayout()
         cards.addWidget(self.t3_pending_card)
@@ -2163,7 +2295,10 @@ class MainWindow(QMainWindow):
         btn = QPushButton("Consultar")
         btn.clicked.connect(self.refresh_tab4)
 
-        self.t4_table = self._make_table()
+        self.t4_table = self._make_table("t4")
+
+        reset_btn = QPushButton("Resetar Filtros")
+        reset_btn.clicked.connect(self._reset_tab4_filters)
 
         top = QHBoxLayout()
         top.addWidget(QLabel("Início:"))
@@ -2171,6 +2306,7 @@ class MainWindow(QMainWindow):
         top.addWidget(QLabel("Fim:"))
         top.addWidget(self.t4_end)
         top.addWidget(btn)
+        top.addWidget(reset_btn)
         top.addStretch()
 
         layout = QVBoxLayout()
@@ -2178,6 +2314,25 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.t4_table)
         tab.setLayout(layout)
         self.tabs.addTab(tab, "Consultar Demandas Concluídas")
+
+    def _reset_tab1_filters(self):
+        self.t1_date.setDate(QDate.currentDate())
+        self._clear_sort("t1")
+        self.refresh_tab1()
+
+    def _reset_tab3_filters(self):
+        self.t3_search.clear()
+        self.t3_status.setCurrentIndex(0)
+        self.t3_prioridade.setCurrentIndex(0)
+        self.t3_responsavel.clear()
+        self._clear_sort("t3")
+        self.refresh_tab3()
+
+    def _reset_tab4_filters(self):
+        self.t4_start.setDate(QDate.currentDate().addDays(-7))
+        self.t4_end.setDate(QDate.currentDate())
+        self._clear_sort("t4")
+        self.refresh_tab4()
 
     # Refresh
     def refresh_all(self):
