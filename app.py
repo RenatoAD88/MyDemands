@@ -6,8 +6,8 @@ import sys
 from datetime import date, datetime
 from typing import Dict, Any, List, Optional, Tuple
 
-from PySide6.QtCore import Qt, QDate, QSize
-from PySide6.QtGui import QColor, QLinearGradient, QGradient, QBrush, QIcon, QKeyEvent
+from PySide6.QtCore import Qt, QDate, QSize, QUrl
+from PySide6.QtGui import QColor, QLinearGradient, QGradient, QBrush, QIcon, QKeyEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QTabWidget,
@@ -1085,7 +1085,6 @@ class MainWindow(QMainWindow):
         self._init_tab2()
         self._init_tab3()
         self._init_tab4()
-        self._init_tab5()
 
         self.refresh_all()
         self.tabs.currentChanged.connect(self._on_tab_changed)
@@ -1192,17 +1191,7 @@ class MainWindow(QMainWindow):
             return
 
         self.refresh_all()
-        self._refresh_general_info()
         QMessageBox.information(self, "Restauração concluída", "Backup restaurado com sucesso.")
-
-    def _refresh_general_info(self):
-        if hasattr(self, "info_last_backup"):
-            self.info_last_backup.setText(f"Último backup CSV: {self._latest_backup_name()}")
-
-        if hasattr(self, "info_today_backup"):
-            self.info_today_backup.setText(
-                "Backup de hoje: Encontrado" if self._today_backup_exists() else "Backup de hoje: Não encontrado"
-            )
 
     def _make_table(self) -> QTableWidget:
         table = QTableWidget(0, len(VISIBLE_COLUMNS))
@@ -1558,20 +1547,41 @@ class MainWindow(QMainWindow):
 
     def show_general_information(self):
         version = build_version_code()
-        info_box = QMessageBox(self)
-        info_box.setWindowTitle("Informações gerais")
-        info_box.setTextFormat(Qt.RichText)
-        info_box.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        info_box.setText(
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Informações gerais")
+
+        content = QLabel(dialog)
+        content.setTextFormat(Qt.RichText)
+        content.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        content.setOpenExternalLinks(False)
+        content.setText(
             "<b>Nome:</b> DemandasApp"
             "<br><b>Finalidade:</b> Facilitar gestão de demandas e ocupação de um time"
             f"<br><b>Número da versão:</b> {version}"
             "<br><b>Aviso:</b> Este aplicativo é OpenSource disponível aqui:"
-            "<br>https://github.com/RenatoAD88/MyDemands"
+            "<br><a href='https://github.com/RenatoAD88/MyDemands'>https://github.com/RenatoAD88/MyDemands</a>"
+            "<br><b>Restaurar backup:</b> <a href='restore_backup'>Clique aqui</a>"
             "<br><a href='https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ&start_radio=1'>Não clique aqui.</a>"
             "<br><br><b>Criado por:</b> Renato A. Dândalo"
         )
-        info_box.exec()
+
+        def _handle_link(link: str) -> None:
+            if link == "restore_backup":
+                dialog.accept()
+                self._restore_backup_experience()
+                return
+            QDesktopServices.openUrl(QUrl(link))
+
+        content.linkActivated.connect(_handle_link)
+
+        close_btn = QPushButton("Fechar", dialog)
+        close_btn.clicked.connect(dialog.accept)
+
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(content)
+        layout.addWidget(close_btn)
+        dialog.setLayout(layout)
+        dialog.exec()
 
     def _init_tab2(self):
         tab = QWidget()
@@ -2130,27 +2140,6 @@ class MainWindow(QMainWindow):
         tab.setLayout(layout)
         self.tabs.addTab(tab, "Consultar Demandas Concluídas")
 
-    def _init_tab5(self):
-        tab = QWidget()
-
-        title = QLabel("Informações gerais")
-        self.info_last_backup = QLabel("")
-        self.info_today_backup = QLabel("")
-
-        restore_btn = QPushButton("Restaurar backup")
-        restore_btn.clicked.connect(self._restore_backup_experience)
-
-        layout = QVBoxLayout()
-        layout.addWidget(title)
-        layout.addWidget(self.info_last_backup)
-        layout.addWidget(self.info_today_backup)
-        layout.addSpacing(8)
-        layout.addWidget(restore_btn)
-        layout.addStretch()
-
-        tab.setLayout(layout)
-        self.tabs.addTab(tab, "Informações gerais")
-
     # Refresh
     def refresh_all(self):
         self.store.load()
@@ -2158,7 +2147,6 @@ class MainWindow(QMainWindow):
         self.refresh_team_control()
         self.refresh_tab3()
         self.refresh_tab4()
-        self._refresh_general_info()
 
     def refresh_current(self):
         i = self.tabs.currentIndex()
@@ -2170,8 +2158,6 @@ class MainWindow(QMainWindow):
             self.refresh_tab3()
         elif i == 3:
             self.refresh_tab4()
-        elif i == 4:
-            self._refresh_general_info()
 
     def refresh_tab1(self):
         d = qdate_to_date(self.t1_date.date())
@@ -2354,7 +2340,6 @@ class MainWindow(QMainWindow):
         try:
             self.team_store.load()
             backup_name = self._save_automatic_backup()
-            self._refresh_general_info()
             debug_msg("Backup", f"Backup automático criado: {backup_name}")
         except Exception as e:
             QMessageBox.warning(self, "Falha no backup automático", f"Não foi possível gerar o backup automático antes de fechar.\n\n{e}")
