@@ -1339,22 +1339,25 @@ class MainWindow(QMainWindow):
             up_btn.setText("▲")
             up_btn.setAutoRaise(True)
             up_btn.setToolTip(f"Ordenar {name} crescente")
-            up_btn.setFixedSize(14, 14)
+            up_btn.setFixedSize(12, 8)
 
             down_btn = QToolButton(host)
             down_btn.setText("▼")
             down_btn.setAutoRaise(True)
             down_btn.setToolTip(f"Ordenar {name} decrescente")
-            down_btn.setFixedSize(14, 14)
+            down_btn.setFixedSize(12, 8)
 
             up_btn.clicked.connect(lambda _=False, t=table, c=col: self._on_header_sort_requested(t, c, Qt.AscendingOrder))
             down_btn.clicked.connect(lambda _=False, t=table, c=col: self._on_header_sort_requested(t, c, Qt.DescendingOrder))
 
-            host_layout.addStretch()
-            host_layout.addWidget(title)
-            host_layout.addWidget(up_btn)
-            host_layout.addWidget(down_btn)
-            host_layout.addStretch()
+            arrows_layout = QVBoxLayout()
+            arrows_layout.setContentsMargins(0, 0, 0, 0)
+            arrows_layout.setSpacing(0)
+            arrows_layout.addWidget(up_btn, alignment=Qt.AlignHCenter)
+            arrows_layout.addWidget(down_btn, alignment=Qt.AlignHCenter)
+
+            host_layout.addWidget(title, 1)
+            host_layout.addLayout(arrows_layout)
 
             table.setHorizontalHeaderItem(col, QTableWidgetItem(""))
             host.setParent(header.viewport())
