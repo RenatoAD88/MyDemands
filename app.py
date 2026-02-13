@@ -287,7 +287,38 @@ class TeamSectionTable(QTableWidget):
         self.setMaximumHeight(total_height)
 
 
-class DatePickDialog(QDialog):
+class BaseModalDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._primary_btn: Optional[QPushButton] = None
+        self._cancel_btn: Optional[QPushButton] = None
+
+    def _bind_modal_keys(self, primary_btn: Optional[QPushButton], cancel_btn: Optional[QPushButton]):
+        self._primary_btn = primary_btn
+        self._cancel_btn = cancel_btn
+        if primary_btn:
+            primary_btn.setDefault(True)
+            primary_btn.setAutoDefault(True)
+
+    def keyPressEvent(self, event: QKeyEvent):
+        key = event.key()
+        if key in (Qt.Key_Return, Qt.Key_Enter):
+            if self._primary_btn and self._primary_btn.isEnabled():
+                self._primary_btn.click()
+                event.accept()
+                return
+        elif key == Qt.Key_Escape:
+            if self._cancel_btn and self._cancel_btn.isEnabled():
+                self._cancel_btn.click()
+                event.accept()
+                return
+            self.reject()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
+class DatePickDialog(BaseModalDialog):
     def __init__(self, parent: QWidget, title: str, label: str, allow_clear: bool = False):
         super().__init__(parent)
         self.setWindowTitle(title)
@@ -328,6 +359,7 @@ class DatePickDialog(QDialog):
         root.addLayout(form)
         root.addLayout(btns)
         self.setLayout(root)
+        self._bind_modal_keys(okb, cb)
 
     def was_cleared(self) -> bool:
         return self._cleared
@@ -336,7 +368,7 @@ class DatePickDialog(QDialog):
         return qdate_to_date(self.date_edit.date()).strftime("%d/%m/%Y")
 
 
-class PrazoMultiDialog(QDialog):
+class PrazoMultiDialog(BaseModalDialog):
     def __init__(self, parent: QWidget, current_prazo: str):
         super().__init__(parent)
         self.setWindowTitle("Editar Prazo")
@@ -382,6 +414,7 @@ class PrazoMultiDialog(QDialog):
         root.addWidget(self.listw)
         root.addLayout(btns)
         self.setLayout(root)
+        self._bind_modal_keys(okb, cb)
 
     def _add(self):
         txt = self.picker.date().toString(DATE_FMT_QT)
@@ -399,7 +432,7 @@ class PrazoMultiDialog(QDialog):
         return normalize_prazo_text(prazos)
 
 
-class DeleteDemandDialog(QDialog):
+class DeleteDemandDialog(BaseModalDialog):
     """
     Exclusão por ID (único ou múltiplos):
     - usuário informa IDs e app carrega as demandas
@@ -449,6 +482,7 @@ class DeleteDemandDialog(QDialog):
         root.addWidget(self.info_label)
         root.addLayout(btns)
         self.setLayout(root)
+        self._bind_modal_keys(self.delete_btn, self.cancel_btn)
 
         self.reset_state()
 
@@ -566,7 +600,7 @@ class DeleteDemandDialog(QDialog):
         self._set_loaded_rows(rows_data)
 
 
-class DeleteTeamMembersDialog(QDialog):
+class DeleteTeamMembersDialog(BaseModalDialog):
     def __init__(self, parent: QWidget):
         super().__init__(parent)
         self.setWindowTitle("Excluir funcionário")
@@ -591,6 +625,7 @@ class DeleteTeamMembersDialog(QDialog):
         root.addWidget(self.info_label)
         root.addLayout(btns)
         self.setLayout(root)
+        self._bind_modal_keys(self.confirm_btn, self.cancel_btn)
 
         self.reset_state()
 
@@ -619,14 +654,13 @@ class DeleteTeamMembersDialog(QDialog):
 
     def _confirm_delete_action(self):
         self.accept()
-        self.reset_state()
 
     def _cancel_delete_action(self):
         self.reset_state()
         self.reject()
 
 
-class NewDemandDialog(QDialog):
+class NewDemandDialog(BaseModalDialog):
     def __init__(self, parent: QWidget):
         super().__init__(parent)
         self.setWindowTitle("Nova demanda")
@@ -751,6 +785,7 @@ class NewDemandDialog(QDialog):
         root.addWidget(self.inline_error)
         root.addLayout(btns)
         self.setLayout(root)
+        self._bind_modal_keys(save_btn, cancel_btn)
 
     def _select_conclusao(self):
         dlg = DatePickDialog(self, "Data Conclusão", "Selecione a data de conclusão:", allow_clear=False)
@@ -843,7 +878,7 @@ class NewDemandDialog(QDialog):
         return validate_payload(payload, mode="create")
 
 
-class AddTeamMemberDialog(QDialog):
+class AddTeamMemberDialog(BaseModalDialog):
     def __init__(self, parent: QWidget, team_names: List[str]):
         super().__init__(parent)
         self.setWindowTitle("Adicionar funcionário")
@@ -887,6 +922,7 @@ class AddTeamMemberDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(self.inline_error)
         layout.addLayout(actions)
+        self._bind_modal_keys(ok, cancel)
 
     def _on_team_change(self, text: str):
         is_new = text == "+ Novo time"
@@ -910,7 +946,7 @@ class AddTeamMemberDialog(QDialog):
         }
 
 
-class CopyTeamMembersDialog(QDialog):
+class CopyTeamMembersDialog(BaseModalDialog):
     def __init__(self, parent: QWidget, team_store: TeamControlStore, selected_names: List[str], default_year: int, default_month: int):
         super().__init__(parent)
         self.setWindowTitle("Copiar Nome(s)")
@@ -955,6 +991,7 @@ class CopyTeamMembersDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(self.inline_error)
         layout.addLayout(actions)
+        self._bind_modal_keys(ok, cancel)
 
         self._refresh_teams()
 
@@ -1808,6 +1845,7 @@ class MainWindow(QMainWindow):
 
         for member_id in dlg.selected_member_ids():
             self.team_store.remove_member(section_id, member_id)
+        dlg.reset_state()
         self.refresh_team_control()
 
     # Tabs
