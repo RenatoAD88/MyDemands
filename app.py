@@ -2291,9 +2291,7 @@ class MainWindow(QMainWindow):
         apply_btn = QPushButton("Aplicar filtros")
         apply_btn.clicked.connect(self.refresh_tab3)
 
-        self.t3_pending_card = QLabel("Total de Pendências: 0")
-        self.t3_delayed_card = QLabel("Em atraso: 0")
-        self.t3_done_card = QLabel("Concluídas: 0")
+        self.t3_pending_card = QLabel("Total de Pendências: 0 - Dentro do prazo: 0 - Em atraso: 0")
 
         self.t3_table = self._make_table("t3")
 
@@ -2314,8 +2312,6 @@ class MainWindow(QMainWindow):
 
         cards = QHBoxLayout()
         cards.addWidget(self.t3_pending_card)
-        cards.addWidget(self.t3_delayed_card)
-        cards.addWidget(self.t3_done_card)
         cards.addStretch()
 
         layout = QVBoxLayout()
@@ -2414,8 +2410,6 @@ class MainWindow(QMainWindow):
             f"Dentro do prazo: {counts['inside_deadline']} - "
             f"Em atraso: {counts['delayed']}"
         )
-        self.t3_delayed_card.setText(f"Em atraso: {counts['delayed']}")
-        self.t3_done_card.setText(f"Concluídas: {counts['concluded']}")
         self._fill(self.t3_table, filtered)
         self._save_preferences()
 
