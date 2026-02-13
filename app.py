@@ -2231,7 +2231,7 @@ class MainWindow(QMainWindow):
 
         top = QHBoxLayout()
         self.t1_actions_layout = top
-        top.addWidget(QLabel("Selecionar data de consulta:"))
+        top.addWidget(QLabel("Selecione o Prazo da Demanda:"))
         top.addWidget(self.t1_date)
         top.addWidget(consult_btn)
         top.addWidget(reset_btn)
