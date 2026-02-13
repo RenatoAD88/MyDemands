@@ -156,3 +156,18 @@ def test_copy_members_to_section_copies_to_target_month_and_year(tmp_path):
     reloaded.set_period(2026, 2)
     source_names = [m.name for m in reloaded.sections[0].members]
     assert source_names == ["Alice", "Bruno"]
+
+
+def test_to_payload_returns_json_serializable_structure(tmp_path):
+    import json
+
+    store = TeamControlStore(str(tmp_path))
+    section = store.create_section("Time Serial")
+    store.add_member(section.id, "Pessoa")
+
+    payload = store.to_payload()
+
+    assert json.loads(json.dumps(payload)) == payload
+    period_key = store._period_key(date.today().year, date.today().month)
+    assert payload["periods"][period_key]["sections"][0]["name"] == "Time Serial"
+
