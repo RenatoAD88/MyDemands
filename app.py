@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
 from typing import Dict, Any, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QDate, QSize
@@ -36,6 +36,8 @@ EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
 DATE_FMT_QT = "dd/MM/yyyy"
 PRAZO_TODAY_BG = (255, 249, 196)  # amarelo claro
+BACKUP_DIRNAME = "bkp"
+BACKUP_PREFIX = "BKP_RAD"
 def debug_msg(title: str, text: str):
     if DEBUG_MODE:
         QMessageBox.information(None, title, text)
@@ -1072,15 +1074,131 @@ class MainWindow(QMainWindow):
 
         self._prefs = load_prefs(self.store.base_dir)
         self.team_store = TeamControlStore(self.store.base_dir)
+        self._ensure_backup_dir()
 
         self._init_tab1()
         self._init_tab2()
         self._init_tab3()
         self._init_tab4()
+        self._init_tab5()
 
         self.refresh_all()
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self._restore_preferences()
+        self._validate_today_backup_on_startup()
+
+    def _backup_dir_path(self) -> str:
+        return os.path.join(self.store.base_dir, BACKUP_DIRNAME)
+
+    def _ensure_backup_dir(self) -> str:
+        path = self._backup_dir_path()
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def _backup_file_name_now(self) -> str:
+        stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        return f"{BACKUP_PREFIX}{stamp}.csv"
+
+    def _latest_backup_name(self) -> str:
+        bkp_dir = self._backup_dir_path()
+        if not os.path.isdir(bkp_dir):
+            return "Nenhum backup"
+        names = sorted(
+            [n for n in os.listdir(bkp_dir) if n.startswith(BACKUP_PREFIX) and n.lower().endswith(".csv")],
+            reverse=True,
+        )
+        return names[0] if names else "Nenhum backup"
+
+    def _today_backup_exists(self) -> bool:
+        bkp_dir = self._backup_dir_path()
+        if not os.path.isdir(bkp_dir):
+            return False
+        day_token = date.today().strftime("%Y%m%d")
+        for name in os.listdir(bkp_dir):
+            if not (name.startswith(BACKUP_PREFIX) and name.lower().endswith(".csv")):
+                continue
+            core = name[len(BACKUP_PREFIX):-4]
+            if len(core) >= 8 and core[:8] == day_token:
+                return True
+        return False
+
+    def _save_automatic_backup(self) -> str:
+        bkp_dir = self._ensure_backup_dir()
+        backup_name = self._backup_file_name_now()
+        backup_path = os.path.join(bkp_dir, backup_name)
+
+        team_payload = {"periods": self.team_store._period_sections}
+        self.store.export_encrypted_backup_csv(backup_path, team_payload)
+        return backup_name
+
+    def _apply_restored_team_control(self, payload: Dict[str, Any]) -> None:
+        data = payload if isinstance(payload, dict) else {}
+        periods = data.get("periods") if isinstance(data, dict) else None
+        if not isinstance(periods, dict):
+            periods = {}
+
+        self.team_store._period_sections = {
+            str(period): self.team_store._parse_sections((entry or {}).get("sections", []))
+            for period, entry in periods.items()
+            if isinstance(entry, dict)
+        }
+        self.team_store.sections = self.team_store._period_sections.get(self.team_store._active_period, [])
+        self.team_store.save()
+
+    def _validate_today_backup_on_startup(self) -> None:
+        if self._today_backup_exists():
+            return
+        QMessageBox.information(
+            self,
+            "Backup diário",
+            "Não foi encontrado backup gerado para a data de hoje na pasta C:\\MyDemands\\bkp.",
+        )
+
+    def _restore_backup_experience(self):
+        bkp_dir = self._backup_dir_path()
+        import_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Selecionar backup criptografado",
+            bkp_dir if os.path.isdir(bkp_dir) else self.store.base_dir,
+            "CSV (*.csv)",
+        )
+        if not import_path:
+            return
+
+        confirm_box = QMessageBox(self)
+        confirm_box.setWindowTitle("Confirmar restauração")
+        confirm_box.setIcon(QMessageBox.Warning)
+        confirm_box.setText(
+            "Atenção!\n\nAo restaurar o backup todas as informações atuais serão totalmente substituídas.\nDeseja prosseguir?"
+        )
+        confirm_button = confirm_box.addButton("Confirmar", QMessageBox.AcceptRole)
+        confirm_box.addButton("Cancelar", QMessageBox.RejectRole)
+        confirm_box.exec()
+        if confirm_box.clickedButton() is not confirm_button:
+            return
+
+        try:
+            team_payload = self.store.import_encrypted_backup_csv(import_path)
+            self._apply_restored_team_control(team_payload)
+        except ValidationError as ve:
+            QMessageBox.warning(self, "Falha na restauração", str(ve))
+            return
+        except Exception as e:
+            QMessageBox.warning(self, "Falha na restauração", f"Não foi possível restaurar o backup.\n\n{e}")
+            return
+
+        self.refresh_all()
+        self._refresh_general_info()
+        QMessageBox.information(self, "Restauração concluída", "Backup restaurado com sucesso.")
+
+    def _refresh_general_info(self):
+        if hasattr(self, "info_last_backup"):
+            self.info_last_backup.setText(f"Último backup CSV: {self._latest_backup_name()}")
+
+        if hasattr(self, "info_today_backup"):
+            self.info_today_backup.setText(
+                "Backup de hoje: Encontrado" if self._today_backup_exists() else "Backup de hoje: Não encontrado"
+            )
 
     def _make_table(self) -> QTableWidget:
         table = QTableWidget(0, len(VISIBLE_COLUMNS))
@@ -1982,6 +2100,27 @@ class MainWindow(QMainWindow):
         tab.setLayout(layout)
         self.tabs.addTab(tab, "Consultar Demandas Concluídas")
 
+    def _init_tab5(self):
+        tab = QWidget()
+
+        title = QLabel("Informações gerais")
+        self.info_last_backup = QLabel("")
+        self.info_today_backup = QLabel("")
+
+        restore_btn = QPushButton("Restaurar backup")
+        restore_btn.clicked.connect(self._restore_backup_experience)
+
+        layout = QVBoxLayout()
+        layout.addWidget(title)
+        layout.addWidget(self.info_last_backup)
+        layout.addWidget(self.info_today_backup)
+        layout.addSpacing(8)
+        layout.addWidget(restore_btn)
+        layout.addStretch()
+
+        tab.setLayout(layout)
+        self.tabs.addTab(tab, "Informações gerais")
+
     # Refresh
     def refresh_all(self):
         self.store.load()
@@ -1989,6 +2128,7 @@ class MainWindow(QMainWindow):
         self.refresh_team_control()
         self.refresh_tab3()
         self.refresh_tab4()
+        self._refresh_general_info()
 
     def refresh_current(self):
         i = self.tabs.currentIndex()
@@ -2000,6 +2140,8 @@ class MainWindow(QMainWindow):
             self.refresh_tab3()
         elif i == 3:
             self.refresh_tab4()
+        elif i == 4:
+            self._refresh_general_info()
 
     def refresh_tab1(self):
         d = qdate_to_date(self.t1_date.date())
@@ -2179,6 +2321,15 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self._save_preferences()
+        try:
+            self.team_store.load()
+            backup_name = self._save_automatic_backup()
+            self._refresh_general_info()
+            debug_msg("Backup", f"Backup automático criado: {backup_name}")
+        except Exception as e:
+            QMessageBox.warning(self, "Falha no backup automático", f"Não foi possível gerar o backup automático antes de fechar.\n\n{e}")
+            event.ignore()
+            return
         super().closeEvent(event)
 
 
