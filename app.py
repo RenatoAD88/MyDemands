@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import os
 import sys
-from datetime import date
+from datetime import date, datetime
 from typing import Dict, Any, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QDate, QSize
@@ -153,6 +153,11 @@ PROGRESS_FILL_COLOR = (3, 141, 220)
 
 def _app_icon_path() -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "img", "icondemand.png")
+
+
+def build_version_code(now: Optional[datetime] = None) -> str:
+    ref = now or datetime.now()
+    return f"RAD{ref.strftime('%Y%m%d%H%M%S')}"
 
 
 def _normalize_percent_to_decimal_str(raw: str) -> str:
@@ -1418,12 +1423,29 @@ class MainWindow(QMainWindow):
             on_click=self.import_demands_csv,
         )
 
+        info_btn = self._build_toolbar_action_button(
+            object_name="infoAction",
+            tooltip="Informações gerais",
+            img_name="",
+            fallback_icon=QStyle.SP_MessageBoxInformation,
+            on_click=self.show_general_information,
+        )
+
         layout.addWidget(new_btn)
         layout.addWidget(delete_btn)
         layout.addWidget(export_shortcut)
         layout.addWidget(import_shortcut)
+        layout.addWidget(info_btn)
         layout.addStretch()
         return section
+
+    def show_general_information(self):
+        version = build_version_code()
+        QMessageBox.information(
+            self,
+            "Informações gerais",
+            f"DemandasApp\n\nVersão: {version}",
+        )
 
     def _init_tab2(self):
         tab = QWidget()

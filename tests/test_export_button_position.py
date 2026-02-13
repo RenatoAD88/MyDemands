@@ -34,13 +34,16 @@ def test_shortcuts_section_renders_buttons_above_tabs(tmp_path):
     import_button = win.findChild(QToolButton, "importAction")
     assert import_button is not None
 
-    for btn in (primary_button, danger_button, export_button, import_button):
+    info_button = win.findChild(QToolButton, "infoAction")
+    assert info_button is not None
+
+    for btn in (primary_button, danger_button, export_button, import_button, info_button):
         assert bool(btn.property("toolbarAction")) is True
 
     for i in range(win.t1_actions_layout.count()):
         item = win.t1_actions_layout.itemAt(i)
         widget = item.widget()
         if isinstance(widget, QToolButton):
-            assert widget.objectName() not in {"primaryAction", "dangerAction", "exportAction", "importAction"}
+            assert widget.objectName() not in {"primaryAction", "dangerAction", "exportAction", "importAction", "infoAction"}
 
     win.close()
