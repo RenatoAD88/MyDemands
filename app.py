@@ -252,11 +252,28 @@ class TeamSectionTable(QTableWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._bulk_edit_handler = None
+        self._delete_members_handler = None
 
     def set_bulk_edit_handler(self, handler):
         self._bulk_edit_handler = handler
 
+    def set_delete_members_handler(self, handler):
+        self._delete_members_handler = handler
+
+    def _selected_name_rows(self) -> set[int]:
+        footer_row = self.rowCount() - 1
+        return {
+            idx.row()
+            for idx in self.selectedIndexes()
+            if 0 <= idx.row() < footer_row and idx.column() == 0
+        }
+
     def keyPressEvent(self, event: QKeyEvent):
+        if event.key() == Qt.Key_Delete and callable(self._delete_members_handler):
+            if self._selected_name_rows() and self._delete_members_handler(self):
+                event.accept()
+                return
+
         if not callable(self._bulk_edit_handler):
             return super().keyPressEvent(event)
 
@@ -1511,6 +1528,7 @@ class MainWindow(QMainWindow):
             table.setSelectionMode(QAbstractItemView.ExtendedSelection)
             table.setContextMenuPolicy(Qt.CustomContextMenu)
             table.set_bulk_edit_handler(self._bulk_fill_team_cells)
+            table.set_delete_members_handler(self._delete_selected_team_members)
             table.customContextMenuRequested.connect(self._open_member_context_menu)
             table.horizontalHeader().setDefaultAlignment(Qt.AlignCenter)
             table.horizontalHeader().setMinimumSectionSize(48)
@@ -1831,9 +1849,6 @@ class MainWindow(QMainWindow):
         if picked != delete_action:
             return
 
-        year, month = self._selected_year_month()
-        self.team_store.set_period(year, month)
-        section_id = str(table.property("sectionId") or "")
         members = selected_members_with_ids(table)
         if not members:
             selected_member_id = str(member_item.data(Qt.UserRole) or "")
@@ -1842,15 +1857,31 @@ class MainWindow(QMainWindow):
                 return
             members = [(selected_member_id, selected_member_name)]
 
+        self._delete_members_from_table(table, members)
+
+    def _delete_selected_team_members(self, table: QTableWidget) -> bool:
+        members = selected_members_with_ids(table)
+        if not members:
+            return False
+        return self._delete_members_from_table(table, members)
+
+    def _delete_members_from_table(self, table: QTableWidget, members: List[Tuple[str, str]]) -> bool:
+        year, month = self._selected_year_month()
+        self.team_store.set_period(year, month)
+        section_id = str(table.property("sectionId") or "")
+        if not section_id:
+            return False
+
         dlg = DeleteTeamMembersDialog(self)
         dlg.preload_members(members)
         if dlg.exec() != QDialog.Accepted:
-            return
+            return False
 
         for member_id in dlg.selected_member_ids():
             self.team_store.remove_member(section_id, member_id)
         dlg.reset_state()
         self.refresh_team_control()
+        return True
 
     # Tabs
     def _init_tab1(self):
