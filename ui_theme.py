@@ -51,6 +51,19 @@ QToolButton[toolbarAction="true"]:hover {
 QToolButton[toolbarAction="true"]::menu-indicator {
     image: none;
 }
+QToolButton[infoIconAction="true"] {
+    background: transparent;
+    border: none;
+    color: #2563eb;
+    font-size: 20px;
+    font-weight: 700;
+    padding: 0;
+    min-width: 22px;
+    min-height: 22px;
+}
+QToolButton[infoIconAction="true"]:hover {
+    color: #1d4ed8;
+}
 
 QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget {
     background: #ffffff;

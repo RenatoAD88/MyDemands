@@ -1520,6 +1520,17 @@ class MainWindow(QMainWindow):
         btn.clicked.connect(on_click)
         return btn
 
+    def _build_info_icon_button(self) -> QToolButton:
+        btn = QToolButton()
+        btn.setObjectName("infoAction")
+        btn.setProperty("infoIconAction", True)
+        btn.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        btn.setText("❕")
+        btn.setToolTip("Informações gerais")
+        btn.setAutoRaise(True)
+        btn.clicked.connect(self.show_general_information)
+        return btn
+
     def _icon_from_img(self, img_name: str, fallback_icon: QStyle.StandardPixmap) -> QIcon:
         img_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "img", img_name)
         if img_name and os.path.exists(img_path):
@@ -1563,20 +1574,14 @@ class MainWindow(QMainWindow):
             on_click=self.import_demands_csv,
         )
 
-        info_btn = self._build_toolbar_action_button(
-            object_name="infoAction",
-            tooltip="Informações gerais",
-            img_name="",
-            fallback_icon=QStyle.SP_MessageBoxInformation,
-            on_click=self.show_general_information,
-        )
+        info_btn = self._build_info_icon_button()
 
         layout.addWidget(new_btn)
         layout.addWidget(delete_btn)
         layout.addWidget(export_shortcut)
         layout.addWidget(import_shortcut)
-        layout.addWidget(info_btn)
         layout.addStretch()
+        layout.addWidget(info_btn)
         return section
 
     def show_general_information(self):
