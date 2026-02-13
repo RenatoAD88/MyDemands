@@ -1441,11 +1441,20 @@ class MainWindow(QMainWindow):
 
     def show_general_information(self):
         version = build_version_code()
-        QMessageBox.information(
-            self,
-            "Informações gerais",
-            f"DemandasApp\n\nVersão: {version}",
+        info_box = QMessageBox(self)
+        info_box.setWindowTitle("Informações gerais")
+        info_box.setTextFormat(Qt.RichText)
+        info_box.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        info_box.setText(
+            "<b>Nome:</b> DemandasApp"
+            "<br><b>Finalidade:</b> Facilitar gestão de demandas e ocupação de um time"
+            f"<br><b>Número da versão:</b> {version}"
+            "<br><b>Aviso:</b> Este aplicativo é OpenSource disponível aqui:"
+            "<br>https://github.com/RenatoAD88/MyDemands"
+            "<br><a href='https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ&start_radio=1'>Não clique aqui.</a>"
+            "<br><br><b>Criado por:</b> Renato A. Dândalo"
         )
+        info_box.exec()
 
     def _init_tab2(self):
         tab = QWidget()
