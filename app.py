@@ -1090,7 +1090,6 @@ class MainWindow(QMainWindow):
         self.refresh_all()
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self._restore_preferences()
-        self._validate_today_backup_on_startup()
 
     def _backup_dir_path(self) -> str:
         return os.path.join(self.store.base_dir, BACKUP_DIRNAME)
