@@ -208,19 +208,20 @@ def _app_icon_path() -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "img", "icondemand.png")
 
 
-def build_version_code(previous_commit_hash: Optional[str] = None) -> str:
-    commit_hash = (previous_commit_hash or "").strip()
-    if not commit_hash:
+def build_version_code(previous_version_number: Optional[int] = None, base_year: int = 2026) -> str:
+    version_number = previous_version_number
+    if version_number is None:
         try:
-            commit_hash = subprocess.check_output(
-                ["git", "rev-parse", "--short=7", "HEAD~1"],
+            count = subprocess.check_output(
+                ["git", "rev-list", "--count", "HEAD"],
                 cwd=os.path.dirname(os.path.abspath(__file__)),
                 stderr=subprocess.DEVNULL,
                 text=True,
             ).strip()
+            version_number = max(1, int(count))
         except Exception:
-            commit_hash = "desconhecido"
-    return f"RAD_{commit_hash}"
+            version_number = 1
+    return f"RAD_{base_year}_{version_number}"
 
 
 def _normalize_percent_to_decimal_str(raw: str) -> str:
