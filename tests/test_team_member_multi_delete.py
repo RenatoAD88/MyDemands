@@ -2,14 +2,17 @@ import pytest
 
 qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
 qtcore = pytest.importorskip("PySide6.QtCore", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
+qtgui = pytest.importorskip("PySide6.QtGui", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
 
-from app import DeleteTeamMembersDialog, selected_members_with_ids
+from app import DeleteTeamMembersDialog, TeamSectionTable, selected_members_with_ids
 
 QApplication = qtwidgets.QApplication
 QDialog = qtwidgets.QDialog
 QTableWidget = qtwidgets.QTableWidget
 QTableWidgetItem = qtwidgets.QTableWidgetItem
 Qt = qtcore.Qt
+QEvent = qtcore.QEvent
+QKeyEvent = qtgui.QKeyEvent
 
 
 def _get_app():
@@ -60,3 +63,34 @@ def test_delete_team_members_dialog_cancel_clears_loaded_members_and_closes_moda
     assert dlg.info_label.text() == ""
     assert not dlg.confirm_btn.isEnabled()
     assert not dlg.isVisible()
+
+
+def test_team_section_table_delete_key_triggers_handler_for_selected_name_rows_only():
+    _get_app()
+    table = TeamSectionTable()
+    table.setRowCount(3)
+    table.setColumnCount(2)
+
+    alice_item = QTableWidgetItem("Alice")
+    alice_item.setData(Qt.UserRole, "id-alice")
+    table.setItem(0, 0, alice_item)
+    table.setItem(0, 1, QTableWidgetItem("K"))
+    table.setItem(1, 0, QTableWidgetItem("Bob"))
+    table.setItem(2, 0, QTableWidgetItem("Participação Dia"))
+
+    calls = []
+
+    def _delete_handler(_table):
+        calls.append(True)
+        return True
+
+    table.set_delete_members_handler(_delete_handler)
+
+    table.item(0, 1).setSelected(True)
+    table.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Delete, Qt.NoModifier))
+    assert calls == []
+
+    table.clearSelection()
+    table.item(0, 0).setSelected(True)
+    table.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Delete, Qt.NoModifier))
+    assert calls == [True]
