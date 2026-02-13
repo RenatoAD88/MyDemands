@@ -2333,6 +2333,8 @@ class MainWindow(QMainWindow):
         btn = QPushButton("Consultar")
         btn.clicked.connect(self.refresh_tab4)
 
+        self.t4_totals_label = QLabel("Total de demandas concluídas: 0 - Total de demandas filtradas: 0")
+
         self.t4_table = self._make_table("t4")
 
         reset_btn = QPushButton("Resetar Filtros")
@@ -2349,6 +2351,7 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout()
         layout.addLayout(top)
+        layout.addWidget(self.t4_totals_label)
         layout.addWidget(self.t4_table)
         tab.setLayout(layout)
         self.tabs.addTab(tab, "Consultar Demandas Concluídas")
@@ -2419,7 +2422,13 @@ class MainWindow(QMainWindow):
         if e < s:
             QMessageBox.warning(self, "Datas inválidas", "A data fim não pode ser menor que a data início.")
             return
-        self._fill(self.t4_table, self.store.tab_concluidas_between(s, e))
+        total_concluded = len([x for x in self.store.build_view() if (x.get("Status") or "").strip() == "Concluído"])
+        filtered_concluded = self.store.tab_concluidas_between(s, e)
+        self.t4_totals_label.setText(
+            f"Total de demandas concluídas: {total_concluded} - "
+            f"Total de demandas filtradas: {len(filtered_concluded)}"
+        )
+        self._fill(self.t4_table, filtered_concluded)
 
     # Actions
     def new_demand(self):
