@@ -659,6 +659,10 @@ class DeleteTeamMembersDialog(BaseModalDialog):
         self.reset_state()
         self.reject()
 
+    def reject(self):
+        self.reset_state()
+        super().reject()
+
 
 class NewDemandDialog(BaseModalDialog):
     def __init__(self, parent: QWidget):
