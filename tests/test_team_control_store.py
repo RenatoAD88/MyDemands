@@ -119,3 +119,40 @@ def test_split_member_names_supports_commas_and_new_lines():
         "Caio Coutinho Covos",
         "Renato Augusto Dândalo",
     ]
+
+
+def test_get_sections_for_period_returns_existing_periods(tmp_path):
+    store = TeamControlStore(str(tmp_path))
+    store.set_period(2026, 2)
+    store.create_section("Time Fevereiro")
+
+    store.set_period(2026, 3)
+    store.create_section("Time Março")
+
+    assert [s.name for s in store.get_sections_for_period(2026, 2)] == ["Time Fevereiro"]
+    assert [s.name for s in store.get_sections_for_period(2026, 3)] == ["Time Março"]
+    assert store.get_sections_for_period(2026, 4) == []
+
+
+def test_copy_members_to_section_copies_to_target_month_and_year(tmp_path):
+    store = TeamControlStore(str(tmp_path))
+
+    store.set_period(2026, 2)
+    source = store.create_section("Origem")
+    store.add_member(source.id, "Alice")
+    store.add_member(source.id, "Bruno")
+
+    store.set_period(2026, 3)
+    target = store.create_section("Destino")
+
+    copied = store.copy_members_to_section(2026, 3, target.id, ["Alice", "Bruno"])
+    assert copied == 2
+
+    reloaded = TeamControlStore(str(tmp_path))
+    reloaded.set_period(2026, 3)
+    copied_names = [m.name for m in reloaded.sections[0].members]
+    assert copied_names == ["Alice", "Bruno"]
+
+    reloaded.set_period(2026, 2)
+    source_names = [m.name for m in reloaded.sections[0].members]
+    assert source_names == ["Alice", "Bruno"]

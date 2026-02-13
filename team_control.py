@@ -86,6 +86,10 @@ class TeamControlStore:
         self._active_period = self._period_key(year, month)
         self.sections = self._period_sections.get(self._active_period, [])
 
+    def get_sections_for_period(self, year: int, month: int) -> List[TeamSection]:
+        key = self._period_key(year, month)
+        return self._period_sections.get(key, [])
+
     def load(self) -> None:
         if not os.path.exists(self.path):
             self.sections = []
@@ -179,6 +183,31 @@ class TeamControlStore:
         section.members.append(member)
         self.save()
         return member
+
+    def copy_members_to_section(self, target_year: int, target_month: int, target_section_id: str, names: List[str]) -> int:
+        cleaned_names = [n.strip() for n in names if (n or "").strip()]
+        if not cleaned_names:
+            return 0
+
+        original_period = self._active_period
+        added = 0
+        try:
+            self.set_period(target_year, target_month)
+            section = self._get_section(target_section_id)
+
+            if len(section.members) + len(cleaned_names) > MAX_MEMBERS_PER_SECTION:
+                raise ValueError("Limite de 20 funcionários por time atingido.")
+
+            for name in cleaned_names:
+                member = TeamMember(id=uuid.uuid4().hex, name=name, entries={})
+                section.members.append(member)
+                added += 1
+
+            self.save()
+            return added
+        finally:
+            self._active_period = original_period
+            self.sections = self._period_sections.get(original_period, [])
 
     def remove_member(self, section_id: str, member_id: str) -> None:
         section = self._get_section(section_id)
