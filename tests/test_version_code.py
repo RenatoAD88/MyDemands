@@ -6,4 +6,12 @@ from app import build_version_code
 
 
 def test_build_version_code_uses_rad_with_previous_commit_format():
-    assert build_version_code("d1cdab8") == "RAD_d1cdab8"
+    assert build_version_code(7) == "RAD_2026_7"
+
+
+def test_build_version_code_uses_first_version_when_git_is_unavailable(monkeypatch):
+    def _raise(*args, **kwargs):
+        raise RuntimeError("git indisponível")
+
+    monkeypatch.setattr("app.subprocess.check_output", _raise)
+    assert build_version_code() == "RAD_2026_1"
