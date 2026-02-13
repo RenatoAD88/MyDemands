@@ -48,4 +48,10 @@ def summary_counts(rows: List[Dict[str, Any]]) -> Dict[str, int]:
             pending += 1
         if "atras" in timing:
             delayed += 1
-    return {"pending": pending, "delayed": delayed, "concluded": concluded}
+    inside_deadline = max(pending - delayed, 0)
+    return {
+        "pending": pending,
+        "inside_deadline": inside_deadline,
+        "delayed": delayed,
+        "concluded": concluded,
+    }

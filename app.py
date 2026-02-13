@@ -2295,7 +2295,7 @@ class MainWindow(QMainWindow):
         apply_btn = QPushButton("Aplicar filtros")
         apply_btn.clicked.connect(self.refresh_tab3)
 
-        self.t3_pending_card = QLabel("Pendentes: 0")
+        self.t3_pending_card = QLabel("Total de Pendências: 0")
         self.t3_delayed_card = QLabel("Em atraso: 0")
         self.t3_done_card = QLabel("Concluídas: 0")
 
@@ -2413,7 +2413,11 @@ class MainWindow(QMainWindow):
             responsavel=self.t3_responsavel.text(),
         )
         counts = summary_counts(rows)
-        self.t3_pending_card.setText(f"Pendentes: {counts['pending']}")
+        self.t3_pending_card.setText(
+            f"Total de Pendências: {counts['pending']} - "
+            f"Dentro do prazo: {counts['inside_deadline']} - "
+            f"Em atraso: {counts['delayed']}"
+        )
         self.t3_delayed_card.setText(f"Em atraso: {counts['delayed']}")
         self.t3_done_card.setText(f"Concluídas: {counts['concluded']}")
         self._fill(self.t3_table, filtered)
