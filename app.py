@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QDate, QSize, QUrl
-from PySide6.QtGui import QColor, QLinearGradient, QGradient, QBrush, QIcon, QKeyEvent, QDesktopServices
+from PySide6.QtGui import QColor, QLinearGradient, QGradient, QBrush, QIcon, QKeyEvent, QDesktopServices, QPixmap, QPainter, QFont
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QTabWidget,
@@ -1673,12 +1673,33 @@ class MainWindow(QMainWindow):
         btn = QToolButton()
         btn.setObjectName("infoAction")
         btn.setProperty("infoIconAction", True)
-        btn.setToolButtonStyle(Qt.ToolButtonTextOnly)
-        btn.setText("❕")
+        btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        btn.setIcon(self._build_general_info_icon())
+        btn.setIconSize(QSize(28, 28))
         btn.setToolTip("Informações gerais")
         btn.setAutoRaise(True)
         btn.clicked.connect(self.show_general_information)
         return btn
+
+    def _build_general_info_icon(self, size: int = 28) -> QIcon:
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#1e88e5"))
+        painter.drawEllipse(0, 0, size, size)
+
+        font = QFont()
+        font.setBold(True)
+        font.setPixelSize(int(size * 0.72))
+        painter.setFont(font)
+        painter.setPen(QColor("#ffffff"))
+        painter.drawText(pixmap.rect(), Qt.AlignCenter, "i")
+        painter.end()
+
+        return QIcon(pixmap)
 
     def _icon_from_img(self, img_name: str, fallback_icon: QStyle.StandardPixmap) -> QIcon:
         img_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "img", img_name)
