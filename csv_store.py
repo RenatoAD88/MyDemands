@@ -5,6 +5,7 @@ import base64
 import hashlib
 import hmac
 import io
+import json
 import os
 import uuid
 from dataclasses import dataclass
@@ -615,3 +616,82 @@ class CsvStore:
         self.rows = imported_rows
         self.save()
         return len(imported_rows)
+
+    def export_encrypted_backup_csv(self, backup_path: str, team_control_payload: Dict[str, Any]) -> int:
+        """
+        Gera um backup CSV criptografado contendo demandas + controle de time.
+        Retorna a quantidade de demandas exportadas.
+        """
+        buf = io.StringIO()
+        writer = csv.writer(buf, delimiter=DELIMITER)
+        writer.writerow(["section", "payload"])
+        writer.writerow(["metadata", json.dumps({"version": 1}, ensure_ascii=False)])
+        writer.writerow(["team_control", json.dumps(team_control_payload or {}, ensure_ascii=False)])
+        for dr in self.rows:
+            writer.writerow(["demand", json.dumps(dr.data, ensure_ascii=False)])
+
+        plain = buf.getvalue().encode("utf-8-sig")
+        encrypted = self._encrypt_bytes(plain)
+        with open(backup_path, "wb") as f:
+            f.write(encrypted)
+        return len(self.rows)
+
+    def import_encrypted_backup_csv(self, backup_path: str) -> Dict[str, Any]:
+        """
+        Restaura backup CSV criptografado no formato export_encrypted_backup_csv.
+        Substitui as demandas atuais e retorna o payload de team_control.
+        """
+        with open(backup_path, "rb") as f:
+            raw = f.read()
+        plain = self._decrypt_bytes(raw)
+
+        reader = csv.DictReader(io.StringIO(plain.decode("utf-8-sig")), delimiter=DELIMITER)
+        expected = ["section", "payload"]
+        if (reader.fieldnames or []) != expected:
+            raise ValidationError("Formato de backup inválido.")
+
+        imported_rows: List[DemandRow] = []
+        team_control_payload: Dict[str, Any] = {}
+
+        for i, row in enumerate(reader, start=2):
+            section = (row.get("section") or "").strip().lower()
+            payload_raw = row.get("payload") or "{}"
+            try:
+                payload = json.loads(payload_raw)
+            except json.JSONDecodeError as e:
+                raise ValidationError(f"Backup inválido na linha {i}.") from e
+
+            if section == "team_control":
+                if isinstance(payload, dict):
+                    team_control_payload = payload
+                continue
+
+            if section != "demand":
+                continue
+
+            if not isinstance(payload, dict):
+                raise ValidationError(f"Backup inválido na linha {i}.")
+
+            try:
+                normalized = validate_payload(payload, mode="create")
+                normalized = _autofix_consistency(normalized)
+                _require_conclusao_date_if_needed(
+                    normalized.get("Status", ""),
+                    normalized.get("% Conclusão", ""),
+                    normalized.get("Data Conclusão", ""),
+                )
+            except ValidationError as e:
+                raise ValidationError(f"Erro no backup, linha {i}: {e}") from e
+
+            new_id = str(uuid.uuid4())
+            data = {c: "" for c in CSV_COLUMNS}
+            data["_id"] = new_id
+            for c in CSV_COLUMNS:
+                if c == "_id":
+                    continue
+                data[c] = normalized.get(c, "")
+            imported_rows.append(DemandRow(_id=new_id, data=data))
+
+        self.rows = imported_rows
+        self.save()
+        return team_control_payload
