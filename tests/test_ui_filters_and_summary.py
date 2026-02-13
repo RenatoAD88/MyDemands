@@ -19,4 +19,4 @@ def test_summary_counts_tracks_pending_delayed_concluded():
         {"Status": "Cancelado", "Timing": "Cancelado"},
     ]
     counts = summary_counts(rows)
-    assert counts == {"pending": 2, "delayed": 1, "concluded": 1}
+    assert counts == {"pending": 2, "inside_deadline": 1, "delayed": 1, "concluded": 1}
