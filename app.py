@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import csv
 import os
+import re
+import shutil
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QDate, QSize, QUrl
@@ -1093,36 +1095,68 @@ class MainWindow(QMainWindow):
     def _backup_dir_path(self) -> str:
         return os.path.join(self.store.base_dir, BACKUP_DIRNAME)
 
+    def _backup_day_dir_path(self, ref_day: Optional[date] = None) -> str:
+        token = (ref_day or date.today()).strftime("%Y%m%d")
+        return os.path.join(self._backup_dir_path(), token)
+
+    def _cleanup_old_backup_dirs(self, keep_days: int = 5, ref_day: Optional[date] = None) -> None:
+        root = self._backup_dir_path()
+        if not os.path.isdir(root):
+            return
+
+        today = ref_day or date.today()
+        for name in os.listdir(root):
+            full_path = os.path.join(root, name)
+            if not os.path.isdir(full_path):
+                continue
+            if not re.fullmatch(r"\d{8}", name):
+                continue
+
+            try:
+                folder_day = datetime.strptime(name, "%Y%m%d").date()
+            except ValueError:
+                continue
+
+            if (today - folder_day) > timedelta(days=keep_days):
+                shutil.rmtree(full_path, ignore_errors=True)
+
     def _ensure_backup_dir(self) -> str:
-        path = self._backup_dir_path()
-        os.makedirs(path, exist_ok=True)
-        return path
+        root = self._backup_dir_path()
+        os.makedirs(root, exist_ok=True)
+        self._cleanup_old_backup_dirs()
+        day_dir = self._backup_day_dir_path()
+        os.makedirs(day_dir, exist_ok=True)
+        return day_dir
 
     def _backup_file_name_now(self) -> str:
         stamp = datetime.now().strftime("%Y%m%d%H%M%S")
         return f"{BACKUP_PREFIX}{stamp}.csv"
 
     def _latest_backup_name(self) -> str:
-        bkp_dir = self._backup_dir_path()
-        if not os.path.isdir(bkp_dir):
+        root = self._backup_dir_path()
+        if not os.path.isdir(root):
             return "Nenhum backup"
-        names = sorted(
-            [n for n in os.listdir(bkp_dir) if n.startswith(BACKUP_PREFIX) and n.lower().endswith(".csv")],
-            reverse=True,
-        )
+
+        names: List[str] = []
+        for day_folder in os.listdir(root):
+            day_path = os.path.join(root, day_folder)
+            if not os.path.isdir(day_path):
+                continue
+            for file_name in os.listdir(day_path):
+                if file_name.startswith(BACKUP_PREFIX) and file_name.lower().endswith(".csv"):
+                    names.append(f"{day_folder}/{file_name}")
+
+        names.sort(reverse=True)
         return names[0] if names else "Nenhum backup"
 
     def _today_backup_exists(self) -> bool:
-        bkp_dir = self._backup_dir_path()
-        if not os.path.isdir(bkp_dir):
+        day_dir = self._backup_day_dir_path()
+        if not os.path.isdir(day_dir):
             return False
-        day_token = date.today().strftime("%Y%m%d")
-        for name in os.listdir(bkp_dir):
+        for name in os.listdir(day_dir):
             if not (name.startswith(BACKUP_PREFIX) and name.lower().endswith(".csv")):
                 continue
-            core = name[len(BACKUP_PREFIX):-4]
-            if len(core) >= 8 and core[:8] == day_token:
-                return True
+            return True
         return False
 
     def _save_automatic_backup(self) -> str:
