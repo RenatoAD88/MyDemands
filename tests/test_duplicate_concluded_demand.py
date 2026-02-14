@@ -67,3 +67,51 @@ def test_concluded_table_supports_duplicate_and_resets_conclusion_fields(tmp_pat
     assert captured["initial_data"]["Data Conclusão"] == ""
 
     win.close()
+
+
+def test_duplicate_concluded_demand_shows_pending_modal_with_created_line(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    today = date.today().strftime("%d/%m/%Y")
+    store.add(
+        {
+            "Projeto": "Projeto Concluído",
+            "Descrição": "Demanda finalizada para duplicar",
+            "Prioridade": "Alta",
+            "Prazo": today,
+            "Data de Registro": today,
+            "Status": "Concluído",
+            "Data Conclusão": today,
+            "Responsável": "Ana",
+            "% Conclusão": "1",
+        }
+    )
+
+    captured = {"line": None}
+
+    def fake_modal(self, line_number):
+        captured["line"] = line_number
+
+    class FakeNewDemandDialog:
+        def __init__(self, parent, initial_data=None):
+            self._payload = dict(initial_data or {})
+
+        def exec(self):
+            return QDialog.Accepted
+
+        def payload(self):
+            return self._payload
+
+    monkeypatch.setattr(app_module, "NewDemandDialog", FakeNewDemandDialog)
+    monkeypatch.setattr(MainWindow, "_show_duplicate_success_modal", fake_modal)
+
+    win = MainWindow(store)
+    win.tabs.setCurrentIndex(2)
+    win.refresh_tab4()
+    win.t4_table.setCurrentCell(0, 0)
+
+    win._duplicate_selected_demand(win.t4_table)
+
+    assert captured["line"] == 2
+
+    win.close()
