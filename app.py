@@ -115,6 +115,7 @@ PICKER_ONLY = {"Data de Registro", "Prazo", "Data Conclusão"}
 NON_EDITABLE = {"ID", "Timing"} | PICKER_ONLY
 TAB4_EDITABLE_COLUMNS = {
     "É Urgente?",
+    "Status",
     "Prioridade",
     "Data de Registro",
     "Prazo",
