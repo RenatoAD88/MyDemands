@@ -1328,7 +1328,7 @@ class MainWindow(QMainWindow):
         table.setProperty("tableSortKey", table_key)
         table.itemChanged.connect(self._on_item_changed)
         table.cellDoubleClicked.connect(self._on_cell_double_clicked)
-        if table_key in {"t1", "t3"}:
+        if table_key in {"t1", "t3", "t4"}:
             table.setContextMenuPolicy(Qt.CustomContextMenu)
             table.customContextMenuRequested.connect(self._open_demand_context_menu)
         if table_key == "t4":
