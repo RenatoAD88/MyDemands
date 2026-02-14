@@ -69,7 +69,7 @@ def test_concluded_table_supports_duplicate_and_resets_conclusion_fields(tmp_pat
     win.close()
 
 
-def test_duplicate_concluded_demand_shows_pending_modal_with_created_line(tmp_path, monkeypatch):
+def test_duplicate_concluded_demand_shows_pending_modal_with_created_id(tmp_path, monkeypatch):
     _get_app()
     store = CsvStore(str(tmp_path))
     today = date.today().strftime("%d/%m/%Y")
@@ -87,10 +87,10 @@ def test_duplicate_concluded_demand_shows_pending_modal_with_created_line(tmp_pa
         }
     )
 
-    captured = {"line": None}
+    captured = {"demand_id": None}
 
-    def fake_modal(self, line_number):
-        captured["line"] = line_number
+    def fake_modal(self, demand_id):
+        captured["demand_id"] = demand_id
 
     class FakeNewDemandDialog:
         def __init__(self, parent, initial_data=None):
@@ -112,6 +112,6 @@ def test_duplicate_concluded_demand_shows_pending_modal_with_created_line(tmp_pa
 
     win._duplicate_selected_demand(win.t4_table)
 
-    assert captured["line"] == 2
+    assert captured["demand_id"].isdigit()
 
     win.close()
