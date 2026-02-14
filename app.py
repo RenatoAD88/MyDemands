@@ -2403,24 +2403,15 @@ class MainWindow(QMainWindow):
             return
         self.refresh_all()
 
-        line_number = self._line_number_for_demand_id(new_id)
-        if line_number is not None:
-            self._show_duplicate_success_modal(line_number)
+        if new_id:
+            self._show_duplicate_success_modal(new_id)
 
-    def _line_number_for_demand_id(self, demand_id: str) -> Optional[int]:
-        if not demand_id:
-            return None
-        for idx, row in enumerate(self.store.build_view(), start=1):
-            if row.get("_id") == demand_id:
-                return idx
-        return None
-
-    def _show_duplicate_success_modal(self, line_number: int):
+    def _show_duplicate_success_modal(self, demand_id: str):
         confirm_box = QMessageBox(self)
         confirm_box.setIcon(QMessageBox.Information)
         confirm_box.setWindowTitle("Duplicar demanda")
         confirm_box.setText("Essa demanda foi recriada como pendente")
-        confirm_box.setInformativeText(f"Linha: {line_number}")
+        confirm_box.setInformativeText(f"ID: {demand_id}")
         confirm_box.setStandardButtons(QMessageBox.NoButton)
 
         seconds_left = 5
