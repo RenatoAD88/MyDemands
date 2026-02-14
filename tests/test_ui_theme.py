@@ -3,6 +3,9 @@ from ui_theme import APP_STYLESHEET, status_color, timing_color
 
 def test_status_color_maps_known_states():
     assert status_color("Concluído") == (210, 242, 220)
+    assert status_color("Não iniciada") == (255, 228, 230)
+    assert status_color("Não Iniciado") == (255, 228, 230)
+    assert status_color("Requer revisão") == (237, 233, 254)
     assert status_color("Em espera") == (255, 243, 205)
 
 
