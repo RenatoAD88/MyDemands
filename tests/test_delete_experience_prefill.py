@@ -35,9 +35,9 @@ def test_delete_dialog_prefills_selected_data_on_pending_tabs(tmp_path, monkeypa
     )
 
     win = MainWindow(store)
-    win.tabs.setCurrentIndex(0)
-    win.refresh_tab1()
-    win.t1_table.setCurrentCell(0, 0)
+    win.tabs.setCurrentIndex(1)
+    win.refresh_tab3()
+    win.t3_table.setCurrentCell(0, 0)
 
     capture = {"line_input": None, "loaded_rows": None}
 
