@@ -288,6 +288,7 @@ class ColumnComboDelegate(QStyledItemDelegate):
     def __init__(self, parent=None, column_to_options: Dict[int, List[str]] | None = None):
         super().__init__(parent)
         self.column_to_options = column_to_options or {}
+        self.progress_column = VISIBLE_COLUMNS.index("% Conclusão")
 
     def createEditor(self, parent, option, index):
         col = index.column()
@@ -325,6 +326,30 @@ class ColumnComboDelegate(QStyledItemDelegate):
             model.setData(index, editor.currentText(), Qt.EditRole)
             return
         super().setModelData(editor, model, index)
+
+    def paint(self, painter: QPainter, option, index):
+        super().paint(painter, option, index)
+
+        if index.column() != self.progress_column:
+            return
+
+        fraction = _percent_to_fraction(str(index.data(Qt.DisplayRole) or ""))
+        if fraction is None or fraction <= 0:
+            return
+
+        fill_rect = option.rect.adjusted(1, 1, -1, -1)
+        fill_width = int(fill_rect.width() * fraction)
+        if fill_width <= 0:
+            return
+
+        fill_rect.setWidth(fill_width)
+        rr, gg, bb = PROGRESS_FILL_COLOR
+
+        painter.save()
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(rr, gg, bb, 120))
+        painter.drawRect(fill_rect)
+        painter.restore()
 
 
 class TeamSectionTable(QTableWidget):
