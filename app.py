@@ -1357,7 +1357,11 @@ class MainWindow(QMainWindow):
             table.setContextMenuPolicy(Qt.CustomContextMenu)
             table.customContextMenuRequested.connect(self._open_demand_context_menu)
         if table_key == "t4":
-            table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+            table.setEditTriggers(
+                QAbstractItemView.DoubleClicked
+                | QAbstractItemView.EditKeyPressed
+                | QAbstractItemView.SelectedClicked
+            )
 
         col_map = {}
         col_map[VISIBLE_COLUMNS.index("Status")] = STATUS_EDIT_OPTIONS
@@ -1490,19 +1494,30 @@ class MainWindow(QMainWindow):
         return None
 
     def _prompt_percent_when_unconcluding(self) -> Optional[str]:
-        items = [lbl for (lbl, _v) in PERCENT_QUICK_PICK]
-        choice, ok = QInputDialog.getItem(
-            self,
-            "% Conclusão",
-            "Informe o % conclusão para este novo status:",
-            items,
-            0,
-            False
-        )
-        if not ok:
-            return None
-        mapping = {lbl: v for (lbl, v) in PERCENT_QUICK_PICK}
-        return mapping.get(choice, "")
+        while True:
+            value, ok = QInputDialog.getText(
+                self,
+                "% Conclusão",
+                "Digite o novo % conclusão (ex.: 25%, 0.25, 50):",
+                text="0%",
+            )
+            if not ok:
+                return None
+
+            pct = _normalize_percent_to_decimal_str(value)
+            if not pct:
+                QMessageBox.warning(self, "Validação", "Informe um valor válido para % Conclusão.")
+                continue
+
+            if pct == "1":
+                QMessageBox.warning(
+                    self,
+                    "Validação",
+                    "Para status diferente de Concluído, o % Conclusão deve ser menor que 100%.",
+                )
+                continue
+
+            return pct
 
     def _on_cell_double_clicked(self, row: int, col: int):
         col_name = VISIBLE_COLUMNS[col]
@@ -1518,7 +1533,7 @@ class MainWindow(QMainWindow):
             return
 
         table_key = str(table.property("tableSortKey") or "")
-        if table_key == "t4":
+        if table_key == "t4" and col_name != "Status":
             return
 
         # Data de Registro / Data Conclusão (picker)
@@ -1580,7 +1595,7 @@ class MainWindow(QMainWindow):
 
         table = item.tableWidget()
         table_key = str(table.property("tableSortKey") or "") if table else ""
-        if table_key == "t4":
+        if table_key == "t4" and col_name != "Status":
             self.refresh_all()
             return
 
