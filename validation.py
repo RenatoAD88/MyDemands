@@ -24,7 +24,7 @@ REQUIRED_ON_CREATE = {"Descrição", "Prioridade", "Prazo", "Data de Registro", 
 REQUIRED_ON_UPDATE = {"Descrição", "Prioridade", "Prazo", "Data de Registro", "Status", "Responsável", "Projeto"}
 
 DATE_COLUMNS = {"Data de Registro", "Data Conclusão"}
-TEXT_COLUMNS = {"Projeto", "Descrição", "ID Azure", "Responsável", "Nome", "Time/Função"}
+TEXT_COLUMNS = {"Projeto", "Descrição", "Comentário", "ID Azure", "Responsável", "Nome", "Time/Função"}
 ENUM_COLUMNS = {
     "Status": STATUS_OPTIONS,
     "Prioridade": PRIORIDADE_OPTIONS,
