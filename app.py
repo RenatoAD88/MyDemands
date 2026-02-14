@@ -1551,6 +1551,31 @@ class MainWindow(QMainWindow):
 
             return pct
 
+    def _prompt_percent_when_unconcluding(self) -> Optional[str]:
+        progress_options = [
+            "0% - Não iniciado",
+            "25% - Começando",
+            "50% - Parcial",
+            "75% - Avançado",
+        ]
+        while True:
+            value, ok = QInputDialog.getItem(
+                self,
+                "% Conclusão",
+                "Selecione o novo % conclusão:",
+                progress_options,
+                0,
+                False,
+            )
+            if not ok:
+                return None
+
+            pct = _percent_label_to_decimal(value)
+            if pct not in ("0", "0.25", "0.5", "0.75"):
+                QMessageBox.warning(self, "Validação", "Selecione 0%, 25%, 50% ou 75%.")
+                continue
+            return pct
+
     def _on_cell_double_clicked(self, row: int, col: int):
         col_name = VISIBLE_COLUMNS[col]
         table = self.sender()
@@ -1658,6 +1683,13 @@ class MainWindow(QMainWindow):
             if new_value == "Não iniciada":
                 payload["Data Conclusão"] = ""
                 payload["% Conclusão"] = "0"
+            elif previous_status == "Concluído":
+                pct = self._prompt_percent_when_unconcluding()
+                if pct is None:
+                    self.refresh_all()
+                    return
+                payload["Data Conclusão"] = ""
+                payload["% Conclusão"] = pct
             elif previous_status == "Não iniciada" and new_value in ("Em andamento", "Em espera", "Requer revisão"):
                 pct = self._prompt_percent_after_not_started()
                 if pct is None:
