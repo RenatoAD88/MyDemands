@@ -8,7 +8,7 @@ import sys
 from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
-from PySide6.QtCore import Qt, QDate, QSize, QUrl
+from PySide6.QtCore import Qt, QDate, QSize, QTimer, QUrl
 from PySide6.QtGui import QColor, QIcon, QKeyEvent, QDesktopServices, QPixmap, QPainter, QFont
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
@@ -2377,11 +2377,53 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            self.store.add(dlg.payload())
+            new_id = self.store.add(dlg.payload())
         except ValidationError as ve:
             QMessageBox.warning(self, "Validação", str(ve))
             return
         self.refresh_all()
+
+        line_number = self._line_number_for_demand_id(new_id)
+        if line_number is not None:
+            self._show_duplicate_success_modal(line_number)
+
+    def _line_number_for_demand_id(self, demand_id: str) -> Optional[int]:
+        if not demand_id:
+            return None
+        for idx, row in enumerate(self.store.build_view(), start=1):
+            if row.get("_id") == demand_id:
+                return idx
+        return None
+
+    def _show_duplicate_success_modal(self, line_number: int):
+        confirm_box = QMessageBox(self)
+        confirm_box.setIcon(QMessageBox.Information)
+        confirm_box.setWindowTitle("Duplicar demanda")
+        confirm_box.setText("Essa demanda foi recriada como pendente")
+        confirm_box.setInformativeText(f"Linha: {line_number}")
+        confirm_box.setStandardButtons(QMessageBox.NoButton)
+
+        seconds_left = 5
+        confirm_button = confirm_box.addButton(f"Confirmar ({seconds_left})", QMessageBox.AcceptRole)
+        confirm_box.setDefaultButton(confirm_button)
+        confirm_box.setEscapeButton(confirm_button)
+
+        countdown_timer = QTimer(confirm_box)
+        countdown_timer.setInterval(1000)
+
+        def _tick():
+            nonlocal seconds_left
+            seconds_left -= 1
+            if seconds_left <= 0:
+                countdown_timer.stop()
+                confirm_box.accept()
+                return
+            confirm_button.setText(f"Confirmar ({seconds_left})")
+
+        countdown_timer.timeout.connect(_tick)
+        confirm_box.finished.connect(lambda _: countdown_timer.stop())
+        countdown_timer.start()
+        confirm_box.exec()
 
     def _delete_selected_team_members(self, table: QTableWidget) -> bool:
         members = selected_members_with_ids(table)
