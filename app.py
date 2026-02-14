@@ -373,6 +373,23 @@ class TeamSectionTable(QTableWidget):
         self.setMaximumHeight(total_height)
 
 
+class DemandTable(QTableWidget):
+    def __init__(self, rows: int = 0, columns: int = 0, parent: QWidget | None = None):
+        super().__init__(rows, columns, parent)
+        self._delete_demand_handler = None
+
+    def set_delete_demand_handler(self, handler):
+        self._delete_demand_handler = handler
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.key() == Qt.Key_Delete and callable(self._delete_demand_handler):
+            selected_rows = self.selectionModel().selectedRows() if self.selectionModel() else []
+            if selected_rows and self._delete_demand_handler(self):
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
+
 class BaseModalDialog(QDialog):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -1331,7 +1348,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Restauração concluída", "Backup restaurado com sucesso.")
 
     def _make_table(self, table_key: str) -> QTableWidget:
-        table = QTableWidget(0, len(VISIBLE_COLUMNS))
+        table = DemandTable(0, len(VISIBLE_COLUMNS))
         table.setHorizontalHeaderLabels(VISIBLE_COLUMNS)
         table.setProperty("tableSortKey", table_key)
         table.itemChanged.connect(self._on_item_changed)
@@ -1356,6 +1373,7 @@ class MainWindow(QMainWindow):
         table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         table.verticalHeader().setVisible(False)
         table.setWordWrap(True)
+        table.set_delete_demand_handler(self._delete_selected_demands_from_table)
 
         header = table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
@@ -2621,19 +2639,24 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Importação concluída", f"CSV importado com sucesso.\nTotal de demandas: {total}")
 
     def delete_demand(self):
-        selected_rows = self._selected_rows_from_current_tab(include_current=False)
+        self._delete_selected_demands_from_table()
+
+    def _delete_selected_demands_from_table(self, table: Optional[QTableWidget] = None) -> bool:
+        selected_rows = self._selected_rows_from_current_tab(include_current=False, table=table)
         if selected_rows and self.tabs.currentIndex() == 2:
             QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
-            return
+            return False
 
         dlg = DeleteDemandDialog(self, self.store)
         if selected_rows and self.tabs.currentIndex() == 1:
             dlg.preload_selected_rows(selected_rows)
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
+            return True
+        return False
 
-    def _selected_rows_from_current_tab(self, include_current: bool = True) -> List[Dict[str, Any]]:
-        table = self._table_from_current_tab()
+    def _selected_rows_from_current_tab(self, include_current: bool = True, table: Optional[QTableWidget] = None) -> List[Dict[str, Any]]:
+        table = table or self._table_from_current_tab()
         if not table:
             return []
 
