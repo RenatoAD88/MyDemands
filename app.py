@@ -1162,6 +1162,10 @@ class MainWindow(QMainWindow):
             "t4": None,
         }
 
+        # Mantido para compatibilidade de código/testes, mas a tab não é mais exibida.
+        self.t1_table = self._make_table("t1")
+        self.t1_actions_layout = QHBoxLayout()
+
         self.tabs = QTabWidget()
         self.tabs.setMovable(True)
         self.tabs.tabBar().tabMoved.connect(self._save_preferences)
@@ -1178,7 +1182,6 @@ class MainWindow(QMainWindow):
         self.team_store = TeamControlStore(self.store.base_dir)
         self._ensure_backup_dir()
 
-        self._init_tab1()
         self._init_tab2()
         self._init_tab3()
         self._init_tab4()
@@ -1579,20 +1582,13 @@ class MainWindow(QMainWindow):
         # Status alterado para um valor diferente de concluído:
         # o novo status vira fonte da verdade do registro.
         if col_name == "Status" and new_value != "Concluído":
-            old_value = (item.data(Qt.UserRole + 1) or "").strip()
-            current = self.store.get(_id)
-            stored_percent = (current.data.get("% Conclusão", "") if current else "")
-
             payload = {"Status": new_value, "Data Conclusão": ""}
 
-            # Se estava concluída (ou inconsistente em 100%), exige novo % para sair de concluído.
-            needs_percent = old_value == "Concluído" or _is_percent_100(stored_percent)
-            if needs_percent:
-                pct = self._prompt_percent_when_unconcluding()
-                if pct is None:
-                    self.refresh_all()
-                    return
-                payload["% Conclusão"] = pct
+            pct = self._prompt_percent_when_unconcluding()
+            if pct is None:
+                self.refresh_all()
+                return
+            payload["% Conclusão"] = pct
 
             try:
                 self.store.update(_id, payload)
@@ -2346,34 +2342,6 @@ class MainWindow(QMainWindow):
         return True
 
     # Tabs
-    def _init_tab1(self):
-        tab = QWidget()
-        self.t1_date = QDateEdit(QDate.currentDate())
-        self.t1_date.setCalendarPopup(True)
-        self.t1_date.setDisplayFormat(DATE_FMT_QT)
-
-        consult_btn = QPushButton("Consultar")
-        consult_btn.clicked.connect(self.refresh_tab1)
-
-        self.t1_table = self._make_table("t1")
-
-        reset_btn = QPushButton("Resetar Filtros")
-        reset_btn.clicked.connect(self._reset_tab1_filters)
-
-        top = QHBoxLayout()
-        self.t1_actions_layout = top
-        top.addWidget(QLabel("Selecione o Prazo da Demanda:"))
-        top.addWidget(self.t1_date)
-        top.addWidget(consult_btn)
-        top.addWidget(reset_btn)
-        top.addStretch()
-
-        layout = QVBoxLayout()
-        layout.addLayout(top)
-        layout.addWidget(self.t1_table)
-        tab.setLayout(layout)
-        self.tabs.addTab(tab, "Consultar Pendências")
-
     def _init_tab3(self):
         tab = QWidget()
         self.t3_search = QLineEdit()
@@ -2386,7 +2354,9 @@ class MainWindow(QMainWindow):
         self.t3_prioridade.addItems(PRIORIDADE_EDIT_OPTIONS)
         self.t3_responsavel = QLineEdit()
         self.t3_responsavel.setPlaceholderText("Filtrar por responsável")
-        self.t3_prazo = QDateEdit(QDate.currentDate())
+        self.t3_prazo = QDateEdit(QDate(1900, 1, 1))
+        self.t3_prazo.setMinimumDate(QDate(1900, 1, 1))
+        self.t3_prazo.setSpecialValueText("Todos")
         self.t3_prazo.setCalendarPopup(True)
         self.t3_prazo.setDisplayFormat(DATE_FMT_QT)
         self.t3_projeto = QComboBox()
@@ -2402,19 +2372,23 @@ class MainWindow(QMainWindow):
         reset_btn = QPushButton("Resetar Filtros")
         reset_btn.clicked.connect(self._reset_tab3_filters)
 
+        clear_prazo_btn = QPushButton("Limpar")
+        clear_prazo_btn.clicked.connect(lambda: self.t3_prazo.setDate(self.t3_prazo.minimumDate()))
+
         filters = QHBoxLayout()
-        filters.addWidget(QLabel("Busca:"))
-        filters.addWidget(self.t3_search, 2)
+        filters.addWidget(QLabel("Prazo:"))
+        filters.addWidget(self.t3_prazo)
+        filters.addWidget(clear_prazo_btn)
+        filters.addWidget(QLabel("Projeto:"))
+        filters.addWidget(self.t3_projeto)
         filters.addWidget(QLabel("Status:"))
         filters.addWidget(self.t3_status)
         filters.addWidget(QLabel("Prioridade:"))
         filters.addWidget(self.t3_prioridade)
         filters.addWidget(QLabel("Responsável:"))
         filters.addWidget(self.t3_responsavel)
-        filters.addWidget(QLabel("Prazo:"))
-        filters.addWidget(self.t3_prazo)
-        filters.addWidget(QLabel("Projeto:"))
-        filters.addWidget(self.t3_projeto)
+        filters.addWidget(QLabel("Busca:"))
+        filters.addWidget(self.t3_search, 2)
         filters.addWidget(apply_btn)
         filters.addWidget(reset_btn)
 
@@ -2464,17 +2438,12 @@ class MainWindow(QMainWindow):
         tab.setLayout(layout)
         self.tabs.addTab(tab, "Consultar Demandas Concluídas")
 
-    def _reset_tab1_filters(self):
-        self.t1_date.setDate(QDate.currentDate())
-        self._clear_sort("t1")
-        self.refresh_tab1()
-
     def _reset_tab3_filters(self):
         self.t3_search.clear()
         self.t3_status.setCurrentIndex(0)
         self.t3_prioridade.setCurrentIndex(0)
         self.t3_responsavel.clear()
-        self.t3_prazo.setDate(QDate.currentDate())
+        self.t3_prazo.setDate(self.t3_prazo.minimumDate())
         self.t3_projeto.setCurrentIndex(0)
         self._clear_sort("t3")
         self.refresh_tab3()
@@ -2488,7 +2457,6 @@ class MainWindow(QMainWindow):
     # Refresh
     def refresh_all(self):
         self.store.load()
-        self.refresh_tab1()
         self.refresh_team_control()
         self.refresh_tab3()
         self.refresh_tab4()
@@ -2496,17 +2464,11 @@ class MainWindow(QMainWindow):
     def refresh_current(self):
         i = self.tabs.currentIndex()
         if i == 0:
-            self.refresh_tab1()
-        elif i == 1:
             self.refresh_team_control()
-        elif i == 2:
+        elif i == 1:
             self.refresh_tab3()
-        elif i == 3:
+        elif i == 2:
             self.refresh_tab4()
-
-    def refresh_tab1(self):
-        d = qdate_to_date(self.t1_date.date())
-        self._fill(self.t1_table, self.store.tab1_by_prazo_date(d))
 
     def refresh_tab3(self):
         rows = self.store.tab_pending_all()
@@ -2520,13 +2482,17 @@ class MainWindow(QMainWindow):
             self.t3_projeto.setCurrentText(current_project)
         self.t3_projeto.blockSignals(False)
 
+        prazo_filter = ""
+        if self.t3_prazo.date() != self.t3_prazo.minimumDate():
+            prazo_filter = self.t3_prazo.date().toString(DATE_FMT_QT)
+
         filtered = filter_rows(
             rows,
             text_query=self.t3_search.text(),
             status=self.t3_status.currentText(),
             prioridade=self.t3_prioridade.currentText(),
             responsavel=self.t3_responsavel.text(),
-            prazo=self.t3_prazo.date().toString(DATE_FMT_QT),
+            prazo=prazo_filter,
             projeto=self.t3_projeto.currentText(),
         )
         counts = summary_counts(rows)
@@ -2648,12 +2614,12 @@ class MainWindow(QMainWindow):
 
     def delete_demand(self):
         selected_rows = self._selected_rows_from_current_tab(include_current=False)
-        if selected_rows and self.tabs.currentIndex() == 3:
+        if selected_rows and self.tabs.currentIndex() == 2:
             QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
             return
 
         dlg = DeleteDemandDialog(self, self.store)
-        if selected_rows and self.tabs.currentIndex() in (0, 2):
+        if selected_rows and self.tabs.currentIndex() == 1:
             dlg.preload_selected_rows(selected_rows)
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
@@ -2693,10 +2659,10 @@ class MainWindow(QMainWindow):
     def _table_from_current_tab(self) -> Optional[QTableWidget]:
         current_tab = self.tabs.currentIndex()
         if current_tab == 0:
-            return self.t1_table
-        if current_tab == 2:
+            return None
+        if current_tab == 1:
             return self.t3_table
-        if current_tab == 3:
+        if current_tab == 2:
             return self.t4_table
         return None
 
