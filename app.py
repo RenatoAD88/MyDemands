@@ -1531,20 +1531,30 @@ class MainWindow(QMainWindow):
             self.refresh_all()
             return
 
-        # Status: Concluído -> outro (pede % e limpa data conclusão)
-        if col_name == "Status":
+        # Status alterado para um valor diferente de concluído:
+        # o novo status vira fonte da verdade do registro.
+        if col_name == "Status" and new_value != "Concluído":
             old_value = (item.data(Qt.UserRole + 1) or "").strip()
-            if old_value == "Concluído" and new_value != "Concluído":
+            current = self.store.get(_id)
+            stored_percent = (current.data.get("% Conclusão", "") if current else "")
+
+            payload = {"Status": new_value, "Data Conclusão": ""}
+
+            # Se estava concluída (ou inconsistente em 100%), exige novo % para sair de concluído.
+            needs_percent = old_value == "Concluído" or _is_percent_100(stored_percent)
+            if needs_percent:
                 pct = self._prompt_percent_when_unconcluding()
                 if pct is None:
                     self.refresh_all()
                     return
-                try:
-                    self.store.update(_id, {"Status": new_value, "% Conclusão": pct, "Data Conclusão": ""})
-                except ValidationError as ve:
-                    QMessageBox.warning(self, "Validação", str(ve))
-                self.refresh_all()
-                return
+                payload["% Conclusão"] = pct
+
+            try:
+                self.store.update(_id, payload)
+            except ValidationError as ve:
+                QMessageBox.warning(self, "Validação", str(ve))
+            self.refresh_all()
+            return
 
         # ✅ % Conclusão via combo
         if col_name == "% Conclusão":
