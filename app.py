@@ -145,6 +145,8 @@ PERCENT_QUICK_PICK = [
     ("75%", "0.75"),
 ]
 
+PERCENT_LABEL_OPTIONS = [label for label, _ in PERCENT_OPTIONS if label]
+
 PRIORIDADE_TEXT_COLORS: Dict[str, Tuple[int, int, int]] = {
     "alta": (220, 38, 38),   # vermelho
     "média": (202, 138, 4),  # amarelo
@@ -272,6 +274,14 @@ def _percent_to_fraction(raw: str) -> Optional[float]:
     except Exception:
         return None
     return max(0.0, min(1.0, value))
+
+
+def _percent_label_to_decimal(label: str) -> str:
+    selected_label = (label or "").strip()
+    for option_label, option_value in PERCENT_OPTIONS:
+        if option_label == selected_label:
+            return option_value
+    return _normalize_percent_to_decimal_str(selected_label)
 
 
 class ColumnComboDelegate(QStyledItemDelegate):
@@ -985,18 +995,22 @@ class NewDemandDialog(BaseModalDialog):
             self.inline_error.setText("Preencha os campos: " + ", ".join(friendly))
             return
 
+        selected_percent_label = self.perc.currentText()
+        if self.status.currentText() != "Concluído" and _is_percent_100(selected_percent_label):
+            self.perc.setStyleSheet("border: 1px solid #d92d20;")
+            self.status.setStyleSheet("border: 1px solid #d92d20;")
+            self.inline_error.setText(
+                "Não é possível criar uma demanda 100% concluída com status diferente de Concluído."
+            )
+            return
+
         self.accept()
 
     def payload(self) -> Dict[str, str]:
         prazos = ", ".join(self.prazo_list.item(i).text() for i in range(self.prazo_list.count()))
         prazos = normalize_prazo_text(prazos)
 
-        selected_label = self.perc.currentText()
-        percent_value = ""
-        for label, val in PERCENT_OPTIONS:
-            if label == selected_label:
-                percent_value = val
-                break
+        percent_value = _percent_label_to_decimal(self.perc.currentText())
 
         payload = {
             "É Urgente?": self.urgente.currentText(),
@@ -1495,16 +1509,18 @@ class MainWindow(QMainWindow):
 
     def _prompt_percent_when_unconcluding(self) -> Optional[str]:
         while True:
-            value, ok = QInputDialog.getText(
+            value, ok = QInputDialog.getItem(
                 self,
                 "% Conclusão",
-                "Digite o novo % conclusão (ex.: 25%, 0.25, 50):",
-                text="0%",
+                "Selecione o novo % conclusão:",
+                PERCENT_LABEL_OPTIONS,
+                0,
+                False,
             )
             if not ok:
                 return None
 
-            pct = _normalize_percent_to_decimal_str(value)
+            pct = _percent_label_to_decimal(value)
             if not pct:
                 QMessageBox.warning(self, "Validação", "Informe um valor válido para % Conclusão.")
                 continue
