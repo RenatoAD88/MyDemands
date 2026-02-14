@@ -1,7 +1,7 @@
 from csv_store import CsvStore
 
 
-def test_concluded_cannot_be_deleted(tmp_path):
+def test_concluded_can_be_deleted(tmp_path):
     store = CsvStore(str(tmp_path))
     _id = store.add({
         "Descrição": "Concluída",
@@ -16,7 +16,7 @@ def test_concluded_cannot_be_deleted(tmp_path):
     })
 
     ok = store.delete_by_id(_id)
-    assert ok is False
+    assert ok is True
 
     store.load()
-    assert store.get(_id) is not None
+    assert store.get(_id) is None

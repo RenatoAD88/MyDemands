@@ -434,10 +434,6 @@ class CsvStore:
         return None
 
     def delete_by_id(self, _id: str) -> bool:
-        dr = self.get(_id)
-        if dr and (dr.data.get("Status") or "").strip() == "Concluído":
-            return False
-
         before = len(self.rows)
         self.rows = [r for r in self.rows if r._id != _id]
         if len(self.rows) == before:
@@ -448,7 +444,7 @@ class CsvStore:
     def delete_by_line(self, line: int) -> bool:
         """
         Exclui pelo 'ID' conforme exibido na UI (ordem do build_view()).
-        Retorna False se a linha for inválida ou se a demanda não puder ser excluída.
+        Retorna False se a linha for inválida.
         """
         try:
             line = int(line)
@@ -469,7 +465,6 @@ class CsvStore:
         if not _id:
             return False
 
-        # delete_by_id já bloqueia concluído
         return self.delete_by_id(_id)
 
     def _sorted(self, demands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
