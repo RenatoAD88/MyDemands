@@ -2,9 +2,10 @@ from form_rules import required_fields
 
 
 def test_required_fields_detects_core_missing():
-    missing = required_fields({"Descrição": "", "Prioridade": "", "Status": "", "Responsável": ""}, prazo_count=0)
+    missing = required_fields({"Descrição": "", "Prioridade": "", "Status": "", "Responsável": "", "Projeto": ""}, prazo_count=0)
     assert "Descrição" in missing
     assert "Prazo" in missing
+    assert "Projeto" in missing
 
 
 def test_required_fields_requires_conclusion_when_concluded():
@@ -13,6 +14,7 @@ def test_required_fields_requires_conclusion_when_concluded():
         "Prioridade": "Alta",
         "Status": "Concluído",
         "Responsável": "R",
+        "Projeto": "P",
         "% Conclusão": "100% - Concluído",
         "Data Conclusão": "",
     }

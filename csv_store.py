@@ -331,7 +331,7 @@ class CsvStore:
         self.rows = []
         csv_text = self._read_csv_text()
         r = csv.DictReader(io.StringIO(csv_text), delimiter=DELIMITER)
-        for row in r:
+        for i, row in enumerate(r, start=2):
             for old, new in LEGACY_TO_NEW.items():
                 if old in row and new not in row:
                     row[new] = row.get(old, "")
@@ -342,8 +342,19 @@ class CsvStore:
             for c in CSV_COLUMNS:
                 row.setdefault(c, "")
 
-            row["Prazo"] = normalize_prazo_text(row.get("Prazo", ""))
-            self.rows.append(DemandRow(_id=_id, data=row))
+            try:
+                normalized = validate_payload(row, mode="create")
+                normalized = _autofix_consistency(normalized)
+                _require_conclusao_date_if_needed(
+                    normalized.get("Status", ""),
+                    normalized.get("% Conclusão", ""),
+                    normalized.get("Data Conclusão", ""),
+                )
+            except ValidationError as e:
+                raise ValidationError(f"Erro no arquivo de dados, linha {i}: {e}") from e
+
+            normalized["_id"] = _id
+            self.rows.append(DemandRow(_id=_id, data=normalized))
 
         self.save()
 
@@ -396,6 +407,8 @@ class CsvStore:
         # aplica mudanças em uma cópia para validar consistência
         merged = dict(dr.data)
         merged.update({k: (v if v is not None else "") for k, v in changes.items()})
+
+        merged = validate_payload(merged, mode="create")
 
         merged = _autofix_consistency(merged)
 

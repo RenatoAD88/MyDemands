@@ -6,6 +6,7 @@ def test_prazo_multi_dates_has_star_in_display(tmp_path):
     store = CsvStore(str(tmp_path))
     _id = store.add({
         "Descrição": "Multi prazo",
+        "Projeto": "Projeto Multi",
         "Prioridade": "Alta",
         "Prazo": "05/02/2026, 06/02/2026",
         "Data de Registro": "01/02/2026",
@@ -27,6 +28,7 @@ def test_prazo_single_date_has_no_star(tmp_path):
     store = CsvStore(str(tmp_path))
     _id = store.add({
         "Descrição": "Single prazo",
+        "Projeto": "Projeto Single",
         "Prioridade": "Baixa",
         "Prazo": "05/02/2026",
         "Data de Registro": "01/02/2026",

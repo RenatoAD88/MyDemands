@@ -6,6 +6,7 @@ def test_percent_display_is_percent_strings(tmp_path):
     store = CsvStore(str(tmp_path))
     _id = store.add({
         "Descrição": "X",
+        "Projeto": "Projeto X",
         "Prioridade": "Alta",
         "Prazo": "05/02/2026",
         "Data Entrada": "01/02/2026",
@@ -22,6 +23,7 @@ def test_status_concluido_requires_data_conclusao_and_autosets_percent(tmp_path)
     store = CsvStore(str(tmp_path))
     _id = store.add({
         "Descrição": "Y",
+        "Projeto": "Projeto Y",
         "Prioridade": "Média",
         "Prazo": "05/02/2026",
         "Data Entrada": "01/02/2026",
@@ -50,6 +52,7 @@ def test_percent_100_requires_data_conclusao_and_autosets_status(tmp_path):
     store = CsvStore(str(tmp_path))
     _id = store.add({
         "Descrição": "Z",
+        "Projeto": "Projeto Z",
         "Prioridade": "Baixa",
         "Prazo": "05/02/2026",
         "Data de Registro": "01/02/2026",

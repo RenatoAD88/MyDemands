@@ -5,6 +5,7 @@ def test_delete_by_line_removes_record(tmp_path):
 
     a = store.add({
         "Descrição": "A",
+        "Projeto": "Projeto A",
         "Prioridade": "Alta",
         "Prazo": "05/02/2026",
         "Data de Registro": "01/02/2026",
@@ -13,6 +14,7 @@ def test_delete_by_line_removes_record(tmp_path):
     })
     b = store.add({
         "Descrição": "B",
+        "Projeto": "Projeto B",
         "Prioridade": "Média",
         "Prazo": "06/02/2026",
         "Data de Registro": "01/02/2026",

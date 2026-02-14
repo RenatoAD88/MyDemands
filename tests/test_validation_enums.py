@@ -31,3 +31,8 @@ def test_yesno_enums_are_enforced():
 
     with pytest.raises(ValidationError):
         validate_payload({"É Urgente?": "Talvez"}, mode="update")
+
+
+def test_update_rejects_empty_required_field():
+    with pytest.raises(ValidationError):
+        validate_payload({"Projeto": ""}, mode="update")

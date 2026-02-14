@@ -7,6 +7,7 @@ def test_tab1_filters_out_cancelado_and_concluido_and_concluded_like(tmp_path):
     # pending
     a = store.add({
         "Descrição": "P",
+        "Projeto": "Projeto P",
         "Prioridade": "Alta",
         "Prazo": "05/02/2026",
         "Data de Registro": "01/02/2026",
@@ -18,6 +19,7 @@ def test_tab1_filters_out_cancelado_and_concluido_and_concluded_like(tmp_path):
     # cancelado
     store.add({
         "Descrição": "C",
+        "Projeto": "Projeto C",
         "Prioridade": "Alta",
         "Prazo": "05/02/2026",
         "Data de Registro": "01/02/2026",
@@ -29,6 +31,7 @@ def test_tab1_filters_out_cancelado_and_concluido_and_concluded_like(tmp_path):
     # concluído via status
     store.add({
         "Descrição": "D",
+        "Projeto": "Projeto D",
         "Prioridade": "Alta",
         "Prazo": "05/02/2026",
         "Data de Registro": "01/02/2026",
@@ -41,6 +44,7 @@ def test_tab1_filters_out_cancelado_and_concluido_and_concluded_like(tmp_path):
     # concluído-like: status não concluído, mas % 100 + data conclusão
     store.add({
         "Descrição": "E",
+        "Projeto": "Projeto E",
         "Prioridade": "Alta",
         "Prazo": "05/02/2026",
         "Data de Registro": "01/02/2026",
