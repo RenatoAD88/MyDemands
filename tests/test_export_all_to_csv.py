@@ -48,6 +48,7 @@ def test_export_all_to_csv_flattens_multiline_prazo(tmp_path):
     store = CsvStore(str(tmp_path))
     store.add({
         "Descrição": "Demanda C",
+        "Projeto": "Projeto C",
         "Prioridade": "Alta",
         "Prazo": "05/02/2026, 06/02/2026",
         "Data de Registro": "01/02/2026",
@@ -68,6 +69,7 @@ def test_export_all_to_csv_writes_utf8_bom_for_excel_compatibility(tmp_path):
     store = CsvStore(str(tmp_path))
     store.add({
         "Descrição": "Ação com acentuação",
+        "Projeto": "Projeto UTF",
         "Prioridade": "Alta",
         "Prazo": "05/02/2026",
         "Data de Registro": "01/02/2026",

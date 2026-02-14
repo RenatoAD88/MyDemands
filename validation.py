@@ -20,7 +20,8 @@ STATUS_OPTIONS = [
 PRIORIDADE_OPTIONS = ["Alta", "Média", "Baixa"]
 YESNO = ["Sim", "Não"]
 
-REQUIRED_ON_CREATE = {"Descrição", "Prioridade", "Prazo", "Data de Registro", "Status", "Responsável"}
+REQUIRED_ON_CREATE = {"Descrição", "Prioridade", "Prazo", "Data de Registro", "Status", "Responsável", "Projeto"}
+REQUIRED_ON_UPDATE = {"Descrição", "Prioridade", "Prazo", "Data de Registro", "Status", "Responsável", "Projeto"}
 
 DATE_COLUMNS = {"Data de Registro", "Data Conclusão"}
 TEXT_COLUMNS = {"Projeto", "Descrição", "ID Azure", "Responsável", "Nome", "Time/Função"}
@@ -137,6 +138,10 @@ def validate_payload(payload: Dict[str, str], *, mode: str) -> Dict[str, str]:
     if mode == "create":
         for req in REQUIRED_ON_CREATE:
             if not (payload.get(req) or "").strip():
+                raise ValidationError(f"Campo obrigatório: {req}.")
+    else:
+        for req in REQUIRED_ON_UPDATE:
+            if req in payload and not (payload.get(req) or "").strip():
                 raise ValidationError(f"Campo obrigatório: {req}.")
 
     normalized: Dict[str, str] = {}

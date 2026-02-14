@@ -751,7 +751,7 @@ class DeleteTeamMembersDialog(BaseModalDialog):
 
 
 class NewDemandDialog(BaseModalDialog):
-    def __init__(self, parent: QWidget):
+    def __init__(self, parent: QWidget, initial_data: Optional[Dict[str, str]] = None):
         super().__init__(parent)
         self.setWindowTitle("Nova demanda")
 
@@ -856,7 +856,7 @@ class NewDemandDialog(BaseModalDialog):
         opc_box = QGroupBox("Controle e identificação")
         opc_form = QFormLayout()
         opc_form.addRow("É Urgente?", self.urgente)
-        opc_form.addRow("Projeto", self.projeto)
+        opc_form.addRow("Projeto*", self.projeto)
         opc_form.addRow("ID Azure", self.id_azure)
         opc_form.addRow("% Conclusão", self.perc)
         opc_form.addRow("Data Conclusão", conc_row)
@@ -876,6 +876,31 @@ class NewDemandDialog(BaseModalDialog):
         root.addLayout(btns)
         self.setLayout(root)
         self._bind_modal_keys(save_btn, cancel_btn)
+
+        if initial_data:
+            self._apply_initial_data(initial_data)
+
+    def _apply_initial_data(self, initial_data: Dict[str, str]):
+        self.setWindowTitle("Duplicar demanda")
+        self.urgente.setCurrentText(initial_data.get("É Urgente?", ""))
+        self.status.setCurrentText(initial_data.get("Status", "") or "Não iniciada")
+        self.prioridade.setCurrentText(initial_data.get("Prioridade", ""))
+
+        data_registro = _try_parse_date_br(initial_data.get("Data de Registro", "") or "")
+        if data_registro:
+            self.data_registro.setDate(QDate(data_registro.year, data_registro.month, data_registro.day))
+
+        self.projeto.setText(initial_data.get("Projeto", "") or "")
+        self.descricao.setPlainText(initial_data.get("Descrição", "") or "")
+        self.id_azure.setText(initial_data.get("ID Azure", "") or "")
+        self.responsavel.setText(initial_data.get("Responsável", "") or "")
+        self.reportar.setCurrentText(initial_data.get("Reportar?", ""))
+        self.nome.setText(initial_data.get("Nome", "") or "")
+        self.time_funcao.setText(initial_data.get("Time/Função", "") or "")
+
+        prazo = normalize_prazo_text((initial_data.get("Prazo", "") or "").replace("*", ""))
+        for p in [x.strip() for x in prazo.split(",") if x.strip()]:
+            self.prazo_list.addItem(p)
 
     def _select_conclusao(self):
         dlg = DatePickDialog(self, "Data Conclusão", "Selecione a data de conclusão:", allow_clear=False)
@@ -907,6 +932,7 @@ class NewDemandDialog(BaseModalDialog):
             "Prioridade": self.prioridade.currentText(),
             "Status": self.status.currentText(),
             "Responsável": self.responsavel.text(),
+            "Projeto": self.projeto.text(),
             "% Conclusão": self.perc.currentText(),
             "Data Conclusão": self._conclusao_txt,
         }
@@ -917,6 +943,7 @@ class NewDemandDialog(BaseModalDialog):
         self.descricao.setStyleSheet("")
         self.prioridade.setStyleSheet("")
         self.status.setStyleSheet("")
+        self.projeto.setStyleSheet("")
         self.conclusao_value.setStyleSheet("padding: 4px; border: 1px solid #ccc;")
 
         if "Responsável" in missing:
@@ -927,6 +954,8 @@ class NewDemandDialog(BaseModalDialog):
             self.prioridade.setStyleSheet("border: 1px solid #d92d20;")
         if "Status" in missing:
             self.status.setStyleSheet("border: 1px solid #d92d20;")
+        if "Projeto" in missing:
+            self.projeto.setStyleSheet("border: 1px solid #d92d20;")
         if "Data Conclusão" in missing:
             self.conclusao_value.setStyleSheet("padding: 4px; border: 1px solid #d92d20;")
 
@@ -1299,6 +1328,11 @@ class MainWindow(QMainWindow):
         table.setProperty("tableSortKey", table_key)
         table.itemChanged.connect(self._on_item_changed)
         table.cellDoubleClicked.connect(self._on_cell_double_clicked)
+        if table_key in {"t1", "t3"}:
+            table.setContextMenuPolicy(Qt.CustomContextMenu)
+            table.customContextMenuRequested.connect(self._open_demand_context_menu)
+        if table_key == "t4":
+            table.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         col_map = {}
         col_map[VISIBLE_COLUMNS.index("Status")] = STATUS_EDIT_OPTIONS
@@ -1457,6 +1491,10 @@ class MainWindow(QMainWindow):
         if not _id:
             return
 
+        table_key = str(table.property("tableSortKey") or "")
+        if table_key == "t4":
+            return
+
         # Data de Registro / Data Conclusão (picker)
         if col_name in ("Data de Registro", "Data Conclusão"):
             allow_clear = (col_name == "Data Conclusão")
@@ -1513,6 +1551,13 @@ class MainWindow(QMainWindow):
             return
 
         col_name = VISIBLE_COLUMNS[item.column()]
+
+        table = item.tableWidget()
+        table_key = str(table.property("tableSortKey") or "") if table else ""
+        if table_key == "t4":
+            self.refresh_all()
+            return
+
         if col_name in NON_EDITABLE:
             return
 
@@ -2222,6 +2267,50 @@ class MainWindow(QMainWindow):
 
         self._delete_members_from_table(table, members)
 
+    def _open_demand_context_menu(self, pos):
+        table = self.sender()
+        if not isinstance(table, QTableWidget):
+            return
+
+        item = table.itemAt(pos)
+        if not item:
+            return
+
+        table.selectRow(item.row())
+        menu = QMenu(table)
+        duplicate_action = menu.addAction("Duplicar demanda")
+        picked = menu.exec(table.viewport().mapToGlobal(pos))
+        if picked is not duplicate_action:
+            return
+        self._duplicate_selected_demand(table)
+
+    def _duplicate_selected_demand(self, table: QTableWidget):
+        selected_rows = table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.information(self, "Duplicar demanda", "Selecione uma demanda para duplicar.")
+            return
+
+        row_idx = selected_rows[0].row()
+        row_data: Dict[str, str] = {}
+        for col_idx, col_name in enumerate(VISIBLE_COLUMNS):
+            item = table.item(row_idx, col_idx)
+            row_data[col_name] = (item.text() if item else "") or ""
+
+        row_data["Status"] = ""
+        row_data["Data Conclusão"] = ""
+        row_data["% Conclusão"] = ""
+
+        dlg = NewDemandDialog(self, initial_data=row_data)
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        try:
+            self.store.add(dlg.payload())
+        except ValidationError as ve:
+            QMessageBox.warning(self, "Validação", str(ve))
+            return
+        self.refresh_all()
+
     def _delete_selected_team_members(self, table: QTableWidget) -> bool:
         members = selected_members_with_ids(table)
         if not members:
@@ -2287,6 +2376,11 @@ class MainWindow(QMainWindow):
         self.t3_prioridade.addItems(PRIORIDADE_EDIT_OPTIONS)
         self.t3_responsavel = QLineEdit()
         self.t3_responsavel.setPlaceholderText("Filtrar por responsável")
+        self.t3_prazo = QDateEdit(QDate.currentDate())
+        self.t3_prazo.setCalendarPopup(True)
+        self.t3_prazo.setDisplayFormat(DATE_FMT_QT)
+        self.t3_projeto = QComboBox()
+        self.t3_projeto.addItem("")
 
         apply_btn = QPushButton("Aplicar filtros")
         apply_btn.clicked.connect(self.refresh_tab3)
@@ -2307,6 +2401,10 @@ class MainWindow(QMainWindow):
         filters.addWidget(self.t3_prioridade)
         filters.addWidget(QLabel("Responsável:"))
         filters.addWidget(self.t3_responsavel)
+        filters.addWidget(QLabel("Prazo:"))
+        filters.addWidget(self.t3_prazo)
+        filters.addWidget(QLabel("Projeto:"))
+        filters.addWidget(self.t3_projeto)
         filters.addWidget(apply_btn)
         filters.addWidget(reset_btn)
 
@@ -2366,6 +2464,8 @@ class MainWindow(QMainWindow):
         self.t3_status.setCurrentIndex(0)
         self.t3_prioridade.setCurrentIndex(0)
         self.t3_responsavel.clear()
+        self.t3_prazo.setDate(QDate.currentDate())
+        self.t3_projeto.setCurrentIndex(0)
         self._clear_sort("t3")
         self.refresh_tab3()
 
@@ -2400,12 +2500,24 @@ class MainWindow(QMainWindow):
 
     def refresh_tab3(self):
         rows = self.store.tab_pending_all()
+        project_options = sorted({(row.get("Projeto") or "").strip() for row in rows if (row.get("Projeto") or "").strip()})
+        current_project = self.t3_projeto.currentText()
+        self.t3_projeto.blockSignals(True)
+        self.t3_projeto.clear()
+        self.t3_projeto.addItem("")
+        self.t3_projeto.addItems(project_options)
+        if current_project in project_options:
+            self.t3_projeto.setCurrentText(current_project)
+        self.t3_projeto.blockSignals(False)
+
         filtered = filter_rows(
             rows,
             text_query=self.t3_search.text(),
             status=self.t3_status.currentText(),
             prioridade=self.t3_prioridade.currentText(),
             responsavel=self.t3_responsavel.text(),
+            prazo=self.t3_prazo.date().toString(DATE_FMT_QT),
+            projeto=self.t3_projeto.currentText(),
         )
         counts = summary_counts(rows)
         self.t3_pending_card.setText(

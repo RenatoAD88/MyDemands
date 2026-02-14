@@ -13,6 +13,8 @@ def required_fields(payload: Dict[str, str], prazo_count: int) -> List[str]:
         missing.append("Status")
     if not (payload.get("Responsável") or "").strip():
         missing.append("Responsável")
+    if not (payload.get("Projeto") or "").strip():
+        missing.append("Projeto")
     if prazo_count == 0:
         missing.append("Prazo")
 

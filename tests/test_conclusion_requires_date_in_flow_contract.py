@@ -4,6 +4,7 @@ def test_concluded_record_has_date_and_percent_1(tmp_path):
     store = CsvStore(str(tmp_path))
     _id = store.add({
         "Descrição": "X",
+        "Projeto": "Projeto X",
         "Prioridade": "Alta",
         "Prazo": "05/02/2026",
         "Data de Registro": "01/02/2026",

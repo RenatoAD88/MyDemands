@@ -5,6 +5,7 @@ def test_setting_data_conclusao_autosets_status_and_percent(tmp_path):
     store = CsvStore(str(tmp_path))
     _id = store.add({
         "Descrição": "A",
+        "Projeto": "Projeto A",
         "Prioridade": "Alta",
         "Prazo": "05/02/2026",
         "Data de Registro": "01/02/2026",
