@@ -2445,8 +2445,7 @@ class MainWindow(QMainWindow):
         confirm_box = QMessageBox(self)
         confirm_box.setIcon(QMessageBox.Information)
         confirm_box.setWindowTitle("Duplicar demanda")
-        confirm_box.setText("Essa demanda foi recriada como pendente")
-        confirm_box.setInformativeText(f"ID: {demand_id}")
+        confirm_box.setText(f"Essa demanda foi recriada como pendente\nID: {demand_id}")
         confirm_box.setStandardButtons(QMessageBox.NoButton)
 
         seconds_left = 5
