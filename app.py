@@ -1639,6 +1639,7 @@ class MainWindow(QMainWindow):
             self.t3_status.setCurrentText(str(self._prefs.get("t3_status", "") or ""))
             self.t3_prioridade.setCurrentText(str(self._prefs.get("t3_prioridade", "") or ""))
             self.t3_responsavel.setText(str(self._prefs.get("t3_responsavel", "") or ""))
+            self.t3_comentario.setText(str(self._prefs.get("t3_comentario", "") or ""))
 
             tab_order = self._prefs.get("tab_order")
             if isinstance(tab_order, list):
@@ -1658,6 +1659,7 @@ class MainWindow(QMainWindow):
             "t3_status": self.t3_status.currentText(),
             "t3_prioridade": self.t3_prioridade.currentText(),
             "t3_responsavel": self.t3_responsavel.text(),
+            "t3_comentario": self.t3_comentario.text(),
             "tab_order": [self.tabs.tabText(i) for i in range(self.tabs.count())],
             "table_column_widths": self._collect_table_column_widths(),
         }
@@ -2401,7 +2403,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(cards)
         layout.addWidget(self.t3_table)
         tab.setLayout(layout)
-        self.tabs.addTab(tab, "Todas demandas pendentes")
+        self.tabs.addTab(tab, "Consultar Demandas Pendentes")
 
     def _init_tab4(self):
         tab = QWidget()

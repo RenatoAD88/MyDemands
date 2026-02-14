@@ -19,7 +19,7 @@ def _get_app():
     return app
 
 
-def test_delete_dialog_opens_without_prefilled_data_on_pending_tabs(tmp_path, monkeypatch):
+def test_delete_dialog_prefills_selected_data_on_pending_tabs(tmp_path, monkeypatch):
     _get_app()
     store = CsvStore(str(tmp_path))
     _id = store.add(
@@ -54,8 +54,9 @@ def test_delete_dialog_opens_without_prefilled_data_on_pending_tabs(tmp_path, mo
 
     win.delete_demand()
 
-    assert capture["line_input"] == ""
-    assert capture["loaded_rows"] == []
+    assert capture["line_input"] == "1"
+    assert len(capture["loaded_rows"]) == 1
+    assert capture["loaded_rows"][0]["ID"] == "1"
 
     win.close()
 

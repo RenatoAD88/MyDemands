@@ -30,3 +30,13 @@ def test_summary_counts_tracks_pending_delayed_concluded():
     ]
     counts = summary_counts(rows)
     assert counts == {"pending": 2, "inside_deadline": 1, "delayed": 1, "concluded": 1}
+
+
+def test_filter_rows_applies_comentario_filter():
+    rows = [
+        {"Projeto": "ERP", "Descrição": "Migrar", "Responsável": "Ana", "Status": "Em andamento", "Prioridade": "Alta", "Comentário": "Aguardando retorno"},
+        {"Projeto": "CRM", "Descrição": "Ajuste", "Responsável": "Bruno", "Status": "Em espera", "Prioridade": "Baixa", "Comentário": "Finalizado"},
+    ]
+    out = filter_rows(rows, comentario="retorno")
+    assert len(out) == 1
+    assert out[0]["Projeto"] == "ERP"
