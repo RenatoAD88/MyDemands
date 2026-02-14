@@ -63,9 +63,18 @@ def test_tab4_totals_label_shows_global_and_filtered_counts(tmp_path):
     )
 
     win = MainWindow(store)
+
+    assert win.t4_totals_label.text() == "Total de demandas concluídas: 2 - Exibindo todas as demandas concluídas"
+    assert win.t4_table.rowCount() == 2
+
     win.t4_start.setDate(win.t4_end.date())
     win.refresh_tab4()
 
     assert win.t4_totals_label.text() == "Total de demandas concluídas: 2 - Total de demandas filtradas: 1"
+    assert win.t4_table.rowCount() == 1
+
+    win._clear_tab4_filters()
+    assert win.t4_totals_label.text() == "Total de demandas concluídas: 2 - Exibindo todas as demandas concluídas"
+    assert win.t4_table.rowCount() == 2
 
     win.close()

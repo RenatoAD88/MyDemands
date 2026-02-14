@@ -2571,12 +2571,12 @@ class MainWindow(QMainWindow):
         btn = QPushButton("Consultar")
         btn.clicked.connect(self.refresh_tab4)
 
-        self.t4_totals_label = QLabel("Total de demandas concluídas: 0 - Total de demandas filtradas: 0")
+        self.t4_totals_label = QLabel("Total de demandas concluídas: 0 - Exibindo todas as demandas concluídas")
 
         self.t4_table = self._make_table("t4")
 
-        reset_btn = QPushButton("Resetar Filtros")
-        reset_btn.clicked.connect(self._reset_tab4_filters)
+        clear_filters_btn = QPushButton("Limpar Filtros")
+        clear_filters_btn.clicked.connect(self._clear_tab4_filters)
 
         top = QHBoxLayout()
         top.addWidget(QLabel("Início:"))
@@ -2584,7 +2584,7 @@ class MainWindow(QMainWindow):
         top.addWidget(QLabel("Fim:"))
         top.addWidget(self.t4_end)
         top.addWidget(btn)
-        top.addWidget(reset_btn)
+        top.addWidget(clear_filters_btn)
         top.addStretch()
 
         layout = QVBoxLayout()
@@ -2593,6 +2593,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.t4_table)
         tab.setLayout(layout)
         self.tabs.addTab(tab, "Consultar Demandas Concluídas")
+        self._clear_tab4_filters()
 
     def _reset_tab3_filters(self):
         self.t3_search.clear()
@@ -2604,18 +2605,20 @@ class MainWindow(QMainWindow):
         self._clear_sort("t3")
         self.refresh_tab3()
 
-    def _reset_tab4_filters(self):
-        self.t4_start.setDate(QDate.currentDate().addDays(-7))
-        self.t4_end.setDate(QDate.currentDate())
+    def _clear_tab4_filters(self):
         self._clear_sort("t4")
-        self.refresh_tab4()
+        total_concluded = self.store.tab_concluidas_all()
+        self.t4_totals_label.setText(
+            f"Total de demandas concluídas: {len(total_concluded)} - Exibindo todas as demandas concluídas"
+        )
+        self._fill(self.t4_table, total_concluded)
 
     # Refresh
     def refresh_all(self):
         self.store.load()
         self.refresh_team_control()
         self.refresh_tab3()
-        self.refresh_tab4()
+        self._clear_tab4_filters()
 
     def refresh_current(self):
         i = self.tabs.currentIndex()
@@ -2624,7 +2627,7 @@ class MainWindow(QMainWindow):
         elif i == 1:
             self.refresh_tab3()
         elif i == 2:
-            self.refresh_tab4()
+            self._clear_tab4_filters()
 
     def refresh_tab3(self):
         rows = self.store.tab_pending_all()
@@ -2666,10 +2669,10 @@ class MainWindow(QMainWindow):
         if e < s:
             QMessageBox.warning(self, "Datas inválidas", "A data fim não pode ser menor que a data início.")
             return
-        total_concluded = len([x for x in self.store.build_view() if (x.get("Status") or "").strip() == "Concluído"])
+        all_concluded = self.store.tab_concluidas_all()
         filtered_concluded = self.store.tab_concluidas_between(s, e)
         self.t4_totals_label.setText(
-            f"Total de demandas concluídas: {total_concluded} - "
+            f"Total de demandas concluídas: {len(all_concluded)} - "
             f"Total de demandas filtradas: {len(filtered_concluded)}"
         )
         self._fill(self.t4_table, filtered_concluded)
