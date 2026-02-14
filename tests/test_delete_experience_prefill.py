@@ -214,6 +214,80 @@ def test_delete_dialog_escape_cancels_and_resets_loaded_rows(tmp_path):
     assert dlg._loaded_rows == []
     assert dlg.line_input.text() == ""
 
+
+def test_context_menu_delete_keeps_multi_selection_and_routes_to_delete_flow(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    today = date.today().strftime("%d/%m/%Y")
+    store.add(
+        {
+            "Projeto": "Projeto 1",
+            "Descrição": "Demanda 1",
+            "Prioridade": "Alta",
+            "Prazo": today,
+            "Data de Registro": today,
+            "Status": "Em andamento",
+            "Responsável": "Ana",
+        }
+    )
+    store.add(
+        {
+            "Projeto": "Projeto 2",
+            "Descrição": "Demanda 2",
+            "Prioridade": "Média",
+            "Prazo": today,
+            "Data de Registro": today,
+            "Status": "Em espera",
+            "Responsável": "Bia",
+        }
+    )
+
+    win = MainWindow(store)
+    win.tabs.setCurrentIndex(1)
+    win.refresh_tab3()
+
+    table = win.t3_table
+    table.selectRow(0)
+    table.selectRow(1)
+
+    captured = {"table": None, "selected_ids": []}
+
+    def fake_delete(selected_table):
+        captured["table"] = selected_table
+        for idx in selected_table.selectionModel().selectedRows():
+            item = selected_table.item(idx.row(), 0)
+            captured["selected_ids"].append(item.text())
+        return True
+
+    monkeypatch.setattr(win, "_delete_selected_demands_from_table", fake_delete)
+    monkeypatch.setattr(win, "sender", lambda: table)
+
+    class FakeMenu:
+        def __init__(self, _parent):
+            self._actions = []
+
+        def addAction(self, label):
+            action = object()
+            self._actions.append((label, action))
+            return action
+
+        def exec(self, _global_pos):
+            for label, action in self._actions:
+                if label == "Excluir demanda":
+                    return action
+            return None
+
+    monkeypatch.setattr(app_module, "QMenu", FakeMenu)
+
+    item = table.item(1, 0)
+    pos = table.visualItemRect(item).center()
+    win._open_demand_context_menu(pos)
+
+    assert captured["table"] is table
+    assert sorted(captured["selected_ids"]) == ["1", "2"]
+
+    win.close()
+
 def test_delete_without_selection_opens_empty_modal(tmp_path, monkeypatch):
     _get_app()
     store = CsvStore(str(tmp_path))

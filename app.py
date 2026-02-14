@@ -2323,13 +2323,21 @@ class MainWindow(QMainWindow):
         if not item:
             return
 
-        table.selectRow(item.row())
+        clicked_row = item.row()
+        selected_rows = {idx.row() for idx in table.selectionModel().selectedRows()}
+        if clicked_row not in selected_rows:
+            table.selectRow(clicked_row)
+
         menu = QMenu(table)
         duplicate_action = menu.addAction("Duplicar demanda")
+        delete_action = menu.addAction("Excluir demanda")
         picked = menu.exec(table.viewport().mapToGlobal(pos))
-        if picked is not duplicate_action:
+        if picked is duplicate_action:
+            self._duplicate_selected_demand(table)
             return
-        self._duplicate_selected_demand(table)
+        if picked is delete_action:
+            self._delete_selected_demands_from_table(table)
+            return
 
     def _duplicate_selected_demand(self, table: QTableWidget):
         selected_rows = table.selectionModel().selectedRows()
