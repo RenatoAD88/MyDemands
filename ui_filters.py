@@ -11,6 +11,7 @@ def filter_rows(
     status: str = "",
     prioridade: str = "",
     responsavel: str = "",
+    comentario: str = "",
     prazo: str = "",
     projeto: str = "",
 ) -> List[Dict[str, Any]]:
@@ -18,6 +19,7 @@ def filter_rows(
     st = (status or "").strip()
     pr = (prioridade or "").strip()
     rs = (responsavel or "").strip().lower()
+    cm = (comentario or "").strip().lower()
     prazo_str = (prazo or "").strip()
     projeto_filtro = (projeto or "").strip()
 
@@ -30,6 +32,8 @@ def filter_rows(
         if rs and rs not in (row.get("Responsável") or "").strip().lower():
             continue
         if projeto_filtro and (row.get("Projeto") or "").strip() != projeto_filtro:
+            continue
+        if cm and cm not in (row.get("Comentário") or row.get("Comentario") or "").strip().lower():
             continue
         if prazo_str:
             prazos = parse_prazos_list((row.get("Prazo") or "").replace("*", ""))

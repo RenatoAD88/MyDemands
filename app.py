@@ -1643,6 +1643,7 @@ class MainWindow(QMainWindow):
             self.t3_status.setCurrentText(str(self._prefs.get("t3_status", "") or ""))
             self.t3_prioridade.setCurrentText(str(self._prefs.get("t3_prioridade", "") or ""))
             self.t3_responsavel.setText(str(self._prefs.get("t3_responsavel", "") or ""))
+            self.t3_comentario.setText(str(self._prefs.get("t3_comentario", "") or ""))
 
             tab_order = self._prefs.get("tab_order")
             if isinstance(tab_order, list):
@@ -1662,6 +1663,7 @@ class MainWindow(QMainWindow):
             "t3_status": self.t3_status.currentText(),
             "t3_prioridade": self.t3_prioridade.currentText(),
             "t3_responsavel": self.t3_responsavel.text(),
+            "t3_comentario": self.t3_comentario.text(),
             "tab_order": [self.tabs.tabText(i) for i in range(self.tabs.count())],
             "table_column_widths": self._collect_table_column_widths(),
         }
@@ -2386,6 +2388,8 @@ class MainWindow(QMainWindow):
         self.t3_prioridade.addItems(PRIORIDADE_EDIT_OPTIONS)
         self.t3_responsavel = QLineEdit()
         self.t3_responsavel.setPlaceholderText("Filtrar por responsável")
+        self.t3_comentario = QLineEdit()
+        self.t3_comentario.setPlaceholderText("Filtrar por comentário")
         self.t3_prazo = QDateEdit(QDate.currentDate())
         self.t3_prazo.setCalendarPopup(True)
         self.t3_prazo.setDisplayFormat(DATE_FMT_QT)
@@ -2411,6 +2415,8 @@ class MainWindow(QMainWindow):
         filters.addWidget(self.t3_prioridade)
         filters.addWidget(QLabel("Responsável:"))
         filters.addWidget(self.t3_responsavel)
+        filters.addWidget(QLabel("Comentário:"))
+        filters.addWidget(self.t3_comentario)
         filters.addWidget(QLabel("Prazo:"))
         filters.addWidget(self.t3_prazo)
         filters.addWidget(QLabel("Projeto:"))
@@ -2427,7 +2433,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(cards)
         layout.addWidget(self.t3_table)
         tab.setLayout(layout)
-        self.tabs.addTab(tab, "Todas demandas pendentes")
+        self.tabs.addTab(tab, "Consultar Demandas Pendentes")
 
     def _init_tab4(self):
         tab = QWidget()
@@ -2474,6 +2480,7 @@ class MainWindow(QMainWindow):
         self.t3_status.setCurrentIndex(0)
         self.t3_prioridade.setCurrentIndex(0)
         self.t3_responsavel.clear()
+        self.t3_comentario.clear()
         self.t3_prazo.setDate(QDate.currentDate())
         self.t3_projeto.setCurrentIndex(0)
         self._clear_sort("t3")
@@ -2526,6 +2533,7 @@ class MainWindow(QMainWindow):
             status=self.t3_status.currentText(),
             prioridade=self.t3_prioridade.currentText(),
             responsavel=self.t3_responsavel.text(),
+            comentario=self.t3_comentario.text(),
             prazo=self.t3_prazo.date().toString(DATE_FMT_QT),
             projeto=self.t3_projeto.currentText(),
         )
