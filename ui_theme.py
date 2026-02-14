@@ -161,6 +161,10 @@ def status_color(status: str) -> Tuple[int, int, int]:
     s = (status or "").strip().lower()
     if s == "concluído" or s == "concluido":
         return (210, 242, 220)
+    if s == "não iniciada" or s == "nao iniciada" or s == "não iniciado" or s == "nao iniciado":
+        return (255, 228, 230)
+    if s == "requer revisão" or s == "requer revisao":
+        return (237, 233, 254)
     if s == "em espera":
         return (255, 243, 205)
     if s == "cancelado":
