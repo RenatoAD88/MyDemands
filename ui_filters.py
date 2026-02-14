@@ -11,7 +11,6 @@ def filter_rows(
     status: str = "",
     prioridade: str = "",
     responsavel: str = "",
-    comentario: str = "",
     prazo: str = "",
     projeto: str = "",
 ) -> List[Dict[str, Any]]:
@@ -19,7 +18,6 @@ def filter_rows(
     st = (status or "").strip()
     pr = (prioridade or "").strip()
     rs = (responsavel or "").strip().lower()
-    cm = (comentario or "").strip().lower()
     prazo_str = (prazo or "").strip()
     projeto_filtro = (projeto or "").strip()
 
@@ -33,8 +31,6 @@ def filter_rows(
             continue
         if projeto_filtro and (row.get("Projeto") or "").strip() != projeto_filtro:
             continue
-        if cm and cm not in (row.get("Comentário") or row.get("Comentario") or "").strip().lower():
-            continue
         if prazo_str:
             prazos = parse_prazos_list((row.get("Prazo") or "").replace("*", ""))
             if prazo_str not in {p.strftime("%d/%m/%Y") for p in prazos}:
@@ -43,7 +39,11 @@ def filter_rows(
             hay = " ".join([
                 str(row.get("Projeto", "") or ""),
                 str(row.get("Descrição", "") or ""),
+                str(row.get("Comentário", "") or row.get("Comentario", "") or ""),
+                str(row.get("ID Azure", "") or ""),
                 str(row.get("Responsável", "") or ""),
+                str(row.get("Nome", "") or ""),
+                str(row.get("Time/Função", "") or ""),
             ]).lower()
             if q not in hay:
                 continue

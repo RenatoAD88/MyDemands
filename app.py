@@ -104,7 +104,7 @@ def selected_members_with_ids(table: QTableWidget) -> List[Tuple[str, str]]:
 VISIBLE_COLUMNS = [
     "ID", "É Urgente?", "Status", "Timing", "Prioridade",
     "Data de Registro", "Prazo", "Data Conclusão",
-    "Projeto", "Descrição", "ID Azure", "% Conclusão",
+    "Projeto", "Descrição", "Comentário", "ID Azure", "% Conclusão",
     "Responsável", "Reportar?", "Nome", "Time/Função"
 ]
 
@@ -772,6 +772,8 @@ class NewDemandDialog(BaseModalDialog):
         self.responsavel.setPlaceholderText("Ex: Ana Silva")
         self.descricao = QTextEdit()
         self.descricao.setPlaceholderText("Descreva a demanda com contexto e resultado esperado")
+        self.comentario = QTextEdit()
+        self.comentario.setPlaceholderText("Comentário adicional (opcional)")
 
         self.urgente = QComboBox()
         self.urgente.setEditable(False)
@@ -844,7 +846,7 @@ class NewDemandDialog(BaseModalDialog):
         btns.addWidget(save_btn)
         btns.addWidget(cancel_btn)
 
-        obrig_box = QGroupBox("Campos obrigatórios")
+        obrig_box = QGroupBox("Dados Principais")
         obrig_form = QFormLayout()
         obrig_form.addRow("Status*", self.status)
         obrig_form.addRow("Prioridade*", self.prioridade)
@@ -852,6 +854,7 @@ class NewDemandDialog(BaseModalDialog):
         obrig_form.addRow("Projeto*", self.projeto)
         obrig_form.addRow("Responsável*", self.responsavel)
         obrig_form.addRow("Descrição*", self.descricao)
+        obrig_form.addRow("Comentário", self.comentario)
         obrig_box.setLayout(obrig_form)
 
         opc_box = QGroupBox("Controle e identificação")
@@ -892,6 +895,7 @@ class NewDemandDialog(BaseModalDialog):
 
         self.projeto.setText(initial_data.get("Projeto", "") or "")
         self.descricao.setPlainText(initial_data.get("Descrição", "") or "")
+        self.comentario.setPlainText(initial_data.get("Comentário", "") or "")
         self.id_azure.setText(initial_data.get("ID Azure", "") or "")
         self.responsavel.setText(initial_data.get("Responsável", "") or "")
         self.reportar.setCurrentText(initial_data.get("Reportar?", ""))
@@ -986,6 +990,7 @@ class NewDemandDialog(BaseModalDialog):
             "Data Conclusão": self._conclusao_txt,
             "Projeto": self.projeto.text(),
             "Descrição": self.descricao.toPlainText(),
+            "Comentário": self.comentario.toPlainText(),
             "ID Azure": self.id_azure.text(),
             "% Conclusão": percent_value,
             "Responsável": self.responsavel.text(),
@@ -1639,7 +1644,6 @@ class MainWindow(QMainWindow):
             self.t3_status.setCurrentText(str(self._prefs.get("t3_status", "") or ""))
             self.t3_prioridade.setCurrentText(str(self._prefs.get("t3_prioridade", "") or ""))
             self.t3_responsavel.setText(str(self._prefs.get("t3_responsavel", "") or ""))
-            self.t3_comentario.setText(str(self._prefs.get("t3_comentario", "") or ""))
 
             tab_order = self._prefs.get("tab_order")
             if isinstance(tab_order, list):
@@ -1659,7 +1663,6 @@ class MainWindow(QMainWindow):
             "t3_status": self.t3_status.currentText(),
             "t3_prioridade": self.t3_prioridade.currentText(),
             "t3_responsavel": self.t3_responsavel.text(),
-            "t3_comentario": self.t3_comentario.text(),
             "tab_order": [self.tabs.tabText(i) for i in range(self.tabs.count())],
             "table_column_widths": self._collect_table_column_widths(),
         }
@@ -2347,7 +2350,7 @@ class MainWindow(QMainWindow):
     def _init_tab3(self):
         tab = QWidget()
         self.t3_search = QLineEdit()
-        self.t3_search.setPlaceholderText("Buscar em Projeto, Descrição ou Responsável")
+        self.t3_search.setPlaceholderText("Buscar por projeto, descrição, comentário, Azure, responsável, nome e time/função")
         self.t3_status = QComboBox()
         self.t3_status.addItem("")
         self.t3_status.addItems(STATUS_EDIT_OPTIONS)
@@ -2363,9 +2366,6 @@ class MainWindow(QMainWindow):
         self.t3_prazo.setDisplayFormat(DATE_FMT_QT)
         self.t3_projeto = QComboBox()
         self.t3_projeto.addItem("")
-
-        apply_btn = QPushButton("Aplicar filtros")
-        apply_btn.clicked.connect(self.refresh_tab3)
 
         self.t3_pending_card = QLabel("Total de Pendências: 0 - Dentro do prazo: 0 - Em atraso: 0")
 
@@ -2389,10 +2389,16 @@ class MainWindow(QMainWindow):
         filters.addWidget(self.t3_prioridade)
         filters.addWidget(QLabel("Responsável:"))
         filters.addWidget(self.t3_responsavel)
-        filters.addWidget(QLabel("Busca:"))
+        filters.addWidget(QLabel("Palavra-chave:"))
         filters.addWidget(self.t3_search, 2)
-        filters.addWidget(apply_btn)
         filters.addWidget(reset_btn)
+
+        self.t3_search.textChanged.connect(self.refresh_tab3)
+        self.t3_status.currentTextChanged.connect(self.refresh_tab3)
+        self.t3_prioridade.currentTextChanged.connect(self.refresh_tab3)
+        self.t3_responsavel.textChanged.connect(self.refresh_tab3)
+        self.t3_prazo.dateChanged.connect(self.refresh_tab3)
+        self.t3_projeto.currentTextChanged.connect(self.refresh_tab3)
 
         cards = QHBoxLayout()
         cards.addWidget(self.t3_pending_card)
