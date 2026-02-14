@@ -540,6 +540,12 @@ class CsvStore:
                 out.append(x)
         return out
 
+    def tab_concluidas_all(self) -> List[Dict[str, Any]]:
+        return [
+            x for x in self.build_view()
+            if (x.get("Status") or "").strip() == "Concluído"
+        ]
+
     def export_all_to_csv(self, export_path: str, delimiter: str = ",") -> int:
         """
         Exporta todas as demandas existentes para um CSV de saída.
