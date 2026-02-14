@@ -2389,6 +2389,8 @@ class MainWindow(QMainWindow):
             item = table.item(row_idx, col_idx)
             row_data[col_name] = (item.text() if item else "") or ""
 
+        was_concluded = (row_data.get("Status") or "").strip() == "Concluído"
+
         row_data["Status"] = ""
         row_data["Data Conclusão"] = ""
         row_data["% Conclusão"] = ""
@@ -2404,7 +2406,7 @@ class MainWindow(QMainWindow):
             return
         self.refresh_all()
 
-        if new_id:
+        if new_id and was_concluded:
             self._show_duplicate_success_modal(new_id)
 
     def _show_duplicate_success_modal(self, demand_id: str):
