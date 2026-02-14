@@ -1506,13 +1506,14 @@ class MainWindow(QMainWindow):
             return dlg.selected_date_str()
         return None
 
-    def _prompt_percent_when_unconcluding(self) -> Optional[str]:
+    def _prompt_percent_after_not_started(self) -> Optional[str]:
+        progress_options = ["25% - Começando", "50% - Parcial", "75% - Avançado"]
         while True:
             value, ok = QInputDialog.getItem(
                 self,
                 "% Conclusão",
-                "Selecione o novo % conclusão:",
-                PERCENT_LABEL_OPTIONS,
+                "Selecione o % conclusão:",
+                progress_options,
                 0,
                 False,
             )
@@ -1523,13 +1524,8 @@ class MainWindow(QMainWindow):
             if not pct:
                 QMessageBox.warning(self, "Validação", "Informe um valor válido para % Conclusão.")
                 continue
-
-            if pct == "1":
-                QMessageBox.warning(
-                    self,
-                    "Validação",
-                    "Para status diferente de Concluído, o % Conclusão deve ser menor que 100%.",
-                )
+            if pct not in ("0.25", "0.5", "0.75"):
+                QMessageBox.warning(self, "Validação", "Selecione 25%, 50% ou 75%.")
                 continue
 
             return pct
@@ -1632,16 +1628,25 @@ class MainWindow(QMainWindow):
             self.refresh_all()
             return
 
-        # Status alterado para um valor diferente de concluído:
-        # o novo status vira fonte da verdade do registro.
-        if col_name == "Status" and new_value != "Concluído":
-            payload = {"Status": new_value, "Data Conclusão": ""}
+        previous_status = (item.data(Qt.UserRole + 1) or "").strip()
 
-            pct = self._prompt_percent_when_unconcluding()
-            if pct is None:
-                self.refresh_all()
-                return
-            payload["% Conclusão"] = pct
+        # Status alterado para um valor diferente de concluído.
+        if col_name == "Status" and new_value != "Concluído":
+            payload = {"Status": new_value}
+
+            if new_value == "Não iniciada":
+                payload["Data Conclusão"] = ""
+                payload["% Conclusão"] = "0"
+            elif previous_status == "Não iniciada" and new_value in ("Em andamento", "Em espera", "Requer revisão"):
+                pct = self._prompt_percent_after_not_started()
+                if pct is None:
+                    self.refresh_all()
+                    return
+                payload["% Conclusão"] = pct
+
+
+            if new_value != "Concluído":
+                payload["Data Conclusão"] = ""
 
             try:
                 self.store.update(_id, payload)
