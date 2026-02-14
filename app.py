@@ -383,8 +383,7 @@ class DemandTable(QTableWidget):
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Delete and callable(self._delete_demand_handler):
-            selected_rows = self.selectionModel().selectedRows() if self.selectionModel() else []
-            if selected_rows and self._delete_demand_handler(self):
+            if self._delete_demand_handler(self):
                 event.accept()
                 return
         super().keyPressEvent(event)
@@ -540,7 +539,6 @@ class DeleteDemandDialog(BaseModalDialog):
     Exclusão por ID (único ou múltiplos):
     - usuário informa IDs e app carrega as demandas
     - permite preload de seleção múltipla da tabela
-    - bloqueia exclusão de demandas concluídas
     """
     def __init__(self, parent: QWidget, store: CsvStore):
         super().__init__(parent)
@@ -629,12 +627,7 @@ class DeleteDemandDialog(BaseModalDialog):
         sections = [self._format_row_info(row) for row in rows]
         self.info_label.setText("\n\n--------------------\n\n".join(sections))
 
-        has_concluded = any((row.get("Status") or "").strip() == "Concluído" for row in rows)
-        if has_concluded:
-            self.delete_btn.setEnabled(False)
-            QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
-        else:
-            self.delete_btn.setEnabled(True)
+        self.delete_btn.setEnabled(True)
 
     def _load_line(self):
         raw = (self.line_input.text() or "").strip()
@@ -668,12 +661,6 @@ class DeleteDemandDialog(BaseModalDialog):
             _id = row.get("_id")
             if not _id:
                 QMessageBox.warning(self, "Falha", "Demanda inválida para exclusão.")
-                self.reject()
-                return
-
-            dr = self.store.get(_id)
-            if dr and (dr.data.get("Status") or "").strip() == "Concluído":
-                QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
                 self.reject()
                 return
 
@@ -2643,12 +2630,9 @@ class MainWindow(QMainWindow):
 
     def _delete_selected_demands_from_table(self, table: Optional[QTableWidget] = None) -> bool:
         selected_rows = self._selected_rows_from_current_tab(include_current=False, table=table)
-        if selected_rows and self.tabs.currentIndex() == 2:
-            QMessageBox.warning(self, "Bloqueado", "Demandas concluídas não podem ser excluídas.")
-            return False
 
         dlg = DeleteDemandDialog(self, self.store)
-        if selected_rows and self.tabs.currentIndex() == 1:
+        if selected_rows:
             dlg.preload_selected_rows(selected_rows)
         if dlg.exec() == QDialog.Accepted:
             self.refresh_all()
