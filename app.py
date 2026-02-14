@@ -113,6 +113,21 @@ PICKER_ONLY = {"Data de Registro", "Prazo", "Data Conclusão"}
 
 # Timing e ID não editáveis
 NON_EDITABLE = {"ID", "Timing"} | PICKER_ONLY
+TAB4_EDITABLE_COLUMNS = {
+    "É Urgente?",
+    "Prioridade",
+    "Data de Registro",
+    "Prazo",
+    "Data Conclusão",
+    "Projeto",
+    "Descrição",
+    "Comentário",
+    "ID Azure",
+    "Responsável",
+    "Reportar?",
+    "Nome",
+    "Time/Função",
+}
 DESC_COLUMN_MAX_CHARS = 45
 
 STATUS_EDIT_OPTIONS = [
@@ -1445,6 +1460,7 @@ class MainWindow(QMainWindow):
     def _set_item(self, table: QTableWidget, r: int, c: int, text: str, _id: str):
         it = SortableTableItem(text or "")
         colname = VISIBLE_COLUMNS[c]
+        table_key = str(table.property("tableSortKey") or "")
         it.setData(SortableTableItem.SORT_ROLE, _column_sort_key(colname, text or ""))
 
         if colname == "Descrição":
@@ -1452,7 +1468,11 @@ class MainWindow(QMainWindow):
         else:
             it.setTextAlignment(Qt.AlignCenter)
 
-        if colname in NON_EDITABLE:
+        is_editable = colname not in NON_EDITABLE
+        if table_key == "t4":
+            is_editable = is_editable and colname in TAB4_EDITABLE_COLUMNS
+
+        if not is_editable:
             it.setFlags(it.flags() & ~Qt.ItemIsEditable)
 
         it.setData(Qt.UserRole, _id)
@@ -1544,7 +1564,7 @@ class MainWindow(QMainWindow):
             return
 
         table_key = str(table.property("tableSortKey") or "")
-        if table_key == "t4" and col_name != "Status":
+        if table_key == "t4" and col_name not in PICKER_ONLY:
             return
 
         # Data de Registro / Data Conclusão (picker)
@@ -1606,7 +1626,7 @@ class MainWindow(QMainWindow):
 
         table = item.tableWidget()
         table_key = str(table.property("tableSortKey") or "") if table else ""
-        if table_key == "t4" and col_name != "Status":
+        if table_key == "t4" and col_name not in TAB4_EDITABLE_COLUMNS:
             self.refresh_all()
             return
 
