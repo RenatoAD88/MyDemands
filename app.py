@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QInputDialog,
     QDialog, QFormLayout,
     QDateEdit, QLineEdit, QTextEdit, QPlainTextEdit, QComboBox,
-    QListWidget, QGroupBox, QAbstractItemView,
+    QListWidget, QListWidgetItem, QGroupBox, QAbstractItemView,
     QMenu, QScrollArea
 )
 from PySide6.QtWidgets import QStyledItemDelegate
@@ -807,6 +807,95 @@ class DeleteTeamMembersDialog(BaseModalDialog):
 
     def _confirm_delete_action(self):
         self.accept()
+
+
+class StatusFilterDialog(BaseModalDialog):
+    SELECT_ALL_LABEL = "(Selecionar Tudo)"
+
+    def __init__(self, statuses: List[str], selected_statuses: List[str], parent=None):
+        super().__init__("Filtrar status", parent)
+        self._status_order = list(statuses)
+        self._updating = False
+
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Pesquisar")
+        self.search.textChanged.connect(self._filter_visible_items)
+
+        self.list_widget = QListWidget()
+        self.list_widget.itemChanged.connect(self._on_item_changed)
+
+        self._all_item = self._add_checkbox_item(self.SELECT_ALL_LABEL)
+        selected_set = {value for value in selected_statuses if value in self._status_order}
+        if not selected_set:
+            selected_set = set(self._status_order)
+
+        for status in self._status_order:
+            item = self._add_checkbox_item(status)
+            item.setCheckState(Qt.Checked if status in selected_set else Qt.Unchecked)
+
+        self._refresh_select_all_item()
+
+        ok_btn = QPushButton("OK")
+        ok_btn.clicked.connect(self.accept)
+        cancel_btn = QPushButton("Cancelar")
+        cancel_btn.clicked.connect(self.reject)
+
+        actions = QHBoxLayout()
+        actions.addStretch()
+        actions.addWidget(ok_btn)
+        actions.addWidget(cancel_btn)
+
+        self.content_layout.addWidget(self.search)
+        self.content_layout.addWidget(self.list_widget)
+        self.content_layout.addLayout(actions)
+
+    def _add_checkbox_item(self, text: str) -> QListWidgetItem:
+        item = QListWidgetItem(text)
+        item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+        item.setCheckState(Qt.Checked)
+        self.list_widget.addItem(item)
+        return item
+
+    def _status_items(self) -> List[QListWidgetItem]:
+        return [self.list_widget.item(i) for i in range(1, self.list_widget.count())]
+
+    def _refresh_select_all_item(self):
+        checked_count = sum(1 for item in self._status_items() if item.checkState() == Qt.Checked)
+        all_checked = checked_count == len(self._status_order)
+        self._updating = True
+        self._all_item.setCheckState(Qt.Checked if all_checked else Qt.Unchecked)
+        self._updating = False
+
+    def _on_item_changed(self, item: QListWidgetItem):
+        if self._updating:
+            return
+
+        if item is self._all_item:
+            check_state = self._all_item.checkState()
+            self._updating = True
+            for status_item in self._status_items():
+                status_item.setCheckState(check_state)
+            self._updating = False
+            return
+
+        self._refresh_select_all_item()
+
+    def _filter_visible_items(self, text: str):
+        query = (text or "").strip().lower()
+        self._all_item.setHidden(bool(query))
+        for status_item in self._status_items():
+            visible = query in status_item.text().lower() if query else True
+            status_item.setHidden(not visible)
+
+    def selected_statuses(self) -> List[str]:
+        selected = [
+            item.text()
+            for item in self._status_items()
+            if item.checkState() == Qt.Checked
+        ]
+        if len(selected) == len(self._status_order):
+            return []
+        return selected
 
     def _cancel_delete_action(self):
         self.reset_state()
@@ -1829,6 +1918,17 @@ class MainWindow(QMainWindow):
             return
         self.refresh_tab3()
 
+    def _open_t3_status_filter_dialog(self):
+        dialog = StatusFilterDialog(
+            statuses=STATUS_EDIT_OPTIONS,
+            selected_statuses=self._selected_t3_status_filters(),
+            parent=self,
+        )
+        if dialog.exec() != QDialog.Accepted:
+            return
+        self._set_t3_status_filter(dialog.selected_statuses())
+        self.refresh_tab3()
+
     def _table_column_widths(self, table: QTableWidget) -> Dict[str, int]:
         return {
             col_name: table.columnWidth(col_idx)
@@ -2573,8 +2673,7 @@ class MainWindow(QMainWindow):
 
         self.t3_status = QToolButton()
         self.t3_status.setText("Todos")
-        self.t3_status.setPopupMode(QToolButton.InstantPopup)
-        self.t3_status.setMenu(self.t3_status_menu)
+        self.t3_status.clicked.connect(self._open_t3_status_filter_dialog)
         self.t3_prioridade = QComboBox()
         self.t3_prioridade.addItem("")
         self.t3_prioridade.addItems(PRIORIDADE_EDIT_OPTIONS)
