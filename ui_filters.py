@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from csv_store import parse_prazos_list
 
@@ -9,6 +9,7 @@ def filter_rows(
     rows: List[Dict[str, Any]],
     text_query: str = "",
     status: str = "",
+    status_values: Optional[List[str]] = None,
     prioridade: str = "",
     responsavel: str = "",
     prazo: str = "",
@@ -16,6 +17,9 @@ def filter_rows(
 ) -> List[Dict[str, Any]]:
     q = (text_query or "").strip().lower()
     st = (status or "").strip()
+    selected_statuses = {(value or "").strip() for value in (status_values or []) if (value or "").strip()}
+    if st and not selected_statuses:
+        selected_statuses = {st}
     pr = (prioridade or "").strip()
     rs = (responsavel or "").strip().lower()
     prazo_str = (prazo or "").strip()
@@ -23,7 +27,8 @@ def filter_rows(
 
     out: List[Dict[str, Any]] = []
     for row in rows:
-        if st and (row.get("Status") or "").strip() != st:
+        row_status = (row.get("Status") or "").strip()
+        if selected_statuses and row_status not in selected_statuses:
             continue
         if pr and (row.get("Prioridade") or "").strip() != pr:
             continue

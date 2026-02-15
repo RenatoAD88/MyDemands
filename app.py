@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QDate, QSize, QTimer, QUrl
-from PySide6.QtGui import QColor, QIcon, QKeyEvent, QDesktopServices, QPixmap, QPainter, QFont
+from PySide6.QtGui import QAction, QColor, QIcon, QKeyEvent, QDesktopServices, QPixmap, QPainter, QFont
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QTabWidget,
@@ -1763,7 +1763,12 @@ class MainWindow(QMainWindow):
             if 0 <= idx < self.tabs.count():
                 self.tabs.setCurrentIndex(idx)
             self.t3_search.setText(str(self._prefs.get("t3_search", "") or ""))
-            self.t3_status.setCurrentText(str(self._prefs.get("t3_status", "") or ""))
+            saved_statuses = self._prefs.get("t3_status")
+            if isinstance(saved_statuses, list):
+                self._set_t3_status_filter([str(value) for value in saved_statuses])
+            else:
+                legacy_status = str(saved_statuses or "")
+                self._set_t3_status_filter([legacy_status] if legacy_status else [])
             self.t3_prioridade.setCurrentText(str(self._prefs.get("t3_prioridade", "") or ""))
             self.t3_responsavel.setText(str(self._prefs.get("t3_responsavel", "") or ""))
 
@@ -1782,13 +1787,47 @@ class MainWindow(QMainWindow):
         data = {
             "tab_index": self.tabs.currentIndex(),
             "t3_search": self.t3_search.text(),
-            "t3_status": self.t3_status.currentText(),
+            "t3_status": self._selected_t3_status_filters(),
             "t3_prioridade": self.t3_prioridade.currentText(),
             "t3_responsavel": self.t3_responsavel.text(),
             "tab_order": [self.tabs.tabText(i) for i in range(self.tabs.count())],
             "table_column_widths": self._collect_table_column_widths(),
         }
         save_prefs(self.store.base_dir, data)
+
+    def _selected_t3_status_filters(self) -> List[str]:
+        return [status for status, action in self.t3_status_actions.items() if action.isChecked()]
+
+    def _update_t3_status_button_text(self) -> None:
+        selected = self._selected_t3_status_filters()
+        if not selected:
+            self.t3_status.setText("Todos")
+            self.t3_status.setToolTip("Todos")
+            return
+
+        if len(selected) <= 2:
+            label = ", ".join(selected)
+        else:
+            label = f"{len(selected)} selecionados"
+        self.t3_status.setText(label)
+        self.t3_status.setToolTip(", ".join(selected))
+
+    def _set_t3_status_filter(self, statuses: List[str]) -> None:
+        selected = {status for status in statuses if status in self.t3_status_actions}
+        previous_state = self._restoring_prefs
+        self._restoring_prefs = True
+        try:
+            for status, action in self.t3_status_actions.items():
+                action.setChecked(status in selected)
+        finally:
+            self._restoring_prefs = previous_state
+        self._update_t3_status_button_text()
+
+    def _on_t3_status_filter_changed(self, _checked: bool) -> None:
+        self._update_t3_status_button_text()
+        if self._restoring_prefs:
+            return
+        self.refresh_tab3()
 
     def _table_column_widths(self, table: QTableWidget) -> Dict[str, int]:
         return {
@@ -2523,9 +2562,19 @@ class MainWindow(QMainWindow):
         tab = QWidget()
         self.t3_search = QLineEdit()
         self.t3_search.setPlaceholderText("Buscar por projeto, descrição, comentário, Azure, responsável, nome e time/função")
-        self.t3_status = QComboBox()
-        self.t3_status.addItem("")
-        self.t3_status.addItems(STATUS_EDIT_OPTIONS)
+        self.t3_status_menu = QMenu(self)
+        self.t3_status_actions: Dict[str, QAction] = {}
+        for status in STATUS_EDIT_OPTIONS:
+            action = QAction(status, self)
+            action.setCheckable(True)
+            action.toggled.connect(self._on_t3_status_filter_changed)
+            self.t3_status_menu.addAction(action)
+            self.t3_status_actions[status] = action
+
+        self.t3_status = QToolButton()
+        self.t3_status.setText("Todos")
+        self.t3_status.setPopupMode(QToolButton.InstantPopup)
+        self.t3_status.setMenu(self.t3_status_menu)
         self.t3_prioridade = QComboBox()
         self.t3_prioridade.addItem("")
         self.t3_prioridade.addItems(PRIORIDADE_EDIT_OPTIONS)
@@ -2566,7 +2615,6 @@ class MainWindow(QMainWindow):
         filters.addWidget(reset_btn)
 
         self.t3_search.textChanged.connect(self.refresh_tab3)
-        self.t3_status.currentTextChanged.connect(self.refresh_tab3)
         self.t3_prioridade.currentTextChanged.connect(self.refresh_tab3)
         self.t3_responsavel.textChanged.connect(self.refresh_tab3)
         self.t3_prazo.dateChanged.connect(self.refresh_tab3)
@@ -2621,7 +2669,7 @@ class MainWindow(QMainWindow):
 
     def _reset_tab3_filters(self):
         self.t3_search.clear()
-        self.t3_status.setCurrentIndex(0)
+        self._set_t3_status_filter([])
         self.t3_prioridade.setCurrentIndex(0)
         self.t3_responsavel.clear()
         self.t3_prazo.setDate(self.t3_prazo.minimumDate())
@@ -2672,7 +2720,7 @@ class MainWindow(QMainWindow):
         filtered = filter_rows(
             rows,
             text_query=self.t3_search.text(),
-            status=self.t3_status.currentText(),
+            status_values=self._selected_t3_status_filters(),
             prioridade=self.t3_prioridade.currentText(),
             responsavel=self.t3_responsavel.text(),
             prazo=prazo_filter,
