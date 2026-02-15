@@ -72,6 +72,15 @@ class AISettingsDialog(QDialog):
         self.debug_log_text = QCheckBox("Modo debug de auditoria (registrar texto)")
         self.debug_log_text.setChecked(self._settings.debug_log_text)
 
+        checkbox_checked_style = """
+            QCheckBox::indicator:checked {
+                background-color: #000000;
+                border: 1px solid #000000;
+            }
+        """
+        for checkbox in (self.enabled, self.show_chips, self.privacy_mode, self.debug_log_text):
+            checkbox.setStyleSheet(checkbox_checked_style)
+
         self.model = QComboBox()
         self.model.addItems(["gpt-5.2", "gpt-4.1-mini"])
         self.model.setCurrentText(self._settings.model)
