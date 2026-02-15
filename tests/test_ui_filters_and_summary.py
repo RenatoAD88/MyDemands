@@ -11,6 +11,16 @@ def test_filter_rows_applies_text_and_status():
     assert out[0]["Projeto"] == "ERP"
 
 
+def test_filter_rows_accepts_multiple_statuses():
+    rows = [
+        {"Projeto": "ERP", "Status": "Em andamento"},
+        {"Projeto": "CRM", "Status": "Em espera"},
+        {"Projeto": "Portal", "Status": "Não iniciada"},
+    ]
+    out = filter_rows(rows, status_values=["Em espera", "Não iniciada"])
+    assert [row["Projeto"] for row in out] == ["CRM", "Portal"]
+
+
 def test_filter_rows_applies_prazo_and_projeto_filters():
     rows = [
         {"Projeto": "ERP", "Descrição": "Migrar", "Responsável": "Ana", "Status": "Em andamento", "Prioridade": "Alta", "Prazo": "05/02/2026"},
