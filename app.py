@@ -2679,10 +2679,24 @@ class MainWindow(QMainWindow):
 
     # Refresh
     def refresh_all(self):
+        tab4_start = self.t4_start.date()
+        tab4_end = self.t4_end.date()
+        show_cancelled = self.t4_show_cancelled.isChecked()
+
         self.store.load()
         self.refresh_team_control()
         self.refresh_tab3()
-        self._clear_tab4_filters()
+
+        self.t4_start.blockSignals(True)
+        self.t4_end.blockSignals(True)
+        self.t4_show_cancelled.blockSignals(True)
+        self.t4_start.setDate(tab4_start)
+        self.t4_end.setDate(tab4_end)
+        self.t4_show_cancelled.setChecked(show_cancelled)
+        self.t4_start.blockSignals(False)
+        self.t4_end.blockSignals(False)
+        self.t4_show_cancelled.blockSignals(False)
+        self.refresh_tab4()
 
     def refresh_current(self):
         i = self.tabs.currentIndex()
@@ -2691,7 +2705,7 @@ class MainWindow(QMainWindow):
         elif i == 1:
             self.refresh_tab3()
         elif i == 2:
-            self._clear_tab4_filters()
+            self.refresh_tab4()
 
     def refresh_tab3(self):
         rows = self.store.tab_pending_all()
