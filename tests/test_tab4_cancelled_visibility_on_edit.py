@@ -61,3 +61,17 @@ def test_cancelled_section_stays_visible_while_checkbox_is_checked_after_edit(tm
     assert not win.t4_cancelled_section.isVisible()
 
     win.close()
+
+
+def test_cancelled_checkbox_checked_indicator_uses_black_fill(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    win = MainWindow(store)
+
+    style = win.t4_show_cancelled.styleSheet()
+
+    assert "QCheckBox::indicator:checked" in style
+    assert "background-color: #000000;" in style
+    assert "border: 1px solid #000000;" in style
+
+    win.close()

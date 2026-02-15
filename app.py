@@ -2621,6 +2621,14 @@ class MainWindow(QMainWindow):
 
         self.t4_table = self._make_table("t4")
         self.t4_show_cancelled = QCheckBox("Apresentar demandas canceladas")
+        self.t4_show_cancelled.setStyleSheet(
+            """
+            QCheckBox::indicator:checked {
+                background-color: #000000;
+                border: 1px solid #000000;
+            }
+            """
+        )
         self.t4_show_cancelled.toggled.connect(self.refresh_tab4)
 
         self.t4_cancelled_label = QLabel("Total de demandas canceladas: 0")
