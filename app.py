@@ -2650,8 +2650,8 @@ class MainWindow(QMainWindow):
         top.addWidget(QLabel("Fim:"))
         top.addWidget(self.t4_end)
         top.addWidget(btn)
-        top.addWidget(self.t4_show_cancelled)
         top.addWidget(clear_filters_btn)
+        top.addWidget(self.t4_show_cancelled)
         top.addStretch()
 
         layout = QVBoxLayout()
