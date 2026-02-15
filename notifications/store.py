@@ -139,6 +139,16 @@ class NotificationStore:
             con.execute("UPDATE notifications SET read = 1 WHERE id = ?", (notification_id,))
         self._rewrite_encrypted_csv_snapshot()
 
+    def mark_as_unread(self, notification_id: int) -> None:
+        with self._connect() as con:
+            con.execute("UPDATE notifications SET read = 0 WHERE id = ?", (notification_id,))
+        self._rewrite_encrypted_csv_snapshot()
+
+    def count_unread(self) -> int:
+        with self._connect() as con:
+            row = con.execute("SELECT COUNT(1) AS total FROM notifications WHERE read = 0").fetchone()
+        return int(row["total"] if row else 0)
+
     def save_preferences(self, preferences: Preferences) -> None:
         payload = {
             "enabled_types": {k.value: v for k, v in preferences.enabled_types.items()},

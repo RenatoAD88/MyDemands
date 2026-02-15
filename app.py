@@ -1285,8 +1285,6 @@ class MainWindow(QMainWindow):
             self.tray_icon.setIcon(QIcon(icon_path))
 
         tray_menu = QMenu(self)
-        open_action = QAction("Abrir", self)
-        open_action.triggered.connect(self._bring_to_front)
         center_action = QAction("Central de Notificações", self)
         center_action.triggered.connect(self.open_notification_center)
         mute_action = QAction("Silenciar 1h", self)
@@ -1295,7 +1293,6 @@ class MainWindow(QMainWindow):
         settings_action.triggered.connect(self.open_notification_settings)
         exit_action = QAction("Sair", self)
         exit_action.triggered.connect(self.close)
-        tray_menu.addAction(open_action)
         tray_menu.addAction(center_action)
         tray_menu.addAction(mute_action)
         tray_menu.addAction(settings_action)
@@ -1316,10 +1313,11 @@ class MainWindow(QMainWindow):
         )
         self.deadline_scheduler = DeadlineScheduler(
             repo=self,
-            emitter=self.notification_dispatcher.dispatch,
+            emitter=self._emit_notification,
         )
         interval = self.notification_store.load_preferences().scheduler_interval_minutes
         self.deadline_scheduler.start(interval)
+        self._on_notifications_changed()
 
     def _is_app_focused(self) -> bool:
         return bool(self.isVisible() and not self.isMinimized() and self.isActiveWindow())
@@ -1338,6 +1336,7 @@ class MainWindow(QMainWindow):
             self.notification_center_dialog = NotificationCenterDialog(
                 self.notification_store,
                 self._handle_notification_click,
+                self._on_notifications_changed,
                 self,
             )
         self.notification_center_dialog.refresh()
@@ -1351,8 +1350,11 @@ class MainWindow(QMainWindow):
             pref = self.notification_store.load_preferences()
             self.deadline_scheduler.update_interval(pref.scheduler_interval_minutes)
 
-    def _emit_notification(self, notif: Notification) -> None:
-        self.notification_dispatcher.dispatch(notif)
+    def _emit_notification(self, notif: Notification) -> int | None:
+        notification_id = self.notification_dispatcher.dispatch(notif)
+        if notification_id:
+            self._on_notifications_changed()
+        return notification_id
 
     def _handle_notification_click(self, notif: Notification) -> None:
         self._bring_to_front()
@@ -2017,6 +2019,46 @@ class MainWindow(QMainWindow):
         btn.clicked.connect(self.show_general_information)
         return btn
 
+    def _build_notification_icon(self, unread_count: int = 0, size: int = 28) -> QIcon:
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        font = QFont()
+        font.setBold(True)
+        font.setPixelSize(int(size * 0.8))
+        painter.setFont(font)
+        painter.setPen(QColor("#374151"))
+        painter.drawText(pixmap.rect().adjusted(0, -1, 0, 0), Qt.AlignCenter, "🔔")
+
+        if unread_count > 0:
+            badge_size = int(size * 0.5)
+            badge_rect = pixmap.rect().adjusted(size - badge_size, 0, 0, -(size - badge_size))
+            painter.setBrush(QColor("#d92d20"))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(badge_rect)
+
+            badge_font = QFont()
+            badge_font.setBold(True)
+            badge_font.setPixelSize(max(9, int(size * 0.28)))
+            painter.setFont(badge_font)
+            painter.setPen(QColor("#ffffff"))
+            label = "99+" if unread_count > 99 else str(unread_count)
+            painter.drawText(badge_rect, Qt.AlignCenter, label)
+
+        painter.end()
+        return QIcon(pixmap)
+
+    def _on_notifications_changed(self) -> None:
+        unread_count = self.notification_store.count_unread()
+        if hasattr(self, "notification_button") and self.notification_button:
+            self.notification_button.setIcon(self._build_notification_icon(unread_count=unread_count))
+            self.notification_button.setToolTip(f"Central de notificações ({unread_count} não lidas)")
+        if self.notification_center_dialog is not None and self.notification_center_dialog.isVisible():
+            self.notification_center_dialog.refresh()
+
     def _build_general_info_icon(self, size: int = 28) -> QIcon:
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.transparent)
@@ -2080,13 +2122,14 @@ class MainWindow(QMainWindow):
             on_click=self.import_demands_csv,
         )
 
-        notif_btn = self._build_toolbar_action_button(
+        self.notification_button = self._build_toolbar_action_button(
             object_name="notificationAction",
             tooltip="Central de notificações",
             img_name="",
             fallback_icon=QStyle.SP_MessageBoxInformation,
             on_click=self.open_notification_center,
         )
+        self.notification_button.setIcon(self._build_notification_icon())
         info_btn = self._build_info_icon_button()
 
         layout.addWidget(new_btn)
@@ -2094,7 +2137,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(export_shortcut)
         layout.addWidget(import_shortcut)
         layout.addStretch()
-        layout.addWidget(notif_btn)
+        layout.addWidget(self.notification_button)
         layout.addWidget(info_btn)
         return section
 
