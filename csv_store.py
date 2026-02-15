@@ -207,6 +207,11 @@ def _autofix_consistency(payload: Dict[str, str]) -> Dict[str, str]:
     status = (p.get("Status") or "").strip()
     perc = (p.get("% Conclusão") or "").strip()
 
+    if status == "Cancelado":
+        p["Data Conclusão"] = ""
+        p["% Conclusão"] = "0"
+        return p
+
     if concl:
         p["Status"] = "Concluído"
         p["% Conclusão"] = "1"
@@ -444,6 +449,10 @@ class CsvStore:
         merged = dict(dr.data)
         merged.update({k: (v if v is not None else "") for k, v in changes.items()})
 
+        previous_status = (dr.data.get("Status") or "").strip()
+        if previous_status == "Concluído" and (merged.get("Status") or "").strip() == "Cancelado":
+            raise ValidationError("Demandas concluídas não podem ser marcadas como canceladas.")
+
         merged = validate_payload(merged, mode="create")
 
         merged = _autofix_consistency(merged)
@@ -578,6 +587,12 @@ class CsvStore:
         return [
             x for x in self.build_view()
             if (x.get("Status") or "").strip() == "Concluído"
+        ]
+
+    def tab_canceladas_all(self) -> List[Dict[str, Any]]:
+        return [
+            x for x in self.build_view()
+            if (x.get("Status") or "").strip() == "Cancelado"
         ]
 
     def export_all_to_csv(self, export_path: str, delimiter: str = ",") -> int:
