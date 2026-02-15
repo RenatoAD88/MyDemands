@@ -33,4 +33,4 @@ def test_delete_by_line_removes_record(tmp_path):
     view2 = store.build_view()
     assert len(view2) == 1
     assert view2[0]["_id"] == b
-    assert view2[0]["ID"] == "1"
+    assert view2[0]["ID"] == "2"
