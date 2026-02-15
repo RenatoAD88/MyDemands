@@ -204,3 +204,39 @@ def test_new_demand_shows_created_id_message(tmp_path, monkeypatch):
     assert captured["text"] == "Demanda criada com sucesso.\nID: 1"
 
     win.close()
+
+
+def test_duplicate_concluded_demand_success_modal_uses_numero_label(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    today = date.today().strftime("%d/%m/%Y")
+    store.add(
+        {
+            "Projeto": "Projeto Concluído",
+            "Descrição": "Demanda finalizada para duplicar",
+            "Prioridade": "Alta",
+            "Prazo": today,
+            "Data de Registro": today,
+            "Status": "Concluído",
+            "Data Conclusão": today,
+            "Responsável": "Ana",
+            "% Conclusão": "1",
+        }
+    )
+
+    captured = {"title": None, "text": None}
+
+    def fake_exec(self):
+        captured["title"] = self.windowTitle()
+        captured["text"] = self.text()
+        return 0
+
+    monkeypatch.setattr(app_module.QMessageBox, "exec", fake_exec)
+
+    win = MainWindow(store)
+    win._show_duplicate_success_modal("2")
+
+    assert captured["title"] == "Duplicar demanda"
+    assert captured["text"] == "Essa demanda foi recriada como pendente\nNº: 2"
+
+    win.close()
