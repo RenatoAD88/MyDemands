@@ -138,6 +138,12 @@ STATUS_EDIT_OPTIONS = [
     "Requer revisão",
     "Concluído",
 ]
+TAB3_STATUS_FILTER_OPTIONS = [
+    "Não iniciada",
+    "Em andamento",
+    "Em espera",
+    "Requer revisão",
+]
 PRIORIDADE_EDIT_OPTIONS = ["Alta", "Média", "Baixa"]
 URGENCIA_EDIT_OPTIONS = ["Sim", "Não"]
 REPORTAR_EDIT_OPTIONS = ["Sim", "Não"]
@@ -810,21 +816,11 @@ class DeleteTeamMembersDialog(BaseModalDialog):
 
 
 class StatusFilterDialog(BaseModalDialog):
-    SELECT_ALL_LABEL = "(Selecionar Tudo)"
-
     def __init__(self, statuses: List[str], selected_statuses: List[str], parent=None):
         super().__init__("Filtrar status", parent)
-        self._status_order = list(statuses)
-        self._updating = False
-
-        self.search = QLineEdit()
-        self.search.setPlaceholderText("Pesquisar")
-        self.search.textChanged.connect(self._filter_visible_items)
+        self._status_order = [status for status in statuses if status]
 
         self.list_widget = QListWidget()
-        self.list_widget.itemChanged.connect(self._on_item_changed)
-
-        self._all_item = self._add_checkbox_item(self.SELECT_ALL_LABEL)
         selected_set = {value for value in selected_statuses if value in self._status_order}
         if not selected_set:
             selected_set = set(self._status_order)
@@ -833,9 +829,7 @@ class StatusFilterDialog(BaseModalDialog):
             item = self._add_checkbox_item(status)
             item.setCheckState(Qt.Checked if status in selected_set else Qt.Unchecked)
 
-        self._refresh_select_all_item()
-
-        ok_btn = QPushButton("OK")
+        ok_btn = QPushButton("Selecionar")
         ok_btn.clicked.connect(self.accept)
         cancel_btn = QPushButton("Cancelar")
         cancel_btn.clicked.connect(self.reject)
@@ -845,7 +839,6 @@ class StatusFilterDialog(BaseModalDialog):
         actions.addWidget(ok_btn)
         actions.addWidget(cancel_btn)
 
-        self.content_layout.addWidget(self.search)
         self.content_layout.addWidget(self.list_widget)
         self.content_layout.addLayout(actions)
 
@@ -857,35 +850,7 @@ class StatusFilterDialog(BaseModalDialog):
         return item
 
     def _status_items(self) -> List[QListWidgetItem]:
-        return [self.list_widget.item(i) for i in range(1, self.list_widget.count())]
-
-    def _refresh_select_all_item(self):
-        checked_count = sum(1 for item in self._status_items() if item.checkState() == Qt.Checked)
-        all_checked = checked_count == len(self._status_order)
-        self._updating = True
-        self._all_item.setCheckState(Qt.Checked if all_checked else Qt.Unchecked)
-        self._updating = False
-
-    def _on_item_changed(self, item: QListWidgetItem):
-        if self._updating:
-            return
-
-        if item is self._all_item:
-            check_state = self._all_item.checkState()
-            self._updating = True
-            for status_item in self._status_items():
-                status_item.setCheckState(check_state)
-            self._updating = False
-            return
-
-        self._refresh_select_all_item()
-
-    def _filter_visible_items(self, text: str):
-        query = (text or "").strip().lower()
-        self._all_item.setHidden(bool(query))
-        for status_item in self._status_items():
-            visible = query in status_item.text().lower() if query else True
-            status_item.setHidden(not visible)
+        return [self.list_widget.item(i) for i in range(self.list_widget.count())]
 
     def selected_statuses(self) -> List[str]:
         selected = [
@@ -896,14 +861,6 @@ class StatusFilterDialog(BaseModalDialog):
         if len(selected) == len(self._status_order):
             return []
         return selected
-
-    def _cancel_delete_action(self):
-        self.reset_state()
-        self.reject()
-
-    def reject(self):
-        self.reset_state()
-        super().reject()
 
 
 class NewDemandDialog(BaseModalDialog):
@@ -1920,7 +1877,7 @@ class MainWindow(QMainWindow):
 
     def _open_t3_status_filter_dialog(self):
         dialog = StatusFilterDialog(
-            statuses=STATUS_EDIT_OPTIONS,
+            statuses=TAB3_STATUS_FILTER_OPTIONS,
             selected_statuses=self._selected_t3_status_filters(),
             parent=self,
         )
@@ -2664,7 +2621,7 @@ class MainWindow(QMainWindow):
         self.t3_search.setPlaceholderText("Buscar por projeto, descrição, comentário, Azure, responsável, nome e time/função")
         self.t3_status_menu = QMenu(self)
         self.t3_status_actions: Dict[str, QAction] = {}
-        for status in STATUS_EDIT_OPTIONS:
+        for status in TAB3_STATUS_FILTER_OPTIONS:
             action = QAction(status, self)
             action.setCheckable(True)
             action.toggled.connect(self._on_t3_status_filter_changed)
