@@ -2219,6 +2219,23 @@ class MainWindow(QMainWindow):
         dialog = AISettingsDialog(self.ai_settings_store, self)
         if dialog.exec() == QDialog.Accepted:
             self.ai_settings = self.ai_settings_store.load()
+            self._refresh_ai_button_visibility()
+
+    def _refresh_ai_button_visibility(self) -> None:
+        for text_widget in self.findChildren(QTextEdit):
+            btn = getattr(text_widget, "_ai_button", None)
+            if btn is None:
+                continue
+            if not self.ai_settings.enabled:
+                btn.hide()
+                continue
+            btn.show()
+            if not os.getenv("OPENAI_API_KEY"):
+                btn.setEnabled(False)
+                btn.setToolTip("Configurar IA…")
+            else:
+                btn.setEnabled(True)
+                btn.setToolTip("")
 
     def _ai_context_provider(self, demand_id: str, field_name: str) -> Dict[str, Any]:
         return {"demand_id": str(demand_id or ""), "field": field_name}
@@ -2239,9 +2256,12 @@ class MainWindow(QMainWindow):
     def _attach_ai_widget(self, text_widget: QTextEdit, context_provider):
         wrapper = attach_ai_writing(text_widget, context_provider, self._generate_ai_suggestion)
         btn = getattr(text_widget, "_ai_button", None)
-        if btn is not None and (not self.ai_settings.enabled or not os.getenv("OPENAI_API_KEY")):
-            btn.setEnabled(False)
-            btn.setToolTip("Configurar IA…")
+        if btn is not None:
+            if not self.ai_settings.enabled:
+                btn.hide()
+            elif not os.getenv("OPENAI_API_KEY"):
+                btn.setEnabled(False)
+                btn.setToolTip("Configurar IA…")
         return wrapper
 
     def show_general_information(self):
