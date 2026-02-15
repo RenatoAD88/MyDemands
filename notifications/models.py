@@ -4,6 +4,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict
+from zoneinfo import ZoneInfo
+
+
+BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+def brasilia_now() -> datetime:
+    return datetime.now(BRASILIA_TZ)
 
 
 class NotificationType(str, Enum):
@@ -26,7 +34,7 @@ class Notification:
     title: str
     body: str
     payload: Dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=brasilia_now)
     read: bool = False
     id: int | None = None
 
