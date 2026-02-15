@@ -40,6 +40,10 @@ from notifications.inapp_toast import InAppToastNotifier
 from notifications.scheduler import DeadlineScheduler
 from notifications.settings_view import NotificationSettingsDialog
 from notifications.system_notifier import SystemNotifier
+from ai_writing.openai_client import OpenAIWritingClient, AIWritingError, MissingAPIKeyError
+from ai_writing.settings import AISettingsStore, AISettingsDialog
+from ai_writing.audit import AIAuditLogger
+from ai_writing.integration import attach_ai_writing
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
@@ -826,7 +830,7 @@ class DeleteTeamMembersDialog(BaseModalDialog):
 
 
 class NewDemandDialog(BaseModalDialog):
-    def __init__(self, parent: QWidget, initial_data: Optional[Dict[str, str]] = None):
+    def __init__(self, parent: QWidget, initial_data: Optional[Dict[str, str]] = None, ai_attach=None, context_provider=None):
         super().__init__(parent)
         self.setWindowTitle("Nova demanda")
 
@@ -849,6 +853,11 @@ class NewDemandDialog(BaseModalDialog):
         self.descricao.setPlaceholderText("Descreva a demanda com contexto e resultado esperado")
         self.comentario = QTextEdit()
         self.comentario.setPlaceholderText("Comentário adicional (opcional)")
+        self.descricao_widget = self.descricao
+        self.comentario_widget = self.comentario
+        if callable(ai_attach):
+            self.descricao_widget = ai_attach(self.descricao, lambda: context_provider("Descrição") if callable(context_provider) else {"field": "Descrição"})
+            self.comentario_widget = ai_attach(self.comentario, lambda: context_provider("Comentário") if callable(context_provider) else {"field": "Comentário"})
 
         self.urgente = QComboBox()
         self.urgente.setEditable(False)
@@ -928,8 +937,8 @@ class NewDemandDialog(BaseModalDialog):
         obrig_form.addRow("Data de Registro*", self.data_registro)
         obrig_form.addRow("Projeto*", self.projeto)
         obrig_form.addRow("Responsável*", self.responsavel)
-        obrig_form.addRow("Descrição*", self.descricao)
-        obrig_form.addRow("Comentário", self.comentario)
+        obrig_form.addRow("Descrição*", self.descricao_widget)
+        obrig_form.addRow("Comentário", self.comentario_widget)
         obrig_box.setLayout(obrig_form)
 
         opc_box = QGroupBox("Controle e identificação")
@@ -1263,6 +1272,9 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         self._prefs = load_prefs(self.store.base_dir)
+        self.ai_settings_store = AISettingsStore(self.store.base_dir)
+        self.ai_settings = self.ai_settings_store.load()
+        self.ai_audit = AIAuditLogger(self.store.base_dir)
         self.team_store = TeamControlStore(self.store.base_dir)
         self._ensure_backup_dir()
 
@@ -1720,6 +1732,32 @@ class MainWindow(QMainWindow):
             return
 
         table_key = str(table.property("tableSortKey") or "")
+        if table_key in {"t4", "t4_cancelled"} and col_name in {"Descrição", "Comentário"}:
+            current_text = it.text() or ""
+            dlg = QDialog(self)
+            dlg.setWindowTitle(f"Editar {col_name}")
+            editor = QTextEdit()
+            editor.setPlainText(current_text)
+            wrapped = self._attach_ai_widget(editor, lambda: self._ai_context_provider(_id, col_name))
+            save_btn = QPushButton("Salvar")
+            cancel_btn = QPushButton("Cancelar")
+            save_btn.clicked.connect(dlg.accept)
+            cancel_btn.clicked.connect(dlg.reject)
+            lay = QVBoxLayout(dlg)
+            lay.addWidget(wrapped)
+            row_btn = QHBoxLayout()
+            row_btn.addStretch()
+            row_btn.addWidget(save_btn)
+            row_btn.addWidget(cancel_btn)
+            lay.addLayout(row_btn)
+            if dlg.exec() == QDialog.Accepted:
+                new_val = editor.toPlainText()
+                try:
+                    self.store.update(_id, {col_name: new_val})
+                except ValidationError as ve:
+                    QMessageBox.warning(self, "Validação", str(ve))
+                self.refresh_all()
+            return
         if table_key in {"t4", "t4_cancelled"} and col_name not in PICKER_ONLY:
             return
 
@@ -2122,6 +2160,15 @@ class MainWindow(QMainWindow):
             on_click=self.import_demands_csv,
         )
 
+        self.ai_settings_button = self._build_toolbar_action_button(
+            object_name="aiSettingsAction",
+            tooltip="Configurações da IA",
+            img_name="",
+            fallback_icon=QStyle.SP_DialogYesButton,
+            on_click=self.open_ai_settings,
+        )
+        self.ai_settings_button.setText("✨")
+
         self.notification_button = self._build_toolbar_action_button(
             object_name="notificationAction",
             tooltip="Central de notificações",
@@ -2137,9 +2184,39 @@ class MainWindow(QMainWindow):
         layout.addWidget(export_shortcut)
         layout.addWidget(import_shortcut)
         layout.addStretch()
+        layout.addWidget(self.ai_settings_button)
         layout.addWidget(self.notification_button)
         layout.addWidget(info_btn)
         return section
+
+    def open_ai_settings(self):
+        dialog = AISettingsDialog(self.ai_settings_store, self)
+        if dialog.exec() == QDialog.Accepted:
+            self.ai_settings = self.ai_settings_store.load()
+
+    def _ai_context_provider(self, demand_id: str, field_name: str) -> Dict[str, Any]:
+        return {"demand_id": str(demand_id or ""), "field": field_name}
+
+    def _generate_ai_suggestion(self, input_text: str, instruction: str, context: Dict[str, Any]) -> str:
+        self.ai_settings = self.ai_settings_store.load()
+        if not self.ai_settings.enabled:
+            raise AIWritingError("IA desabilitada")
+        try:
+            client = OpenAIWritingClient(model=self.ai_settings.model, temperature=self.ai_settings.temperature)
+            suggestion = client.suggest(input_text=input_text, instruction=instruction, context=context)
+            self.ai_audit.log_event("generate", str(context.get("demand_id", "")), str(context.get("field", "")), input_text, True, privacy_mode=self.ai_settings.privacy_mode, debug_mode=self.ai_settings.debug_log_text)
+            return suggestion
+        except MissingAPIKeyError:
+            self.ai_audit.log_event("generate", str(context.get("demand_id", "")), str(context.get("field", "")), input_text, False, error_message="missing_key", privacy_mode=self.ai_settings.privacy_mode, debug_mode=self.ai_settings.debug_log_text)
+            raise
+
+    def _attach_ai_widget(self, text_widget: QTextEdit, context_provider):
+        wrapper = attach_ai_writing(text_widget, context_provider, self._generate_ai_suggestion)
+        btn = getattr(text_widget, "_ai_button", None)
+        if btn is not None and (not self.ai_settings.enabled or not os.getenv("OPENAI_API_KEY")):
+            btn.setEnabled(False)
+            btn.setToolTip("Configurar IA…")
+        return wrapper
 
     def show_general_information(self):
         version = build_version_code(previous_version_number=106)
@@ -2653,7 +2730,8 @@ class MainWindow(QMainWindow):
         row_data["Data Conclusão"] = ""
         row_data["% Conclusão"] = ""
 
-        dlg = NewDemandDialog(self, initial_data=row_data)
+        demand_id_ctx = row_data.get("ID", "")
+        dlg = NewDemandDialog(self, initial_data=row_data, ai_attach=self._attach_ai_widget, context_provider=lambda field: self._ai_context_provider(demand_id_ctx, field))
         if dlg.exec() != QDialog.Accepted:
             return
 
@@ -2958,7 +3036,7 @@ class MainWindow(QMainWindow):
 
     # Actions
     def new_demand(self):
-        dlg = NewDemandDialog(self)
+        dlg = NewDemandDialog(self, ai_attach=self._attach_ai_widget, context_provider=lambda field: self._ai_context_provider("", field))
         if dlg.exec() == QDialog.Accepted:
             try:
                 new_row_id = self.store.add(dlg.payload())
