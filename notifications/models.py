@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
-BRASILIA_TZ = ZoneInfo("America/Sao_Paulo")
+def _load_brasilia_tz() -> ZoneInfo | timezone:
+    try:
+        return ZoneInfo("America/Sao_Paulo")
+    except ZoneInfoNotFoundError:
+        # Fallback for packaged environments where IANA tz database is absent.
+        return timezone(timedelta(hours=-3), name="America/Sao_Paulo")
+
+
+BRASILIA_TZ = _load_brasilia_tz()
 
 
 def brasilia_now() -> datetime:
