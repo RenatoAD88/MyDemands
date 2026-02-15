@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -18,10 +18,17 @@ from .store import NotificationStore
 
 
 class NotificationCenterDialog(QDialog):
-    def __init__(self, store: NotificationStore, on_open: Callable[[Notification], None], parent=None):
+    def __init__(
+        self,
+        store: NotificationStore,
+        on_open: Callable[[Notification], None],
+        on_change: Optional[Callable[[], None]] = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.store = store
         self.on_open = on_open
+        self.on_change = on_change
         self.setWindowTitle("Central de Notificações")
         self.resize(900, 420)
 
@@ -46,11 +53,11 @@ class NotificationCenterDialog(QDialog):
         refresh_btn.clicked.connect(self.refresh)
         mark_read_btn = QPushButton("Marcar como lida")
         mark_read_btn.clicked.connect(self.mark_selected_as_read)
-        open_btn = QPushButton("Abrir")
-        open_btn.clicked.connect(self._open_selected)
+        mark_unread_btn = QPushButton("Marcar como não lida")
+        mark_unread_btn.clicked.connect(self.mark_selected_as_unread)
         filter_row.addWidget(refresh_btn)
         filter_row.addWidget(mark_read_btn)
-        filter_row.addWidget(open_btn)
+        filter_row.addWidget(mark_unread_btn)
 
         root = QVBoxLayout(self)
         root.addLayout(filter_row)
@@ -88,6 +95,18 @@ class NotificationCenterDialog(QDialog):
             if notif_id:
                 self.store.mark_as_read(int(notif_id))
         self.refresh()
+        self._notify_change()
+
+    def mark_selected_as_unread(self) -> None:
+        for idx in self.table.selectionModel().selectedRows():
+            item = self.table.item(idx.row(), 0)
+            if not item:
+                continue
+            notif_id = item.data(Qt.UserRole)
+            if notif_id:
+                self.store.mark_as_unread(int(notif_id))
+        self.refresh()
+        self._notify_change()
 
     def _open_selected(self):
         idxs = self.table.selectionModel().selectedRows()
@@ -101,3 +120,8 @@ class NotificationCenterDialog(QDialog):
         self.store.mark_as_read(notif_id)
         self.on_open(notification)
         self.refresh()
+        self._notify_change()
+
+    def _notify_change(self) -> None:
+        if self.on_change:
+            self.on_change()
