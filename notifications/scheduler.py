@@ -62,7 +62,12 @@ class DeadlineScheduler(QObject):
                     type=NotificationType.PRAZO_ESTOURADO,
                     title=f"Demanda #{demand_id} atrasada",
                     body=f"Prazo em {closest.strftime('%d/%m/%Y')}.",
-                    payload={"demand_id": demand_id, "route": "atrasadas"},
+                    payload={
+                        "demand_id": demand_id,
+                        "route": "atrasadas",
+                        "deadline_date": closest.isoformat(),
+                        "event_code": "deadline_overdue",
+                    },
                 )
                 self.emitter(evt)
                 events.append(DeadlineEvent(demand_id, NotificationType.PRAZO_ESTOURADO))
@@ -71,7 +76,12 @@ class DeadlineScheduler(QObject):
                     type=NotificationType.PRAZO_PROXIMO,
                     title=f"Prazo hoje: #{demand_id}",
                     body=f"Demanda vence em {closest.strftime('%d/%m/%Y')}.",
-                    payload={"demand_id": demand_id, "route": "demanda"},
+                    payload={
+                        "demand_id": demand_id,
+                        "route": "demanda",
+                        "deadline_date": closest.isoformat(),
+                        "event_code": "deadline_due",
+                    },
                 )
                 self.emitter(evt)
                 events.append(DeadlineEvent(demand_id, NotificationType.PRAZO_PROXIMO))

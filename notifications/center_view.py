@@ -23,12 +23,14 @@ class NotificationCenterDialog(QDialog):
         store: NotificationStore,
         on_open: Callable[[Notification], None],
         on_change: Optional[Callable[[], None]] = None,
+        on_refresh_pending: Optional[Callable[[], None]] = None,
         parent=None,
     ):
         super().__init__(parent)
         self.store = store
         self.on_open = on_open
         self.on_change = on_change
+        self.on_refresh_pending = on_refresh_pending
         self.setWindowTitle("Central de Notificações")
         self.resize(900, 420)
 
@@ -52,11 +54,14 @@ class NotificationCenterDialog(QDialog):
         filter_row.addWidget(self.read_filter)
         refresh_btn = QPushButton("Filtrar")
         refresh_btn.clicked.connect(self.refresh)
+        update_pending_btn = QPushButton("Atualizar")
+        update_pending_btn.clicked.connect(self.refresh_pending_notifications)
         self.mark_toggle_btn = QPushButton("Marcar como lida")
         self.mark_toggle_btn.clicked.connect(self.toggle_selected_read_status)
         delete_btn = QPushButton("Excluir")
         delete_btn.clicked.connect(self.delete_selected_notifications)
         filter_row.addWidget(refresh_btn)
+        filter_row.addWidget(update_pending_btn)
         filter_row.addWidget(self.mark_toggle_btn)
         filter_row.addWidget(delete_btn)
 
@@ -146,6 +151,12 @@ class NotificationCenterDialog(QDialog):
             return
         self.store.mark_as_read(int(notification.id))
         self.on_open(notification)
+        self.refresh()
+        self._notify_change()
+
+    def refresh_pending_notifications(self) -> None:
+        if self.on_refresh_pending:
+            self.on_refresh_pending()
         self.refresh()
         self._notify_change()
 
