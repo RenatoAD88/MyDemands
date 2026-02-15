@@ -2062,6 +2062,23 @@ class MainWindow(QMainWindow):
         btn.clicked.connect(self.show_general_information)
         return btn
 
+    def _build_ai_settings_icon(self, size: int = 28) -> QIcon:
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        font = QFont()
+        font.setBold(True)
+        font.setPixelSize(int(size * 0.8))
+        painter.setFont(font)
+        painter.setPen(QColor("#374151"))
+        painter.drawText(pixmap.rect().adjusted(0, -1, 0, 0), Qt.AlignCenter, "✨")
+        painter.end()
+
+        return QIcon(pixmap)
+
     def _build_notification_icon(self, unread_count: int = 0, size: int = 28) -> QIcon:
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.transparent)
@@ -2172,7 +2189,9 @@ class MainWindow(QMainWindow):
             fallback_icon=QStyle.SP_DialogYesButton,
             on_click=self.open_ai_settings,
         )
-        self.ai_settings_button.setText("✨")
+        self.ai_settings_button.setProperty("infoIconAction", True)
+        self.ai_settings_button.setAutoRaise(True)
+        self.ai_settings_button.setIcon(self._build_ai_settings_icon())
 
         self.notification_button = self._build_toolbar_action_button(
             object_name="notificationAction",
@@ -2181,6 +2200,8 @@ class MainWindow(QMainWindow):
             fallback_icon=QStyle.SP_MessageBoxInformation,
             on_click=self.open_notification_center,
         )
+        self.notification_button.setProperty("infoIconAction", True)
+        self.notification_button.setAutoRaise(True)
         self.notification_button.setIcon(self._build_notification_icon())
         info_btn = self._build_info_icon_button()
 
