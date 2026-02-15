@@ -2448,14 +2448,22 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            new_id = self.store.add(dlg.payload())
+            new_row_id = self.store.add(dlg.payload())
         except ValidationError as ve:
             QMessageBox.warning(self, "Validação", str(ve))
             return
         self.refresh_all()
 
-        if new_id and was_concluded:
-            self._show_duplicate_success_modal(new_id)
+        if new_row_id and was_concluded:
+            self._show_duplicate_success_modal(self._resolve_demand_number(new_row_id))
+
+    def _resolve_demand_number(self, row_id: str) -> str:
+        row = self.store.get(row_id) if row_id else None
+        if row:
+            demand_number = str(row.data.get("ID") or "").strip()
+            if demand_number:
+                return demand_number
+        return str(row_id or "")
 
     def _show_duplicate_success_modal(self, demand_id: str):
         confirm_box = QMessageBox(self)
@@ -2698,11 +2706,12 @@ class MainWindow(QMainWindow):
         dlg = NewDemandDialog(self)
         if dlg.exec() == QDialog.Accepted:
             try:
-                new_id = self.store.add(dlg.payload())
+                new_row_id = self.store.add(dlg.payload())
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
             else:
-                QMessageBox.information(self, "Nova demanda", f"Demanda criada com sucesso.\nID: {new_id}")
+                demand_number = self._resolve_demand_number(new_row_id)
+                QMessageBox.information(self, "Nova demanda", f"Demanda criada com sucesso.\nID: {demand_number}")
             self.refresh_all()
 
     def export_team_control_csv(self):
