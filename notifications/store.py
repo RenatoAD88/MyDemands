@@ -44,7 +44,24 @@ class NotificationStore:
                     title TEXT NOT NULL,
                     body TEXT NOT NULL,
                     payload_json TEXT NOT NULL,
+                    occurrence_key TEXT,
                     read INTEGER NOT NULL DEFAULT 0
+                )
+                """
+            )
+            cols = {
+                row["name"]
+                for row in con.execute("PRAGMA table_info(notifications)").fetchall()
+            }
+            if "occurrence_key" not in cols:
+                con.execute("ALTER TABLE notifications ADD COLUMN occurrence_key TEXT")
+
+            con.execute(
+                """
+                CREATE TABLE IF NOT EXISTS notified_occurrences (
+                    occurrence_key TEXT PRIMARY KEY,
+                    acknowledged INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL
                 )
                 """
             )
@@ -56,6 +73,57 @@ class NotificationStore:
                 )
                 """
             )
+
+    def _notification_occurrence_key(self, notification: Notification) -> str:
+        payload = notification.payload or {}
+        demand_id = str(payload.get("demand_id") or "").strip()
+        deadline_date = str(payload.get("deadline_date") or "").strip()
+        event_code = str(payload.get("event_code") or "").strip()
+        if demand_id:
+            return f"{notification.type.value}|{demand_id}|{deadline_date}|{event_code}"
+        payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        digest = hashlib.sha256(
+            f"{notification.type.value}|{notification.title}|{notification.body}|{payload_json}".encode("utf-8")
+        ).hexdigest()
+        return f"{notification.type.value}|{digest}"
+
+    def should_dispatch(self, notification: Notification) -> bool:
+        occurrence_key = self._notification_occurrence_key(notification)
+        with self._connect() as con:
+            row = con.execute(
+                "SELECT 1 FROM notified_occurrences WHERE occurrence_key = ?",
+                (occurrence_key,),
+            ).fetchone()
+        return row is None
+
+    def _mark_occurrence_presented(self, occurrence_key: str, *, acknowledged: bool = False) -> None:
+        now = datetime.now(BRASILIA_TZ).isoformat()
+        with self._connect() as con:
+            con.execute(
+                """
+                INSERT INTO notified_occurrences (occurrence_key, acknowledged, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(occurrence_key) DO UPDATE SET
+                    acknowledged = CASE
+                        WHEN excluded.acknowledged = 1 THEN 1
+                        ELSE notified_occurrences.acknowledged
+                    END,
+                    updated_at = excluded.updated_at
+                """,
+                (occurrence_key, 1 if acknowledged else 0, now),
+            )
+
+    def _acknowledge_occurrence_from_notification(self, notification_id: int) -> None:
+        with self._connect() as con:
+            row = con.execute(
+                "SELECT occurrence_key FROM notifications WHERE id = ?",
+                (notification_id,),
+            ).fetchone()
+        if not row:
+            return
+        occurrence_key = str(row["occurrence_key"] or "").strip()
+        if occurrence_key:
+            self._mark_occurrence_presented(occurrence_key, acknowledged=True)
 
     def _load_or_create_key(self) -> bytes:
         if os.path.exists(self.key_path):
@@ -83,15 +151,18 @@ class NotificationStore:
         return ENC_MAGIC + b"\n" + base64.urlsafe_b64encode(nonce + bytes(cipher) + mac)
 
     def insert(self, notification: Notification) -> int:
+        occurrence_key = self._notification_occurrence_key(notification)
+        self._mark_occurrence_presented(occurrence_key)
         with self._connect() as con:
             cur = con.execute(
-                "INSERT INTO notifications (timestamp, type, title, body, payload_json, read) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO notifications (timestamp, type, title, body, payload_json, occurrence_key, read) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     notification.timestamp.isoformat(),
                     notification.type.value,
                     notification.title,
                     notification.body,
                     json.dumps(notification.payload, ensure_ascii=False),
+                    occurrence_key,
                     1 if notification.read else 0,
                 ),
             )
@@ -140,6 +211,7 @@ class NotificationStore:
         return out
 
     def mark_as_read(self, notification_id: int) -> None:
+        self._acknowledge_occurrence_from_notification(notification_id)
         with self._connect() as con:
             con.execute("UPDATE notifications SET read = 1 WHERE id = ?", (notification_id,))
         self._rewrite_encrypted_csv_snapshot()
@@ -150,6 +222,7 @@ class NotificationStore:
         self._rewrite_encrypted_csv_snapshot()
 
     def delete_notification(self, notification_id: int) -> None:
+        self._acknowledge_occurrence_from_notification(notification_id)
         with self._connect() as con:
             con.execute("DELETE FROM notifications WHERE id = ?", (notification_id,))
         self._rewrite_encrypted_csv_snapshot()

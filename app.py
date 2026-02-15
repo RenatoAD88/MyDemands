@@ -1337,6 +1337,7 @@ class MainWindow(QMainWindow):
                 self.notification_store,
                 self._handle_notification_click,
                 self._on_notifications_changed,
+                self.refresh_pending_notifications,
                 self,
             )
         self.notification_center_dialog.refresh()
@@ -1355,6 +1356,10 @@ class MainWindow(QMainWindow):
         if notification_id:
             self._on_notifications_changed()
         return notification_id
+
+    def refresh_pending_notifications(self) -> None:
+        self.deadline_scheduler.check_now()
+        self._on_notifications_changed()
 
     def _handle_notification_click(self, notif: Notification) -> None:
         self._bring_to_front()

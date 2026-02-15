@@ -31,6 +31,10 @@ class NotificationDispatcher:
             LOGGER.info("Notificação desabilitada por tipo: %s", notification.type)
             return None
 
+        if not self.store.should_dispatch(notification):
+            LOGGER.info("Ocorrência já notificada anteriormente: %s", notification.type)
+            return None
+
         notification_id = self.store.insert(notification)
 
         if pref.is_muted(time.time()):

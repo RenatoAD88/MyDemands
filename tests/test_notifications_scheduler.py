@@ -45,3 +45,7 @@ def test_scheduler_generates_proximo_and_estourado_events():
 
     assert any(n.payload.get("demand_id") == "123" and n.type == NotificationType.PRAZO_PROXIMO for n in captured)
     assert any(n.payload.get("demand_id") == "333" and n.type == NotificationType.PRAZO_ESTOURADO for n in captured)
+
+    overdue_payload = next(n.payload for n in captured if n.payload.get("demand_id") == "333")
+    assert overdue_payload.get("deadline_date") == "2026-01-09"
+    assert overdue_payload.get("event_code") == "deadline_overdue"

@@ -15,6 +15,9 @@ class FakeStore:
     def load_preferences(self):
         return self.pref
 
+    def should_dispatch(self, notification):
+        return True
+
     def insert(self, notification):
         self.saved.append(notification)
         return len(self.saved)
@@ -63,4 +66,26 @@ def test_dispatcher_background_uses_system_channel():
 
     dispatcher.dispatch(Notification(type=NotificationType.PRAZO_PROXIMO, title="t", body="b"))
     assert len(system.calls) == 1
+    assert len(inapp.calls) == 0
+
+
+def test_dispatcher_ignores_already_notified_occurrence():
+    store = FakeStore()
+    store.pref.enabled_channels[Channel.IN_APP] = True
+    store.pref.enabled_channels[Channel.SYSTEM] = True
+    store.should_dispatch = lambda _notification: False
+    system = Sink()
+    inapp = Sink()
+
+    dispatcher = NotificationDispatcher(
+        store=store,
+        system_notifier=system,
+        inapp_notifier=inapp,
+        is_app_focused=lambda: True,
+    )
+
+    result = dispatcher.dispatch(Notification(type=NotificationType.NOVA_DEMANDA, title="t", body="b"))
+    assert result is None
+    assert len(store.saved) == 0
+    assert len(system.calls) == 0
     assert len(inapp.calls) == 0
