@@ -2835,6 +2835,17 @@ class MainWindow(QMainWindow):
         return None
 
     def closeEvent(self, event):
+        confirm = QMessageBox.question(
+            self,
+            "Fechar aplicativo",
+            "Deseja realmente fechar o aplicativo?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            event.ignore()
+            return
+
         self._save_preferences()
         try:
             self.team_store.load()
