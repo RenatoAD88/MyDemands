@@ -5,7 +5,10 @@ import random
 import time
 from typing import Any, Dict, Optional
 
-from openai import OpenAI
+try:
+    from openai import OpenAI
+except ModuleNotFoundError:  # pragma: no cover - depende do ambiente da máquina
+    OpenAI = None
 
 
 class AIWritingError(RuntimeError):
@@ -13,6 +16,10 @@ class AIWritingError(RuntimeError):
 
 
 class MissingAPIKeyError(AIWritingError):
+    pass
+
+
+class MissingOpenAIDependencyError(AIWritingError):
     pass
 
 
@@ -30,6 +37,10 @@ class OpenAIWritingClient:
         self.timeout = float(timeout)
         self.max_retries = int(max_retries)
         self._api_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        if OpenAI is None:
+            self.client = None
+            return
+
         self.client = OpenAI(api_key=self._api_key) if self._api_key else OpenAI()
 
     @staticmethod
@@ -38,6 +49,11 @@ class OpenAIWritingClient:
         return cleaned[:4000]
 
     def suggest(self, input_text: str, instruction: str, context: Optional[Dict[str, Any]] = None) -> str:
+        if self.client is None:
+            raise MissingOpenAIDependencyError(
+                "Dependência 'openai' não encontrada. Instale com: pip install openai"
+            )
+
         if not self._api_key:
             raise MissingAPIKeyError("Chave não configurada")
 

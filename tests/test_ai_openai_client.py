@@ -62,3 +62,14 @@ def test_missing_key_raises_specific_error(monkeypatch):
     client = OpenAIWritingClient(api_key=None)
     with pytest.raises(MissingAPIKeyError):
         client.suggest("abc", "i", {})
+
+
+def test_missing_openai_dependency_raises_specific_error(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("ai_writing.openai_client.OpenAI", None)
+
+    from ai_writing.openai_client import MissingOpenAIDependencyError
+
+    client = OpenAIWritingClient()
+    with pytest.raises(MissingOpenAIDependencyError):
+        client.suggest("abc", "i", {})
