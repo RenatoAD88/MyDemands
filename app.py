@@ -2856,13 +2856,22 @@ class MainWindow(QMainWindow):
         return None
 
     def closeEvent(self, event):
-        confirm = QMessageBox.question(
-            self,
-            "Fechar aplicativo",
-            "Deseja realmente fechar o aplicativo?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
+        confirm_box = QMessageBox(self)
+        confirm_box.setWindowTitle("Fechar aplicativo")
+        confirm_box.setText("Deseja realmente fechar o aplicativo?")
+        confirm_box.setIcon(QMessageBox.Question)
+        confirm_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+
+        yes_button = confirm_box.button(QMessageBox.Yes)
+        no_button = confirm_box.button(QMessageBox.No)
+        if yes_button is not None:
+            yes_button.setText("Sim")
+            confirm_box.setDefaultButton(yes_button)
+        if no_button is not None:
+            no_button.setText("Não")
+            confirm_box.setEscapeButton(no_button)
+
+        confirm = confirm_box.exec()
         if confirm != QMessageBox.Yes:
             event.ignore()
             return
