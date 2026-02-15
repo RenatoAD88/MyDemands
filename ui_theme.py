@@ -130,6 +130,11 @@ QGroupBox::title {
     padding: 0 4px 0 4px;
 }
 
+QCheckBox::indicator {
+    background: #ffffff;
+    border: 1px solid #bccae3;
+}
+
 QLabel#errorText { color: #b42318; }
 
 /* Ajustes do cabeçalho do calendário do QDateEdit */
