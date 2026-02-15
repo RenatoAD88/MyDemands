@@ -112,8 +112,7 @@ def test_duplicate_concluded_demand_shows_pending_modal_with_created_id(tmp_path
 
     win._duplicate_selected_demand(win.t4_table)
 
-    expected_first_pending_id = store.tab_pending_all()[0]["ID"]
-    assert captured["demand_id"] == expected_first_pending_id
+    assert captured["demand_id"] == "2"
 
     win.close()
 
@@ -162,5 +161,46 @@ def test_duplicate_non_concluded_demand_does_not_show_pending_modal(tmp_path, mo
     win._duplicate_selected_demand(win.t1_table)
 
     assert captured["called"] is False
+
+    win.close()
+
+
+def test_new_demand_shows_created_id_message(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    captured = {"title": None, "text": None}
+
+    class FakeNewDemandDialog:
+        def __init__(self, parent, initial_data=None):
+            self._payload = {
+                "Projeto": "Projeto Novo",
+                "Descrição": "Demanda recém-criada",
+                "Prioridade": "Alta",
+                "Prazo": date.today().strftime("%d/%m/%Y"),
+                "Data de Registro": date.today().strftime("%d/%m/%Y"),
+                "Status": "Pendente",
+                "Data Conclusão": "",
+                "Responsável": "Ana",
+                "% Conclusão": "0",
+            }
+
+        def exec(self):
+            return QDialog.Accepted
+
+        def payload(self):
+            return self._payload
+
+    def fake_information(parent, title, text):
+        captured["title"] = title
+        captured["text"] = text
+
+    monkeypatch.setattr(app_module, "NewDemandDialog", FakeNewDemandDialog)
+    monkeypatch.setattr(app_module.QMessageBox, "information", fake_information)
+
+    win = MainWindow(store)
+    win.new_demand()
+
+    assert captured["title"] == "Nova demanda"
+    assert captured["text"] == "Demanda criada com sucesso.\nID: 1"
 
     win.close()
