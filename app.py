@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QDialog, QFormLayout,
     QDateEdit, QLineEdit, QTextEdit, QPlainTextEdit, QComboBox,
     QListWidget, QListWidgetItem, QGroupBox, QAbstractItemView,
-    QMenu, QScrollArea
+    QMenu, QScrollArea, QCheckBox
 )
 from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QHeaderView, QStyle
@@ -136,6 +136,7 @@ STATUS_EDIT_OPTIONS = [
     "Em andamento",
     "Em espera",
     "Requer revisão",
+    "Cancelado",
     "Concluído",
 ]
 TAB3_STATUS_FILTER_OPTIONS = [
@@ -143,6 +144,8 @@ TAB3_STATUS_FILTER_OPTIONS = [
     "Em Andamento",
     "Em Espera",
     "Requer Revisão",
+    "Cancelado",
+    "Concluído",
 ]
 PRIORIDADE_EDIT_OPTIONS = ["Alta", "Média", "Baixa"]
 URGENCIA_EDIT_OPTIONS = ["Sim", "Não"]
@@ -1402,17 +1405,17 @@ class MainWindow(QMainWindow):
     def _make_table(self, table_key: str) -> QTableWidget:
         table = DemandTable(0, len(VISIBLE_COLUMNS))
         table.setHorizontalHeaderLabels(VISIBLE_COLUMNS)
-        if table_key in {"t3", "t4"}:
+        if table_key in {"t3", "t4", "t4_cancelled"}:
             first_header_item = table.horizontalHeaderItem(0)
             if first_header_item is not None:
                 first_header_item.setText("Nº")
         table.setProperty("tableSortKey", table_key)
         table.itemChanged.connect(self._on_item_changed)
         table.cellDoubleClicked.connect(self._on_cell_double_clicked)
-        if table_key in {"t1", "t3", "t4"}:
+        if table_key in {"t1", "t3", "t4", "t4_cancelled"}:
             table.setContextMenuPolicy(Qt.CustomContextMenu)
             table.customContextMenuRequested.connect(self._open_demand_context_menu)
-        if table_key == "t4":
+        if table_key in {"t4", "t4_cancelled"}:
             table.setEditTriggers(
                 QAbstractItemView.DoubleClicked
                 | QAbstractItemView.EditKeyPressed
@@ -1484,7 +1487,7 @@ class MainWindow(QMainWindow):
             it.setTextAlignment(Qt.AlignCenter)
 
         is_editable = colname not in NON_EDITABLE
-        if table_key == "t4":
+        if table_key in {"t4", "t4_cancelled"}:
             is_editable = is_editable and colname in TAB4_EDITABLE_COLUMNS
 
         if not is_editable:
@@ -1604,7 +1607,7 @@ class MainWindow(QMainWindow):
             return
 
         table_key = str(table.property("tableSortKey") or "")
-        if table_key == "t4" and col_name not in PICKER_ONLY:
+        if table_key in {"t4", "t4_cancelled"} and col_name not in PICKER_ONLY:
             return
 
         # Data de Registro / Data Conclusão (picker)
@@ -1666,7 +1669,7 @@ class MainWindow(QMainWindow):
 
         table = item.tableWidget()
         table_key = str(table.property("tableSortKey") or "") if table else ""
-        if table_key == "t4" and col_name not in TAB4_EDITABLE_COLUMNS:
+        if table_key in {"t4", "t4_cancelled"} and col_name not in TAB4_EDITABLE_COLUMNS:
             self.refresh_all()
             return
 
@@ -1690,8 +1693,25 @@ class MainWindow(QMainWindow):
 
         previous_status = (item.data(Qt.UserRole + 1) or "").strip()
 
+        if col_name == "Status" and new_value == "Cancelado":
+            if previous_status == "Concluído":
+                QMessageBox.warning(
+                    self,
+                    "Validação",
+                    "Demandas concluídas não podem ser marcadas como canceladas.",
+                )
+                self.refresh_all()
+                return
+
+            try:
+                self.store.update(_id, {"Status": "Cancelado", "Data Conclusão": "", "% Conclusão": "0"})
+            except ValidationError as ve:
+                QMessageBox.warning(self, "Validação", str(ve))
+            self.refresh_all()
+            return
+
         # Status alterado para um valor diferente de concluído.
-        if col_name == "Status" and new_value != "Concluído":
+        if col_name == "Status" and new_value not in ("Concluído", "Cancelado"):
             payload = {"Status": new_value}
 
             if new_value == "Não iniciada":
@@ -1799,7 +1819,7 @@ class MainWindow(QMainWindow):
 
     def _collect_table_column_widths(self) -> Dict[str, Dict[str, int]]:
         result: Dict[str, Dict[str, int]] = {}
-        for key in ("t1", "t3", "t4"):
+        for key in ("t1", "t3", "t4", "t4_cancelled"):
             table = getattr(self, f"{key}_table", None)
             if isinstance(table, QTableWidget):
                 result[key] = self._table_column_widths(table)
@@ -1810,7 +1830,7 @@ class MainWindow(QMainWindow):
         if not isinstance(widths_by_table, dict):
             return
 
-        for key, table in (("t1", self.t1_table), ("t3", self.t3_table), ("t4", self.t4_table)):
+        for key, table in (("t1", self.t1_table), ("t3", self.t3_table), ("t4", self.t4_table), ("t4_cancelled", self.t4_cancelled_table)):
             widths = widths_by_table.get(key)
             if not isinstance(widths, dict):
                 continue
@@ -1823,7 +1843,7 @@ class MainWindow(QMainWindow):
         if self._restoring_prefs:
             return
         table_key = str(table.property("tableSortKey") or "")
-        if table_key not in {"t1", "t3", "t4"}:
+        if table_key not in {"t1", "t3", "t4", "t4_cancelled"}:
             return
         self._save_preferences()
 
@@ -2438,7 +2458,8 @@ class MainWindow(QMainWindow):
             item = table.item(row_idx, col_idx)
             row_data[col_name] = (item.text() if item else "") or ""
 
-        was_concluded = (row_data.get("Status") or "").strip() == "Concluído"
+        previous_status = (row_data.get("Status") or "").strip()
+        was_concluded = previous_status in ("Concluído", "Cancelado")
 
         row_data["Status"] = ""
         row_data["Data Conclusão"] = ""
@@ -2599,6 +2620,18 @@ class MainWindow(QMainWindow):
         self.t4_totals_label = QLabel("Total de demandas concluídas: 0 - Exibindo todas as demandas concluídas")
 
         self.t4_table = self._make_table("t4")
+        self.t4_show_cancelled = QCheckBox("Apresentar demandas canceladas")
+        self.t4_show_cancelled.toggled.connect(self.refresh_tab4)
+
+        self.t4_cancelled_label = QLabel("Total de demandas canceladas: 0")
+        self.t4_cancelled_table = self._make_table("t4_cancelled")
+        self.t4_cancelled_section = QWidget()
+        cancelled_layout = QVBoxLayout()
+        cancelled_layout.setContentsMargins(0, 0, 0, 0)
+        cancelled_layout.addWidget(self.t4_cancelled_label)
+        cancelled_layout.addWidget(self.t4_cancelled_table)
+        self.t4_cancelled_section.setLayout(cancelled_layout)
+        self.t4_cancelled_section.setVisible(False)
 
         clear_filters_btn = QPushButton("Limpar Filtros")
         clear_filters_btn.clicked.connect(self._clear_tab4_filters)
@@ -2609,6 +2642,7 @@ class MainWindow(QMainWindow):
         top.addWidget(QLabel("Fim:"))
         top.addWidget(self.t4_end)
         top.addWidget(btn)
+        top.addWidget(self.t4_show_cancelled)
         top.addWidget(clear_filters_btn)
         top.addStretch()
 
@@ -2616,6 +2650,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(top)
         layout.addWidget(self.t4_totals_label)
         layout.addWidget(self.t4_table)
+        layout.addWidget(self.t4_cancelled_section)
         tab.setLayout(layout)
         self.tabs.addTab(tab, "Consultar Demandas Concluídas")
         self._clear_tab4_filters()
@@ -2632,11 +2667,15 @@ class MainWindow(QMainWindow):
 
     def _clear_tab4_filters(self):
         self._clear_sort("t4")
+        self._clear_sort("t4_cancelled")
+        self.t4_show_cancelled.setChecked(False)
         total_concluded = self.store.tab_concluidas_all()
         self.t4_totals_label.setText(
             f"Total de demandas concluídas: {len(total_concluded)} - Exibindo todas as demandas concluídas"
         )
         self._fill(self.t4_table, total_concluded)
+        self.t4_cancelled_section.setVisible(False)
+        self._fill(self.t4_cancelled_table, [])
 
     # Refresh
     def refresh_all(self):
@@ -2701,6 +2740,11 @@ class MainWindow(QMainWindow):
             f"Total de demandas filtradas: {len(filtered_concluded)}"
         )
         self._fill(self.t4_table, filtered_concluded)
+
+        cancelled_rows = self.store.tab_canceladas_all() if self.t4_show_cancelled.isChecked() else []
+        self.t4_cancelled_section.setVisible(self.t4_show_cancelled.isChecked())
+        self.t4_cancelled_label.setText(f"Total de demandas canceladas: {len(cancelled_rows)}")
+        self._fill(self.t4_cancelled_table, cancelled_rows)
 
     # Actions
     def new_demand(self):
@@ -2852,6 +2896,12 @@ class MainWindow(QMainWindow):
         if current_tab == 1:
             return self.t3_table
         if current_tab == 2:
+            if self.t4_cancelled_table.hasFocus():
+                return self.t4_cancelled_table
+            if self.t4_table.selectionModel() and self.t4_table.selectionModel().selectedRows():
+                return self.t4_table
+            if self.t4_cancelled_table.selectionModel() and self.t4_cancelled_table.selectionModel().selectedRows():
+                return self.t4_cancelled_table
             return self.t4_table
         return None
 
