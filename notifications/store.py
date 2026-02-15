@@ -10,6 +10,8 @@ import os
 import sqlite3
 import time
 from datetime import datetime
+
+from .models import BRASILIA_TZ
 from typing import List, Optional
 
 from .models import Channel, Notification, NotificationType, Preferences
@@ -121,10 +123,13 @@ class NotificationStore:
             ).fetchall()
         out = []
         for r in rows:
+            timestamp = datetime.fromisoformat(r["timestamp"])
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=BRASILIA_TZ)
             out.append(
                 Notification(
                     id=int(r["id"]),
-                    timestamp=datetime.fromisoformat(r["timestamp"]),
+                    timestamp=timestamp,
                     type=NotificationType(r["type"]),
                     title=r["title"],
                     body=r["body"],
@@ -143,6 +148,32 @@ class NotificationStore:
         with self._connect() as con:
             con.execute("UPDATE notifications SET read = 0 WHERE id = ?", (notification_id,))
         self._rewrite_encrypted_csv_snapshot()
+
+    def delete_notification(self, notification_id: int) -> None:
+        with self._connect() as con:
+            con.execute("DELETE FROM notifications WHERE id = ?", (notification_id,))
+        self._rewrite_encrypted_csv_snapshot()
+
+    def get_notification_by_id(self, notification_id: int) -> Notification | None:
+        with self._connect() as con:
+            row = con.execute(
+                "SELECT id, timestamp, type, title, body, payload_json, read FROM notifications WHERE id = ?",
+                (notification_id,),
+            ).fetchone()
+        if not row:
+            return None
+        timestamp = datetime.fromisoformat(row["timestamp"])
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=BRASILIA_TZ)
+        return Notification(
+            id=int(row["id"]),
+            timestamp=timestamp,
+            type=NotificationType(row["type"]),
+            title=row["title"],
+            body=row["body"],
+            payload=json.loads(row["payload_json"] or "{}"),
+            read=bool(row["read"]),
+        )
 
     def count_unread(self) -> int:
         with self._connect() as con:

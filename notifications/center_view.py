@@ -44,6 +44,7 @@ class NotificationCenterDialog(QDialog):
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Data", "Tipo", "Título", "Mensagem", "Status"])
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.itemSelectionChanged.connect(self._update_mark_button_label)
         self.table.itemDoubleClicked.connect(self._open_selected)
 
         filter_row = QHBoxLayout()
@@ -51,13 +52,13 @@ class NotificationCenterDialog(QDialog):
         filter_row.addWidget(self.read_filter)
         refresh_btn = QPushButton("Filtrar")
         refresh_btn.clicked.connect(self.refresh)
-        mark_read_btn = QPushButton("Marcar como lida")
-        mark_read_btn.clicked.connect(self.mark_selected_as_read)
-        mark_unread_btn = QPushButton("Marcar como não lida")
-        mark_unread_btn.clicked.connect(self.mark_selected_as_unread)
+        self.mark_toggle_btn = QPushButton("Marcar como lida")
+        self.mark_toggle_btn.clicked.connect(self.toggle_selected_read_status)
+        delete_btn = QPushButton("Excluir")
+        delete_btn.clicked.connect(self.delete_selected_notifications)
         filter_row.addWidget(refresh_btn)
-        filter_row.addWidget(mark_read_btn)
-        filter_row.addWidget(mark_unread_btn)
+        filter_row.addWidget(self.mark_toggle_btn)
+        filter_row.addWidget(delete_btn)
 
         root = QVBoxLayout(self)
         root.addLayout(filter_row)
@@ -72,6 +73,7 @@ class NotificationCenterDialog(QDialog):
         self.table.setRowCount(len(rows))
         for i, n in enumerate(rows):
             self._set_row(i, n)
+        self._update_mark_button_label()
 
     def _set_row(self, row: int, n: Notification) -> None:
         values = [
@@ -86,38 +88,63 @@ class NotificationCenterDialog(QDialog):
             item.setData(Qt.UserRole, n.id)
             self.table.setItem(row, col, item)
 
-    def mark_selected_as_read(self) -> None:
+    def _selected_notification_ids(self) -> list[int]:
+        selected_ids: list[int] = []
         for idx in self.table.selectionModel().selectedRows():
             item = self.table.item(idx.row(), 0)
             if not item:
                 continue
             notif_id = item.data(Qt.UserRole)
             if notif_id:
-                self.store.mark_as_read(int(notif_id))
+                selected_ids.append(int(notif_id))
+        return selected_ids
+
+    def _selected_notification(self) -> Notification | None:
+        idxs = self.table.selectionModel().selectedRows()
+        if not idxs:
+            return None
+        row = idxs[0].row()
+        item = self.table.item(row, 0)
+        if not item:
+            return None
+        notif_id = item.data(Qt.UserRole)
+        if not notif_id:
+            return None
+        return self.store.get_notification_by_id(int(notif_id))
+
+    def _update_mark_button_label(self) -> None:
+        notification = self._selected_notification()
+        if notification and notification.read:
+            self.mark_toggle_btn.setText("Marcar como não lida")
+        else:
+            self.mark_toggle_btn.setText("Marcar como lida")
+
+    def toggle_selected_read_status(self) -> None:
+        selected = self._selected_notification()
+        if selected is None:
+            return
+        ids = self._selected_notification_ids()
+        if selected.read:
+            for notif_id in ids:
+                self.store.mark_as_unread(notif_id)
+        else:
+            for notif_id in ids:
+                self.store.mark_as_read(notif_id)
         self.refresh()
         self._notify_change()
 
-    def mark_selected_as_unread(self) -> None:
-        for idx in self.table.selectionModel().selectedRows():
-            item = self.table.item(idx.row(), 0)
-            if not item:
-                continue
-            notif_id = item.data(Qt.UserRole)
-            if notif_id:
-                self.store.mark_as_unread(int(notif_id))
+    def delete_selected_notifications(self) -> None:
+        ids = self._selected_notification_ids()
+        for notif_id in ids:
+            self.store.delete_notification(notif_id)
         self.refresh()
         self._notify_change()
 
     def _open_selected(self):
-        idxs = self.table.selectionModel().selectedRows()
-        if not idxs:
-            return
-        row = idxs[0].row()
-        notif_id = int(self.table.item(row, 0).data(Qt.UserRole))
-        notification = next((n for n in self.store.list_notifications(limit=500) if n.id == notif_id), None)
+        notification = self._selected_notification()
         if not notification:
             return
-        self.store.mark_as_read(notif_id)
+        self.store.mark_as_read(int(notification.id))
         self.on_open(notification)
         self.refresh()
         self._notify_change()
