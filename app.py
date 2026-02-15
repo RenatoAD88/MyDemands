@@ -170,6 +170,13 @@ PRIORIDADE_TEXT_COLORS: Dict[str, Tuple[int, int, int]] = {
     "baixa": (22, 163, 74),  # verde
 }
 
+PRIORIDADE_SORT_ORDER = {
+    "alta": 0,
+    "média": 1,
+    "media": 1,
+    "baixa": 2,
+}
+
 PROGRESS_FILL_COLOR = (3, 141, 220)
 def _try_parse_date_br(text: str) -> Optional[date]:
     raw = (text or "").strip().replace("*", "")
@@ -206,6 +213,11 @@ def _column_sort_key(col_name: str, text: str):
         pct = _percent_to_fraction(raw)
         if pct is not None:
             return (0, pct)
+
+    if col_name == "Prioridade":
+        mapped = PRIORIDADE_SORT_ORDER.get(raw.lower())
+        if mapped is not None:
+            return (0, mapped)
 
     return (0, raw.lower())
 
@@ -1392,6 +1404,10 @@ class MainWindow(QMainWindow):
     def _make_table(self, table_key: str) -> QTableWidget:
         table = DemandTable(0, len(VISIBLE_COLUMNS))
         table.setHorizontalHeaderLabels(VISIBLE_COLUMNS)
+        if table_key in {"t3", "t4"}:
+            first_header_item = table.horizontalHeaderItem(0)
+            if first_header_item is not None:
+                first_header_item.setText("Nº")
         table.setProperty("tableSortKey", table_key)
         table.itemChanged.connect(self._on_item_changed)
         table.cellDoubleClicked.connect(self._on_cell_double_clicked)
@@ -2445,7 +2461,7 @@ class MainWindow(QMainWindow):
         confirm_box = QMessageBox(self)
         confirm_box.setIcon(QMessageBox.Information)
         confirm_box.setWindowTitle("Duplicar demanda")
-        confirm_box.setText(f"Essa demanda foi recriada como pendente\nID: {demand_id}")
+        confirm_box.setText(f"Essa demanda foi recriada como pendente\nNº: {demand_id}")
         confirm_box.setStandardButtons(QMessageBox.NoButton)
 
         seconds_left = 5
