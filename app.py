@@ -2439,7 +2439,14 @@ class MainWindow(QMainWindow):
         self.refresh_all()
 
         if new_id and was_concluded:
-            self._show_duplicate_success_modal(new_id)
+            pending_first_id = self._get_pending_first_row_id() or new_id
+            self._show_duplicate_success_modal(pending_first_id)
+
+    def _get_pending_first_row_id(self) -> str:
+        pending_rows = self.store.tab_pending_all()
+        if not pending_rows:
+            return ""
+        return str(pending_rows[0].get("ID") or "")
 
     def _show_duplicate_success_modal(self, demand_id: str):
         confirm_box = QMessageBox(self)

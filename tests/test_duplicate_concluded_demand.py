@@ -112,7 +112,8 @@ def test_duplicate_concluded_demand_shows_pending_modal_with_created_id(tmp_path
 
     win._duplicate_selected_demand(win.t4_table)
 
-    assert captured["demand_id"].isdigit()
+    expected_first_pending_id = store.tab_pending_all()[0]["ID"]
+    assert captured["demand_id"] == expected_first_pending_id
 
     win.close()
 
