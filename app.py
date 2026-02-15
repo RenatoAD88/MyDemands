@@ -19,8 +19,9 @@ from PySide6.QtWidgets import (
     QDialog, QFormLayout,
     QDateEdit, QLineEdit, QTextEdit, QPlainTextEdit, QComboBox,
     QListWidget, QListWidgetItem, QGroupBox, QAbstractItemView,
-    QMenu, QScrollArea, QCheckBox
+    QMenu, QScrollArea, QCheckBox, QSystemTrayIcon
 )
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QHeaderView, QStyle
 from PySide6.QtWidgets import QSizePolicy
@@ -33,6 +34,12 @@ from ui_theme import APP_STYLESHEET, status_color, timing_color
 from ui_filters import filter_rows, summary_counts
 from ui_prefs import load_prefs, save_prefs
 from form_rules import required_fields
+from notifications import Notification, NotificationDispatcher, NotificationStore, NotificationType
+from notifications.center_view import NotificationCenterDialog
+from notifications.inapp_toast import InAppToastNotifier
+from notifications.scheduler import DeadlineScheduler
+from notifications.settings_view import NotificationSettingsDialog
+from notifications.system_notifier import SystemNotifier
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
@@ -1259,6 +1266,9 @@ class MainWindow(QMainWindow):
         self.team_store = TeamControlStore(self.store.base_dir)
         self._ensure_backup_dir()
 
+        self.notification_store = NotificationStore(self.store.base_dir)
+        self._init_notifications()
+
         self._init_tab2()
         self._init_tab3()
         self._init_tab4()
@@ -1266,6 +1276,107 @@ class MainWindow(QMainWindow):
         self.refresh_all()
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self._restore_preferences()
+
+    def _init_notifications(self) -> None:
+        self.notification_center_dialog: Optional[NotificationCenterDialog] = None
+        self.tray_icon = QSystemTrayIcon(self)
+        icon_path = _app_icon_path()
+        if os.path.exists(icon_path):
+            self.tray_icon.setIcon(QIcon(icon_path))
+
+        tray_menu = QMenu(self)
+        open_action = QAction("Abrir", self)
+        open_action.triggered.connect(self._bring_to_front)
+        center_action = QAction("Central de Notificações", self)
+        center_action.triggered.connect(self.open_notification_center)
+        mute_action = QAction("Silenciar 1h", self)
+        mute_action.triggered.connect(lambda: self.notification_store.mute_for_seconds(3600))
+        settings_action = QAction("Configurações de Notificações", self)
+        settings_action.triggered.connect(self.open_notification_settings)
+        exit_action = QAction("Sair", self)
+        exit_action.triggered.connect(self.close)
+        tray_menu.addAction(open_action)
+        tray_menu.addAction(center_action)
+        tray_menu.addAction(mute_action)
+        tray_menu.addAction(settings_action)
+        tray_menu.addSeparator()
+        tray_menu.addAction(exit_action)
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(lambda *_: self._bring_to_front())
+        self.tray_icon.show()
+
+        self._inapp_notifier = InAppToastNotifier(self)
+        self._system_notifier = SystemNotifier(self.tray_icon)
+        self.notification_dispatcher = NotificationDispatcher(
+            store=self.notification_store,
+            system_notifier=self._system_notifier,
+            inapp_notifier=self._inapp_notifier,
+            is_app_focused=self._is_app_focused,
+            play_sound=QApplication.beep,
+        )
+        self.deadline_scheduler = DeadlineScheduler(
+            repo=self,
+            emitter=self.notification_dispatcher.dispatch,
+        )
+        interval = self.notification_store.load_preferences().scheduler_interval_minutes
+        self.deadline_scheduler.start(interval)
+
+    def _is_app_focused(self) -> bool:
+        return bool(self.isVisible() and not self.isMinimized() and self.isActiveWindow())
+
+    def _bring_to_front(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def list_open_demands(self) -> List[Dict[str, Any]]:
+        self.store.load()
+        return self.store.tab_pending_all()
+
+    def open_notification_center(self) -> None:
+        if self.notification_center_dialog is None:
+            self.notification_center_dialog = NotificationCenterDialog(
+                self.notification_store,
+                self._handle_notification_click,
+                self,
+            )
+        self.notification_center_dialog.refresh()
+        self.notification_center_dialog.show()
+        self.notification_center_dialog.raise_()
+        self.notification_center_dialog.activateWindow()
+
+    def open_notification_settings(self) -> None:
+        dialog = NotificationSettingsDialog(self.notification_store, self)
+        if dialog.exec() == QDialog.Accepted:
+            pref = self.notification_store.load_preferences()
+            self.deadline_scheduler.update_interval(pref.scheduler_interval_minutes)
+
+    def _emit_notification(self, notif: Notification) -> None:
+        self.notification_dispatcher.dispatch(notif)
+
+    def _handle_notification_click(self, notif: Notification) -> None:
+        self._bring_to_front()
+        route = str(notif.payload.get("route") or "")
+        demand_id = str(notif.payload.get("demand_id") or "")
+        if route == "atrasadas":
+            self.tabs.setCurrentIndex(1)
+            self.t3_status.setCurrentText("")
+            self.refresh_tab3()
+            return
+        if demand_id:
+            self.tabs.setCurrentIndex(1)
+            self.t3_search.setText(demand_id)
+            self.refresh_tab3()
+
+    def emit_error_notification(self, message: str) -> None:
+        self._emit_notification(
+            Notification(
+                type=NotificationType.MENSAGEM_GERAL_ERRO,
+                title="Erro de aplicação",
+                body=(message or "Erro inesperado")[:180],
+                payload={"route": "error"},
+            )
+        )
 
     def _backup_dir_path(self) -> str:
         return os.path.join(self.store.base_dir, BACKUP_DIRNAME)
@@ -1652,6 +1763,7 @@ class MainWindow(QMainWindow):
                 return
             try:
                 self.store.update(_id, {"Prazo": dlg.prazo_str()})
+                self.deadline_scheduler.check_now()
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
             self.refresh_all()
@@ -1686,6 +1798,14 @@ class MainWindow(QMainWindow):
                 return
             try:
                 self.store.update(_id, {"Status": "Concluído", "Data Conclusão": concl, "% Conclusão": "1"})
+                self._emit_notification(
+                    Notification(
+                        type=NotificationType.ALTERACAO_STATUS,
+                        title=f"Status atualizado: #{_id}",
+                        body="Demanda marcada como Concluído.",
+                        payload={"demand_id": _id, "route": "demanda"},
+                    )
+                )
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
             self.refresh_all()
@@ -1705,6 +1825,14 @@ class MainWindow(QMainWindow):
 
             try:
                 self.store.update(_id, {"Status": "Cancelado", "Data Conclusão": "", "% Conclusão": "0"})
+                self._emit_notification(
+                    Notification(
+                        type=NotificationType.ALTERACAO_STATUS,
+                        title=f"Status atualizado: #{_id}",
+                        body="Demanda marcada como Cancelado.",
+                        payload={"demand_id": _id, "route": "demanda"},
+                    )
+                )
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
             self.refresh_all()
@@ -1737,6 +1865,14 @@ class MainWindow(QMainWindow):
 
             try:
                 self.store.update(_id, payload)
+                self._emit_notification(
+                    Notification(
+                        type=NotificationType.ALTERACAO_STATUS,
+                        title=f"Status atualizado: #{_id}",
+                        body=f"Novo status: {new_value}.",
+                        payload={"demand_id": _id, "route": "demanda"},
+                    )
+                )
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
             self.refresh_all()
@@ -1771,6 +1907,7 @@ class MainWindow(QMainWindow):
         except ValidationError as ve:
             QMessageBox.warning(self, "Validação", str(ve))
         except Exception as e:
+            self.emit_error_notification(str(e))
             debug_msg("Erro ao salvar", str(e))
         self.refresh_all()
 
@@ -1943,6 +2080,13 @@ class MainWindow(QMainWindow):
             on_click=self.import_demands_csv,
         )
 
+        notif_btn = self._build_toolbar_action_button(
+            object_name="notificationAction",
+            tooltip="Central de notificações",
+            img_name="",
+            fallback_icon=QStyle.SP_MessageBoxInformation,
+            on_click=self.open_notification_center,
+        )
         info_btn = self._build_info_icon_button()
 
         layout.addWidget(new_btn)
@@ -1950,6 +2094,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(export_shortcut)
         layout.addWidget(import_shortcut)
         layout.addStretch()
+        layout.addWidget(notif_btn)
         layout.addWidget(info_btn)
         return section
 
@@ -2779,7 +2924,16 @@ class MainWindow(QMainWindow):
             else:
                 demand_number = self._resolve_demand_number(new_row_id)
                 QMessageBox.information(self, "Nova demanda", f"Demanda criada com sucesso.\nID: {demand_number}")
+                self._emit_notification(
+                    Notification(
+                        type=NotificationType.NOVA_DEMANDA,
+                        title="Nova demanda atribuída",
+                        body=f"Demanda #{demand_number} criada com sucesso.",
+                        payload={"demand_id": demand_number, "route": "demanda"},
+                    )
+                )
             self.refresh_all()
+            self.deadline_scheduler.check_now()
 
     def export_team_control_csv(self):
         year, month = self._selected_year_month()
