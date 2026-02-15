@@ -41,6 +41,7 @@ DISPLAY_COLUMNS = [
 
 CSV_COLUMNS = [
     "_id",
+    "ID",
     "É Urgente?",
     "Status",
     "Prioridade",
@@ -333,6 +334,9 @@ class CsvStore:
         self.rows = []
         csv_text = self._read_csv_text()
         r = csv.DictReader(io.StringIO(csv_text), delimiter=DELIMITER)
+        next_numeric_id = 1
+        used_numeric_ids = set()
+
         for i, row in enumerate(r, start=2):
             for old, new in LEGACY_TO_NEW.items():
                 if old in row and new not in row:
@@ -340,6 +344,23 @@ class CsvStore:
 
             _id = row.get("_id") or str(uuid.uuid4())
             row["_id"] = _id
+
+            raw_numeric_id = str(row.get("ID") or "").strip()
+            try:
+                numeric_id = int(raw_numeric_id)
+            except (TypeError, ValueError):
+                numeric_id = None
+
+            if numeric_id is not None and numeric_id > 0 and numeric_id not in used_numeric_ids:
+                row["ID"] = str(numeric_id)
+                used_numeric_ids.add(numeric_id)
+                next_numeric_id = max(next_numeric_id, numeric_id + 1)
+            else:
+                while next_numeric_id in used_numeric_ids:
+                    next_numeric_id += 1
+                row["ID"] = str(next_numeric_id)
+                used_numeric_ids.add(next_numeric_id)
+                next_numeric_id += 1
 
             for c in CSV_COLUMNS:
                 row.setdefault(c, "")
@@ -373,6 +394,18 @@ class CsvStore:
             dr.data["Prazo"] = normalize_prazo_text(dr.data.get("Prazo", ""))
         self._atomic_save()
 
+    def _next_numeric_id(self) -> str:
+        used_ids = set()
+        for dr in self.rows:
+            try:
+                numeric_id = int(str(dr.data.get("ID") or "").strip())
+            except (TypeError, ValueError):
+                continue
+            if numeric_id > 0:
+                used_ids.add(numeric_id)
+
+        return str(max(used_ids) + 1) if used_ids else "1"
+
     def add(self, payload: Dict[str, str]) -> str:
         payload = _map_legacy_keys(payload)
         payload = validate_payload(payload, mode="create")
@@ -388,6 +421,7 @@ class CsvStore:
         _id = str(uuid.uuid4())
         row = {c: "" for c in CSV_COLUMNS}
         row["_id"] = _id
+        row["ID"] = self._next_numeric_id()
         for k, v in payload.items():
             if k in row:
                 row[k] = v if v is not None else ""
@@ -476,7 +510,7 @@ class CsvStore:
     def build_view(self) -> List[Dict[str, Any]]:
         today = date.today()
         out: List[Dict[str, Any]] = []
-        for i, dr in enumerate(self.rows, start=1):
+        for dr in self.rows:
             data = dr.data
             prazos = parse_prazos_list(data.get("Prazo", ""))
             conclusao = parse_ddmmyyyy(data.get("Data Conclusão", ""))
@@ -485,7 +519,7 @@ class CsvStore:
 
             out.append({
                 "_id": dr._id,
-                "ID": str(i),
+                "ID": str(data.get("ID", "") or ""),
                 "É Urgente?": data.get("É Urgente?", ""),
                 "Status": data.get("Status", ""),
                 "Timing": timing,
@@ -592,6 +626,8 @@ class CsvStore:
                 )
 
             imported_rows: List[DemandRow] = []
+            imported_used_ids = set()
+            imported_next_id = 1
             for i, row in enumerate(reader, start=2):
                 payload = {
                     "É Urgente?": (row.get("É Urgente?") or "").strip(),
@@ -625,8 +661,21 @@ class CsvStore:
                 new_id = str(uuid.uuid4())
                 data = {c: "" for c in CSV_COLUMNS}
                 data["_id"] = new_id
+
+                imported_numeric_id_raw = (row.get("ID") or "").strip()
+                imported_numeric_id = int(imported_numeric_id_raw) if imported_numeric_id_raw.isdigit() else None
+                if imported_numeric_id is not None and imported_numeric_id > 0 and imported_numeric_id not in imported_used_ids:
+                    data["ID"] = str(imported_numeric_id)
+                    imported_used_ids.add(imported_numeric_id)
+                    imported_next_id = max(imported_next_id, imported_numeric_id + 1)
+                else:
+                    while imported_next_id in imported_used_ids:
+                        imported_next_id += 1
+                    data["ID"] = str(imported_next_id)
+                    imported_used_ids.add(imported_next_id)
+                    imported_next_id += 1
                 for c in CSV_COLUMNS:
-                    if c == "_id":
+                    if c in {"_id", "ID"}:
                         continue
                     data[c] = normalized.get(c, "")
                 imported_rows.append(DemandRow(_id=new_id, data=data))
@@ -669,6 +718,8 @@ class CsvStore:
             raise ValidationError("Formato de backup inválido.")
 
         imported_rows: List[DemandRow] = []
+        imported_used_ids = set()
+        imported_next_id = 1
         team_control_payload: Dict[str, Any] = {}
 
         for i, row in enumerate(reader, start=2):
@@ -704,8 +755,21 @@ class CsvStore:
             new_id = str(uuid.uuid4())
             data = {c: "" for c in CSV_COLUMNS}
             data["_id"] = new_id
+
+            imported_numeric_id_raw = str(payload.get("ID") or "").strip()
+            imported_numeric_id = int(imported_numeric_id_raw) if imported_numeric_id_raw.isdigit() else None
+            if imported_numeric_id is not None and imported_numeric_id > 0 and imported_numeric_id not in imported_used_ids:
+                data["ID"] = str(imported_numeric_id)
+                imported_used_ids.add(imported_numeric_id)
+                imported_next_id = max(imported_next_id, imported_numeric_id + 1)
+            else:
+                while imported_next_id in imported_used_ids:
+                    imported_next_id += 1
+                data["ID"] = str(imported_next_id)
+                imported_used_ids.add(imported_next_id)
+                imported_next_id += 1
             for c in CSV_COLUMNS:
-                if c == "_id":
+                if c in {"_id", "ID"}:
                     continue
                 data[c] = normalized.get(c, "")
             imported_rows.append(DemandRow(_id=new_id, data=data))
