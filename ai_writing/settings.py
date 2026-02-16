@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui_prefs import load_prefs, save_prefs
-from ai_writing.openai_client import OpenAIWritingClient
+from ai_writing.openai_client import InsufficientQuotaError, MissingAPIKeyError, OpenAIWritingClient
 from ai_writing.key_store import has_api_key, load_api_key, save_api_key
 
 
@@ -138,6 +138,10 @@ class AISettingsDialog(QDialog):
             client = OpenAIWritingClient(api_key=api_key, model=self.model.currentText(), temperature=float(self.temperature.value()), max_retries=2)
             client.suggest("teste", "Responda com a palavra OK em pt-BR.", {"field": "connection_test"})
             QMessageBox.information(self, "IA", "Conexão OK")
+        except MissingAPIKeyError:
+            QMessageBox.warning(self, "IA", "Chave não configurada")
+        except InsufficientQuotaError:
+            QMessageBox.warning(self, "IA", "Créditos da API esgotados. Verifique seu plano e faturamento da OpenAI.")
         except Exception as exc:
             QMessageBox.warning(self, "IA", f"Falha ao testar conexão: {exc}")
 
