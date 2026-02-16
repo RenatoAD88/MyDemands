@@ -55,3 +55,21 @@ def test_rate_limit_tratado(monkeypatch):
     client = HuggingFaceClient(api_token="hf-token")
     with pytest.raises(RateLimitError):
         client.suggest("abc", "instr")
+
+
+def test_http_410_faz_fallback_para_router(monkeypatch):
+    calls = []
+
+    def _urlopen(req, *args, **kwargs):
+        calls.append(req.full_url)
+        if "api-inference.huggingface.co" in req.full_url:
+            raise urllib.error.HTTPError(req.full_url, 410, "", None, None)
+        return _Response([{"generated_text": "OK via router"}])
+
+    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+    client = HuggingFaceClient(api_token="hf-token", model="mistralai/Mistral-7B-Instruct-v0.2")
+
+    assert client.suggest("abc", "instr") == "OK via router"
+    assert len(calls) == 2
+    assert "api-inference.huggingface.co" in calls[0]
+    assert "router.huggingface.co" in calls[1]
