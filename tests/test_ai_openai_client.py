@@ -67,13 +67,11 @@ def test_missing_key_raises_specific_error(monkeypatch):
         client.suggest("abc", "i", {})
 
 
-def test_missing_openai_dependency_raises_specific_error(monkeypatch):
+def test_fallback_to_http_when_openai_dependency_missing(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setattr("ai_writing.openai_client.load_api_key", lambda: "")
     monkeypatch.setattr("ai_writing.openai_client.OpenAI", None)
-
-    from ai_writing.openai_client import MissingOpenAIDependencyError
+    monkeypatch.setattr(OpenAIWritingClient, "_suggest_via_http", lambda self, payload: "ok-http")
 
     client = OpenAIWritingClient()
-    with pytest.raises(MissingOpenAIDependencyError):
-        client.suggest("abc", "i", {})
+    assert client.suggest("abc", "i", {}) == "ok-http"

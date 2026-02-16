@@ -26,7 +26,7 @@ from ai_writing.key_store import has_api_key, load_api_key, save_api_key
 class AISettings:
     enabled: bool = True
     show_chips: bool = True
-    model: str = "gpt-5.2"
+    model: str = "gpt-4.1-mini"
     temperature: float = 0.3
     log_channel: str = "sqlite"
     privacy_mode: bool = True
@@ -83,7 +83,7 @@ class AISettingsDialog(QDialog):
             checkbox.setStyleSheet(checkbox_checked_style)
 
         self.model = QComboBox()
-        self.model.addItems(["gpt-5.2", "gpt-4.1-mini"])
+        self.model.addItems(["gpt-4.1-mini", "gpt-5.2"])
         self.model.setCurrentText(self._settings.model)
 
         self.temperature = QDoubleSpinBox()
