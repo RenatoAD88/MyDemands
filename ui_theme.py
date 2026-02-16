@@ -131,8 +131,15 @@ QGroupBox::title {
 }
 
 QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
     background: #ffffff;
-    border: 1px solid #bccae3;
+    border: 1px solid #111827;
+    border-radius: 3px;
+}
+QCheckBox::indicator:checked {
+    background: #ffffff;
+    border: 1px solid #111827;
 }
 
 QLabel#errorText { color: #b42318; }

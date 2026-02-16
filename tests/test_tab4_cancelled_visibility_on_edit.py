@@ -2,9 +2,11 @@ from datetime import date
 
 import pytest
 
+pytest.importorskip("PySide6.QtCore", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
 qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
 
 from app import MainWindow, VISIBLE_COLUMNS
+from ui_theme import APP_STYLESHEET
 from csv_store import CsvStore
 
 QApplication = qtwidgets.QApplication
@@ -63,15 +65,13 @@ def test_cancelled_section_stays_visible_while_checkbox_is_checked_after_edit(tm
     win.close()
 
 
-def test_cancelled_checkbox_checked_indicator_uses_black_fill(tmp_path):
+def test_checkboxes_use_white_background_with_visible_border_when_checked(tmp_path):
     _get_app()
     store = CsvStore(str(tmp_path))
     win = MainWindow(store)
 
-    style = win.t4_show_cancelled.styleSheet()
-
-    assert "QCheckBox::indicator:checked" in style
-    assert "background-color: #000000;" in style
-    assert "border: 1px solid #000000;" in style
+    assert "QCheckBox::indicator:checked" in APP_STYLESHEET
+    assert "background: #ffffff;" in APP_STYLESHEET
+    assert "border: 1px solid #111827;" in APP_STYLESHEET
 
     win.close()

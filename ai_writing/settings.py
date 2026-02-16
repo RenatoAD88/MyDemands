@@ -34,7 +34,7 @@ from ai_writing.huggingface_client import (
 class AISettings:
     enabled: bool = True
     show_chips: bool = True
-    model: str = "mistralai/Mistral-7B-Instruct-v0.2"
+    model: str = "mistralai/Mistral-7B-Instruct-v0.3"
     temperature: float = 0.5
     log_channel: str = "sqlite"
     privacy_mode: bool = True

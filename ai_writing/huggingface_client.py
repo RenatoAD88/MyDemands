@@ -7,6 +7,10 @@ import urllib.request
 from typing import Optional
 
 
+LEGACY_MODEL_ALIASES = {
+    "mistralai/Mistral-7B-Instruct-v0.2": "mistralai/Mistral-7B-Instruct-v0.3",
+}
+
 class AIWritingError(RuntimeError):
     pass
 
@@ -35,14 +39,14 @@ class HuggingFaceClient:
     def __init__(
         self,
         api_token: str,
-        model: str = "mistralai/Mistral-7B-Instruct-v0.2",
+        model: str = "mistralai/Mistral-7B-Instruct-v0.3",
         temperature: float = 0.5,
         max_new_tokens: int = 150,
         top_p: Optional[float] = None,
         timeout: float = 30.0,
     ):
         self.api_token = (api_token or "").strip()
-        self.model = model.strip() or "mistralai/Mistral-7B-Instruct-v0.2"
+        self.model = model.strip() or "mistralai/Mistral-7B-Instruct-v0.3"
         self.temperature = float(temperature)
         self.max_new_tokens = int(max_new_tokens)
         self.top_p = top_p
@@ -80,39 +84,46 @@ class HuggingFaceClient:
         return self._extract_text(raw, prompt)
 
     def _request_with_fallback(self, payload: dict):
-        endpoints = [
-            f"https://api-inference.huggingface.co/models/{self.model}",
-            f"https://router.huggingface.co/hf-inference/models/{self.model}",
-        ]
         last_http_error = None
+        candidate_models = [self.model]
+        alias_model = LEGACY_MODEL_ALIASES.get(self.model)
+        if alias_model and alias_model not in candidate_models:
+            candidate_models.append(alias_model)
 
-        for idx, endpoint in enumerate(endpoints):
-            req = urllib.request.Request(
-                endpoint,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Authorization": f"Bearer {self.api_token}",
-                    "Content-Type": "application/json",
-                },
-                method="POST",
-            )
+        for model in candidate_models:
+            endpoints = [
+                f"https://api-inference.huggingface.co/models/{model}",
+                f"https://router.huggingface.co/hf-inference/models/{model}",
+            ]
+            for idx, endpoint in enumerate(endpoints):
+                req = urllib.request.Request(
+                    endpoint,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={
+                        "Authorization": f"Bearer {self.api_token}",
+                        "Content-Type": "application/json",
+                    },
+                    method="POST",
+                )
 
-            try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                    return json.loads(response.read().decode("utf-8"))
-            except urllib.error.HTTPError as exc:
-                last_http_error = exc
-                if exc.code == 401:
-                    raise MissingAPIKeyError("Token do Hugging Face inválido ou ausente") from exc
-                if exc.code == 404:
-                    raise ModelNotFoundError("Modelo do Hugging Face não encontrado") from exc
-                if exc.code == 429:
-                    raise RateLimitError("Limite de requisições do Hugging Face atingido") from exc
-                if exc.code == 410 and idx == 0:
-                    continue
-                raise AIWritingError(f"Falha na API do Hugging Face (HTTP {exc.code})") from exc
-            except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
-                raise AIRequestTimeoutError("Timeout na API do Hugging Face") from exc
+                try:
+                    with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                        return json.loads(response.read().decode("utf-8"))
+                except urllib.error.HTTPError as exc:
+                    last_http_error = exc
+                    if exc.code == 401:
+                        raise MissingAPIKeyError("Token do Hugging Face inválido ou ausente") from exc
+                    if exc.code == 404:
+                        if model != candidate_models[-1]:
+                            break
+                        raise ModelNotFoundError("Modelo do Hugging Face não encontrado") from exc
+                    if exc.code == 429:
+                        raise RateLimitError("Limite de requisições do Hugging Face atingido") from exc
+                    if exc.code == 410 and idx == 0:
+                        continue
+                    raise AIWritingError(f"Falha na API do Hugging Face (HTTP {exc.code})") from exc
+                except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+                    raise AIRequestTimeoutError("Timeout na API do Hugging Face") from exc
 
         if isinstance(last_http_error, urllib.error.HTTPError) and last_http_error.code == 410:
             raise AIWritingError("Falha na API do Hugging Face (HTTP 410)") from last_http_error
