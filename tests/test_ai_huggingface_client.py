@@ -92,6 +92,23 @@ def test_modelo_legado_faz_fallback_para_alias(monkeypatch):
     assert any("Mistral-7B-Instruct-v0.3" in call for call in calls)
 
 
+def test_modelo_atual_faz_fallback_para_versao_anterior_quando_indisponivel(monkeypatch):
+    calls = []
+
+    def _urlopen(req, *args, **kwargs):
+        calls.append(req.full_url)
+        if "Mistral-7B-Instruct-v0.3" in req.full_url:
+            raise urllib.error.HTTPError(req.full_url, 404, "", None, None)
+        return _Response([{"generated_text": "OK fallback v0.2"}])
+
+    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+    client = HuggingFaceClient(api_token="hf-token", model="mistralai/Mistral-7B-Instruct-v0.3")
+
+    assert client.suggest("abc", "instr") == "OK fallback v0.2"
+    assert any("Mistral-7B-Instruct-v0.3" in call for call in calls)
+    assert any("Mistral-7B-Instruct-v0.2" in call for call in calls)
+
+
 def test_check_connectivity_token_invalido(monkeypatch):
     def _raise(*args, **kwargs):
         raise urllib.error.HTTPError("", 401, "", None, None)
