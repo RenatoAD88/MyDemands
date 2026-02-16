@@ -116,3 +116,13 @@ def test_ai_settings_store_persists_last_saved_configuration(tmp_path):
     loaded = store.load()
 
     assert loaded == expected
+
+
+def test_ai_settings_store_persists_provider(tmp_path):
+    store = AISettingsStore(str(tmp_path))
+    expected = AISettings(provider="openai")
+
+    store.save(expected)
+    loaded = store.load()
+
+    assert loaded.provider == "openai"
