@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import sys
+import traceback
 from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -54,6 +55,7 @@ from ai_writing.config_store import AIConfigStore, OPENAI_PROVIDER
 from ai_writing.service import AIWritingService
 from ai_writing.audit import AIAuditLogger
 from ai_writing.integration import attach_ai_writing
+from ai_writing.error_log import append_ai_error_log
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
@@ -1750,7 +1752,7 @@ class MainWindow(QMainWindow):
             return
 
         table_key = str(table.property("tableSortKey") or "")
-        if table_key in {"t4", "t4_cancelled"} and col_name in {"Descrição", "Comentário"}:
+        if table_key in {"t3", "t4", "t4_cancelled"} and col_name in {"Descrição", "Comentário"}:
             current_text = it.text() or ""
             dlg = QDialog(self)
             dlg.setWindowTitle(f"Editar {col_name}")
@@ -1781,6 +1783,8 @@ class MainWindow(QMainWindow):
                 self.refresh_all()
             return
         if table_key in {"t4", "t4_cancelled"} and col_name not in PICKER_ONLY:
+            return
+        if table_key == "t3":
             return
 
         # Data de Registro / Data Conclusão (picker)
@@ -2271,6 +2275,19 @@ class MainWindow(QMainWindow):
             return suggestion
         except MissingAPIKeyError:
             self.ai_audit.log_event("generate", str(context.get("demand_id", "")), str(context.get("field", "")), input_text, False, error_message="missing_key", privacy_mode=self.ai_settings.privacy_mode, debug_mode=self.ai_settings.debug_log_text)
+            raise
+        except Exception as exc:
+            self.ai_audit.log_event(
+                "generate",
+                str(context.get("demand_id", "")),
+                str(context.get("field", "")),
+                input_text,
+                False,
+                error_message=str(exc),
+                privacy_mode=self.ai_settings.privacy_mode,
+                debug_mode=self.ai_settings.debug_log_text,
+            )
+            append_ai_error_log(str(exc), traceback.format_exc(), context)
             raise
 
     def _attach_ai_widget(self, text_widget: QTextEdit, context_provider):
