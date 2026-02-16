@@ -122,10 +122,13 @@ class AIWritingPanel(QDialog):
         self.status.setText("success")
 
     def _on_error(self, message: str):
-        if "Chave" in message:
+        lowered = message.lower()
+        if "chave" in lowered:
             QMessageBox.warning(self, "IA", "Chave não configurada")
-        elif "rate" in message.lower() or "429" in message:
-            self.status.setText("Limite de requisições atingido, tentando novamente…")
+        elif "esgotados" in lowered or "insufficient_quota" in lowered or "faturamento" in lowered:
+            QMessageBox.warning(self, "IA", "Créditos da API esgotados. Verifique seu plano e faturamento da OpenAI.")
+        elif "rate" in lowered or "429" in lowered:
+            QMessageBox.warning(self, "IA", "Limite de requisições atingido. Tente novamente em instantes.")
         else:
             QMessageBox.warning(self, "IA", "Falha ao gerar sugestão (ver logs)")
         self.status.setText("error")

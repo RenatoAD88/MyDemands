@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai_writing.openai_client import MissingAPIKeyError, OpenAIWritingClient
+from ai_writing.openai_client import InsufficientQuotaError, MissingAPIKeyError, OpenAIWritingClient
 
 
 class FakeRateLimitError(Exception):
@@ -75,3 +75,25 @@ def test_fallback_to_http_when_openai_dependency_missing(monkeypatch):
 
     client = OpenAIWritingClient()
     assert client.suggest("abc", "i", {}) == "ok-http"
+
+
+def test_suggest_raises_insufficient_quota_without_retry(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("ai_writing.openai_client.load_api_key", lambda: "")
+    calls = {"count": 0}
+
+    class QuotaOpenAI:
+        def __init__(self, *args, **kwargs):
+            self.responses = SimpleNamespace(create=self._create)
+
+        def _create(self, **kwargs):
+            calls["count"] += 1
+            raise Exception('{"error": {"type": "insufficient_quota", "code": "insufficient_quota"}}')
+
+    monkeypatch.setattr("ai_writing.openai_client.OpenAI", QuotaOpenAI)
+
+    client = OpenAIWritingClient(max_retries=5)
+    with pytest.raises(InsufficientQuotaError):
+        client.suggest("Texto", "Instr", {})
+
+    assert calls["count"] == 1

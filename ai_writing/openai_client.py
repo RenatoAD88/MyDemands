@@ -28,6 +28,10 @@ class MissingOpenAIDependencyError(AIWritingError):
     pass
 
 
+class InsufficientQuotaError(AIWritingError):
+    pass
+
+
 class OpenAIWritingClient:
     def __init__(
         self,
@@ -117,10 +121,14 @@ class OpenAIWritingClient:
             except urllib.error.HTTPError as exc:
                 attempt += 1
                 status_code = exc.code
-                message = (exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)).lower()
+                message = exc.read().decode("utf-8", errors="ignore") if exc.fp else str(exc)
+                lowered_message = message.lower()
 
                 if status_code in (401, 403):
                     raise MissingAPIKeyError("Chave não configurada") from exc
+
+                if status_code == 429 and "insufficient_quota" in lowered_message:
+                    raise InsufficientQuotaError("Créditos da API esgotados. Verifique seu plano e faturamento da OpenAI.") from exc
 
                 should_retry = status_code == 429 or status_code >= 500
                 if should_retry and attempt < self.max_retries:
@@ -131,7 +139,7 @@ class OpenAIWritingClient:
 
                 if status_code < 500 and status_code != 429:
                     raise AIWritingError("Falha ao gerar sugestão (erro de requisição).") from exc
-                raise AIWritingError(f"Falha ao gerar sugestão (HTTP {status_code}). {message}") from exc
+                raise AIWritingError(f"Falha ao gerar sugestão (HTTP {status_code}). {lowered_message}") from exc
             except Exception as exc:
                 message = str(exc).lower()
                 status_code = getattr(exc, "status_code", None)
@@ -139,6 +147,9 @@ class OpenAIWritingClient:
 
                 if "api key" in message and ("missing" in message or "not set" in message or "401" in message):
                     raise MissingAPIKeyError("Chave não configurada") from exc
+
+                if "insufficient_quota" in message and (status_code in (None, 429) or "429" in message):
+                    raise InsufficientQuotaError("Créditos da API esgotados. Verifique seu plano e faturamento da OpenAI.") from exc
 
                 should_retry = False
                 if status_code == 429 or "429" in message or "rate limit" in message:
