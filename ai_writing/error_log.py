@@ -9,6 +9,9 @@ from ai_writing.errors import MissingAPIKeyError
 from bootstrap import ensure_storage_root, resolve_storage_root
 
 
+AI_ERROR_LOG_FILE_NAME = "openIA_error.log"
+
+
 def ai_log_dir() -> str:
     root = resolve_storage_root()
     base_dir = ensure_storage_root(root)
@@ -24,7 +27,7 @@ def ai_log_dir() -> str:
 
 
 def append_ai_error_log(message: str, traceback_text: str = "", context: Optional[Dict[str, Any]] = None) -> str:
-    log_path = os.path.join(ai_log_dir(), "ai_errors.log")
+    log_path = os.path.join(ai_log_dir(), AI_ERROR_LOG_FILE_NAME)
     when = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     context_repr = context or {}
     body = [
