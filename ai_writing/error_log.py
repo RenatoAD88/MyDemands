@@ -12,18 +12,40 @@ from bootstrap import ensure_storage_root, resolve_storage_root
 AI_ERROR_LOG_FILE_NAME = "openIA_error.log"
 
 
+def _candidate_storage_roots() -> list[str]:
+    roots: list[str] = [resolve_storage_root()]
+
+    local_app_data = os.getenv("LOCALAPPDATA", "").strip()
+    if local_app_data:
+        roots.append(os.path.join(local_app_data, "MyDemands"))
+
+    roots.append(os.path.join(os.path.expanduser("~"), ".mydemands"))
+
+    unique: list[str] = []
+    for root in roots:
+        if root and root not in unique:
+            unique.append(root)
+    return unique
+
+
 def ai_log_dir() -> str:
-    root = resolve_storage_root()
-    base_dir = ensure_storage_root(root)
-    if not base_dir:
-        raise OSError(f"Não foi possível criar a pasta base de armazenamento: {root}")
+    errors: list[str] = []
 
-    path = os.path.join(base_dir, "log")
-    log_dir = ensure_storage_root(path)
-    if not log_dir:
-        raise OSError(f"Não foi possível criar a pasta de log: {path}")
+    for root in _candidate_storage_roots():
+        base_dir = ensure_storage_root(root)
+        if not base_dir:
+            errors.append(root)
+            continue
 
-    return log_dir
+        path = os.path.join(base_dir, "log")
+        log_dir = ensure_storage_root(path)
+        if log_dir:
+            return log_dir
+
+        errors.append(path)
+
+    attempted = ", ".join(errors) if errors else "(sem caminhos)"
+    raise OSError(f"Não foi possível criar a pasta de log em nenhum caminho: {attempted}")
 
 
 def append_ai_error_log(message: str, traceback_text: str = "", context: Optional[Dict[str, Any]] = None) -> str:
