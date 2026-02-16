@@ -123,12 +123,16 @@ class AIWritingPanel(QDialog):
 
     def _on_error(self, message: str):
         lowered = message.lower()
-        if "chave" in lowered:
-            QMessageBox.warning(self, "IA", "Chave não configurada")
-        elif "esgotados" in lowered or "insufficient_quota" in lowered or "faturamento" in lowered:
-            QMessageBox.warning(self, "IA", "Créditos da API esgotados. Verifique seu plano e faturamento da OpenAI.")
+        if "token" in lowered or "chave" in lowered or "401" in lowered:
+            QMessageBox.warning(self, "IA", "Token do Hugging Face não configurado")
+        elif "modelo" in lowered or "404" in lowered:
+            QMessageBox.warning(self, "IA", "Modelo inválido ou não encontrado")
         elif "rate" in lowered or "429" in lowered:
             QMessageBox.warning(self, "IA", "Limite de requisições atingido. Tente novamente em instantes.")
+        elif "timeout" in lowered:
+            QMessageBox.warning(self, "IA", "Timeout na API do Hugging Face")
+        elif "limite mensal" in lowered:
+            QMessageBox.warning(self, "IA", "Limite mensal de uso da IA atingido")
         else:
             QMessageBox.warning(self, "IA", "Falha ao gerar sugestão (ver logs)")
         self.status.setText("error")

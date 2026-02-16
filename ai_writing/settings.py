@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
+from datetime import date
 from typing import Any, Dict
 
 from PySide6.QtWidgets import (
@@ -15,19 +16,26 @@ from PySide6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QDoubleSpinBox,
+    QSpinBox,
+    QProgressBar,
 )
 
 from ui_prefs import load_prefs, save_prefs
-from ai_writing.openai_client import InsufficientQuotaError, MissingAPIKeyError, OpenAIWritingClient
-from ai_writing.key_store import has_api_key, load_api_key, save_api_key
+from ai_writing.config_store import AIConfig, AIConfigStore
+from ai_writing.huggingface_client import (
+    HuggingFaceClient,
+    MissingAPIKeyError,
+    ModelNotFoundError,
+    RateLimitError,
+)
 
 
 @dataclass
 class AISettings:
     enabled: bool = True
     show_chips: bool = True
-    model: str = "gpt-4.1-mini"
-    temperature: float = 0.3
+    model: str = "mistralai/Mistral-7B-Instruct-v0.2"
+    temperature: float = 0.5
     log_channel: str = "sqlite"
     privacy_mode: bool = True
     debug_log_text: bool = False
@@ -54,52 +62,79 @@ class AISettingsStore:
         save_prefs(self.base_dir, prefs)
 
 
+class AIConsumptionDialog(QDialog):
+    def __init__(self, cfg: AIConfig, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Consumo de IA")
+
+        usage_pct = min(100, int((cfg.ia_usage_count / max(1, cfg.ia_usage_limit)) * 100))
+        progress = QProgressBar()
+        progress.setRange(0, 100)
+        progress.setValue(usage_pct)
+
+        color = "#2e7d32"
+        if cfg.ia_usage_count >= cfg.ia_usage_limit:
+            color = "#c62828"
+        elif usage_pct > 80:
+            color = "#f9a825"
+        progress.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; }}")
+
+        form = QFormLayout()
+        form.addRow("Uso atual", QLabel(f"{cfg.ia_usage_count} / {cfg.ia_usage_limit}"))
+        form.addRow("Percentual utilizado", QLabel(f"{usage_pct}%"))
+        form.addRow("Data do último reset", QLabel(cfg.ia_last_reset))
+        form.addRow("Próxima data de reset", QLabel(cfg.next_reset_date.strftime("%Y-%m-%d")))
+        form.addRow("Modelo em uso", QLabel(cfg.hf_model))
+        form.addRow("Cache ativo", QLabel("Sim" if cfg.ia_cache_enabled else "Não"))
+        form.addRow("Progresso", progress)
+
+        close_btn = QPushButton("Fechar")
+        close_btn.clicked.connect(self.accept)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(close_btn)
+
+
 class AISettingsDialog(QDialog):
     def __init__(self, store: AISettingsStore, parent=None):
         super().__init__(parent)
         self.store = store
+        self.config_store = AIConfigStore()
         self.setWindowTitle("Configurações da IA ✨")
         self._settings = self.store.load()
+        self._config = self.config_store.load_config()
 
         self.enabled = QCheckBox("Habilitar Redigir com IA")
         self.enabled.setChecked(self._settings.enabled)
 
-        self.show_chips = QCheckBox("Mostrar chips de ação")
-        self.show_chips.setChecked(self._settings.show_chips)
-
-        self.privacy_mode = QCheckBox("Modo privacidade (não registrar texto completo)")
-        self.privacy_mode.setChecked(self._settings.privacy_mode)
-
-        self.debug_log_text = QCheckBox("Modo debug de auditoria (registrar texto)")
-        self.debug_log_text.setChecked(self._settings.debug_log_text)
-
-        checkbox_checked_style = """
-            QCheckBox::indicator:checked {
-                background-color: #000000;
-                border: 1px solid #000000;
-            }
-        """
-        for checkbox in (self.enabled, self.show_chips, self.privacy_mode, self.debug_log_text):
-            checkbox.setStyleSheet(checkbox_checked_style)
-
-        self.model = QComboBox()
-        self.model.addItems(["gpt-4.1-mini", "gpt-5.2"])
-        self.model.setCurrentText(self._settings.model)
-
+        self.model = QLineEdit(self._config.hf_model)
         self.temperature = QDoubleSpinBox()
         self.temperature.setRange(0.0, 2.0)
         self.temperature.setSingleStep(0.1)
-        self.temperature.setValue(float(self._settings.temperature))
+        self.temperature.setValue(float(self._config.temperature))
 
-        self.api_key_input = QLineEdit()
-        self.api_key_input.setPlaceholderText("Cole aqui sua chave da OpenAI")
+        self.max_new_tokens = QSpinBox()
+        self.max_new_tokens.setRange(1, 4096)
+        self.max_new_tokens.setValue(int(self._config.max_new_tokens))
+
+        self.monthly_limit = QSpinBox()
+        self.monthly_limit.setRange(1, 100000)
+        self.monthly_limit.setValue(int(self._config.ia_usage_limit))
+
+        self.cache_enabled = QCheckBox("Ativar cache")
+        self.cache_enabled.setChecked(self._config.ia_cache_enabled)
+
+        self.api_key_input = QLineEdit(self._config.hf_api_token)
+        self.api_key_input.setPlaceholderText("Cole aqui seu token do Hugging Face")
         self.api_key_input.setEchoMode(QLineEdit.Password)
-        self.api_key_input.setText(load_api_key())
 
-        self.key_status = QLabel(self._key_status_text())
+        self.usage_label = QLabel(f"Uso atual: {self._config.ia_usage_count} / {self._config.ia_usage_limit}")
 
         test_btn = QPushButton("Testar conexão")
         test_btn.clicked.connect(self._test_connection)
+        consumo_btn = QPushButton("Consumo de IA")
+        consumo_btn.clicked.connect(self._open_consumption_dialog)
 
         save_btn = QPushButton("Salvar")
         cancel_btn = QPushButton("Cancelar")
@@ -107,54 +142,72 @@ class AISettingsDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
 
         form = QFormLayout()
-        form.addRow("Chave da OpenAI", self.api_key_input)
-        form.addRow("Status da chave", self.key_status)
+        form.addRow("Token Hugging Face", self.api_key_input)
         form.addRow("Modelo", self.model)
         form.addRow("Temperatura", self.temperature)
+        form.addRow("Máx Tokens", self.max_new_tokens)
+        form.addRow("Limite mensal", self.monthly_limit)
+        form.addRow("", self.cache_enabled)
+        form.addRow("", self.usage_label)
 
         buttons = QHBoxLayout()
         buttons.addStretch()
+        buttons.addWidget(consumo_btn)
         buttons.addWidget(test_btn)
         buttons.addWidget(save_btn)
         buttons.addWidget(cancel_btn)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.enabled)
-        layout.addWidget(self.show_chips)
-        layout.addWidget(self.privacy_mode)
-        layout.addWidget(self.debug_log_text)
         layout.addLayout(form)
         layout.addLayout(buttons)
 
-    def _key_status_text(self) -> str:
-        return "Detectada" if has_api_key() else "Não detectada"
+    def _open_consumption_dialog(self):
+        cfg = self.config_store.reset_usage_if_needed(self.config_store.load_config())
+        AIConsumptionDialog(cfg, self).exec()
 
     def _test_connection(self):
-        api_key = self.api_key_input.text().strip() or load_api_key()
+        api_key = self.api_key_input.text().strip()
         if not api_key:
-            QMessageBox.warning(self, "IA", "Chave não configurada")
+            QMessageBox.warning(self, "IA", "Token do Hugging Face não configurado")
             return
         try:
-            client = OpenAIWritingClient(api_key=api_key, model=self.model.currentText(), temperature=float(self.temperature.value()), max_retries=2)
-            client.suggest("teste", "Responda com a palavra OK em pt-BR.", {"field": "connection_test"})
+            client = HuggingFaceClient(
+                api_token=api_key,
+                model=self.model.text().strip(),
+                temperature=float(self.temperature.value()),
+                max_new_tokens=int(self.max_new_tokens.value()),
+            )
+            client.suggest("Teste", "Responda apenas OK.", {"field": "connection_test"})
             QMessageBox.information(self, "IA", "Conexão OK")
         except MissingAPIKeyError:
-            QMessageBox.warning(self, "IA", "Chave não configurada")
-        except InsufficientQuotaError:
-            QMessageBox.warning(self, "IA", "Créditos da API esgotados. Verifique seu plano e faturamento da OpenAI.")
+            QMessageBox.warning(self, "IA", "Token do Hugging Face inválido ou ausente")
+        except ModelNotFoundError:
+            QMessageBox.warning(self, "IA", "Modelo inválido ou não encontrado")
+        except RateLimitError:
+            QMessageBox.warning(self, "IA", "Limite de requisições atingido. Tente novamente em instantes.")
         except Exception as exc:
             QMessageBox.warning(self, "IA", f"Falha ao testar conexão: {exc}")
 
     def _save(self):
         settings = AISettings(
             enabled=self.enabled.isChecked(),
-            show_chips=self.show_chips.isChecked(),
-            model=self.model.currentText(),
+            show_chips=self._settings.show_chips,
+            model=self.model.text().strip() or AISettings.model,
             temperature=float(self.temperature.value()),
-            privacy_mode=self.privacy_mode.isChecked(),
-            debug_log_text=self.debug_log_text.isChecked(),
+            privacy_mode=self._settings.privacy_mode,
+            debug_log_text=self._settings.debug_log_text,
         )
-        save_api_key(self.api_key_input.text())
-        self.key_status.setText(self._key_status_text())
         self.store.save(settings)
+
+        cfg = self.config_store.load_config()
+        cfg.hf_api_token = self.api_key_input.text().strip()
+        cfg.hf_model = self.model.text().strip() or cfg.hf_model
+        cfg.temperature = float(self.temperature.value())
+        cfg.max_new_tokens = int(self.max_new_tokens.value())
+        cfg.ia_usage_limit = int(self.monthly_limit.value())
+        cfg.ia_cache_enabled = self.cache_enabled.isChecked()
+        if cfg.ia_last_reset == "":
+            cfg.ia_last_reset = date.today().strftime("%Y-%m-%d")
+        self.config_store.save_config(cfg)
         self.accept()

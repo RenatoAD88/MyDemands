@@ -40,9 +40,18 @@ from notifications.inapp_toast import InAppToastNotifier
 from notifications.scheduler import DeadlineScheduler
 from notifications.settings_view import NotificationSettingsDialog
 from notifications.system_notifier import SystemNotifier
-from ai_writing.openai_client import OpenAIWritingClient, AIWritingError, MissingAPIKeyError
+from ai_writing.huggingface_client import (
+    HuggingFaceClient,
+    AIWritingError,
+    MissingAPIKeyError,
+    ModelNotFoundError,
+    RateLimitError,
+    AIRequestTimeoutError,
+    UsageLimitReachedError,
+)
 from ai_writing.settings import AISettingsStore, AISettingsDialog
-from ai_writing.key_store import has_api_key
+from ai_writing.config_store import AIConfigStore
+from ai_writing.service import AIWritingService
 from ai_writing.audit import AIAuditLogger
 from ai_writing.integration import attach_ai_writing
 
@@ -1275,6 +1284,9 @@ class MainWindow(QMainWindow):
         self._prefs = load_prefs(self.store.base_dir)
         self.ai_settings_store = AISettingsStore(self.store.base_dir)
         self.ai_settings = self.ai_settings_store.load()
+        self.ai_config_store = AIConfigStore()
+        self.ai_config_store.ensure_files()
+        self.ai_service = AIWritingService(self.ai_config_store)
         self.ai_audit = AIAuditLogger(self.store.base_dir)
         self.team_store = TeamControlStore(self.store.base_dir)
         self._ensure_backup_dir()
@@ -2231,7 +2243,8 @@ class MainWindow(QMainWindow):
                 btn.hide()
                 continue
             btn.show()
-            if not has_api_key():
+            cfg = self.ai_config_store.load_config()
+            if not cfg.hf_api_token.strip():
                 btn.setEnabled(False)
                 btn.setToolTip("Configurar IA…")
             else:
@@ -2245,9 +2258,9 @@ class MainWindow(QMainWindow):
         self.ai_settings = self.ai_settings_store.load()
         if not self.ai_settings.enabled:
             raise AIWritingError("IA desabilitada")
+
         try:
-            client = OpenAIWritingClient(model=self.ai_settings.model, temperature=self.ai_settings.temperature)
-            suggestion = client.suggest(input_text=input_text, instruction=instruction, context=context)
+            suggestion = self.ai_service.generate(input_text=input_text, instruction=instruction, context=context)
             self.ai_audit.log_event("generate", str(context.get("demand_id", "")), str(context.get("field", "")), input_text, True, privacy_mode=self.ai_settings.privacy_mode, debug_mode=self.ai_settings.debug_log_text)
             return suggestion
         except MissingAPIKeyError:
@@ -2260,7 +2273,7 @@ class MainWindow(QMainWindow):
         if btn is not None:
             if not self.ai_settings.enabled:
                 btn.hide()
-            elif not has_api_key():
+            elif not self.ai_config_store.load_config().hf_api_token.strip():
                 btn.setEnabled(False)
                 btn.setToolTip("Configurar IA…")
         return wrapper
