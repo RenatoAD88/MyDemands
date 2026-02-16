@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, asdict
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -11,6 +10,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from ui_prefs import load_prefs, save_prefs
 from ai_writing.openai_client import OpenAIWritingClient
+from ai_writing.key_store import has_api_key, load_api_key, save_api_key
 
 
 @dataclass
@@ -90,6 +91,11 @@ class AISettingsDialog(QDialog):
         self.temperature.setSingleStep(0.1)
         self.temperature.setValue(float(self._settings.temperature))
 
+        self.api_key_input = QLineEdit()
+        self.api_key_input.setPlaceholderText("Cole aqui sua chave da OpenAI")
+        self.api_key_input.setEchoMode(QLineEdit.Password)
+        self.api_key_input.setText(load_api_key())
+
         self.key_status = QLabel(self._key_status_text())
 
         test_btn = QPushButton("Testar conexão")
@@ -101,6 +107,7 @@ class AISettingsDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
 
         form = QFormLayout()
+        form.addRow("Chave da OpenAI", self.api_key_input)
         form.addRow("Status da chave", self.key_status)
         form.addRow("Modelo", self.model)
         form.addRow("Temperatura", self.temperature)
@@ -120,14 +127,15 @@ class AISettingsDialog(QDialog):
         layout.addLayout(buttons)
 
     def _key_status_text(self) -> str:
-        return "Detectada" if os.getenv("OPENAI_API_KEY") else "Não detectada"
+        return "Detectada" if has_api_key() else "Não detectada"
 
     def _test_connection(self):
-        if not os.getenv("OPENAI_API_KEY"):
+        api_key = self.api_key_input.text().strip() or load_api_key()
+        if not api_key:
             QMessageBox.warning(self, "IA", "Chave não configurada")
             return
         try:
-            client = OpenAIWritingClient(model=self.model.currentText(), temperature=float(self.temperature.value()), max_retries=2)
+            client = OpenAIWritingClient(api_key=api_key, model=self.model.currentText(), temperature=float(self.temperature.value()), max_retries=2)
             client.suggest("teste", "Responda com a palavra OK em pt-BR.", {"field": "connection_test"})
             QMessageBox.information(self, "IA", "Conexão OK")
         except Exception as exc:
@@ -142,5 +150,7 @@ class AISettingsDialog(QDialog):
             privacy_mode=self.privacy_mode.isChecked(),
             debug_log_text=self.debug_log_text.isChecked(),
         )
+        save_api_key(self.api_key_input.text())
+        self.key_status.setText(self._key_status_text())
         self.store.save(settings)
         self.accept()
