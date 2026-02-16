@@ -16,7 +16,7 @@ MAX_CACHE_ENTRIES = 1000
 @dataclass
 class AIConfig:
     hf_api_token: str = ""
-    hf_model: str = "mistralai/Mistral-7B-Instruct-v0.3"
+    hf_model: str = "google/flan-t5-base"
     temperature: float = 0.5
     max_new_tokens: int = 150
     top_p: float = 0.9

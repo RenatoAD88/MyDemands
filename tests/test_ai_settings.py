@@ -98,7 +98,7 @@ from ai_writing.settings import AISettings, AISettingsStore
 def test_ai_settings_default_model_is_hf_mistral(tmp_path):
     store = AISettingsStore(str(tmp_path))
     loaded = store.load()
-    assert loaded.model == "mistralai/Mistral-7B-Instruct-v0.3"
+    assert loaded.model == "google/flan-t5-base"
 
 
 def test_ai_settings_store_persists_last_saved_configuration(tmp_path):

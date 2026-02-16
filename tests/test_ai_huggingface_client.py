@@ -67,7 +67,7 @@ def test_http_410_faz_fallback_para_router(monkeypatch):
         return _Response([{"generated_text": "OK via router"}])
 
     monkeypatch.setattr("urllib.request.urlopen", _urlopen)
-    client = HuggingFaceClient(api_token="hf-token", model="mistralai/Mistral-7B-Instruct-v0.3")
+    client = HuggingFaceClient(api_token="hf-token", model="google/flan-t5-base")
 
     assert client.suggest("abc", "instr") == "OK via router"
     assert len(calls) == 2
@@ -89,7 +89,7 @@ def test_modelo_legado_faz_fallback_para_alias(monkeypatch):
 
     assert client.suggest("abc", "instr") == "OK alias"
     assert any("Mistral-7B-Instruct-v0.2" in call for call in calls)
-    assert any("Mistral-7B-Instruct-v0.3" in call for call in calls)
+    assert any("flan-t5-base" in call for call in calls)
 
 
 def test_modelo_atual_faz_fallback_para_versao_anterior_quando_indisponivel(monkeypatch):
@@ -97,15 +97,15 @@ def test_modelo_atual_faz_fallback_para_versao_anterior_quando_indisponivel(monk
 
     def _urlopen(req, *args, **kwargs):
         calls.append(req.full_url)
-        if "Mistral-7B-Instruct-v0.3" in req.full_url:
+        if "flan-t5-base" in req.full_url:
             raise urllib.error.HTTPError(req.full_url, 404, "", None, None)
         return _Response([{"generated_text": "OK fallback v0.2"}])
 
     monkeypatch.setattr("urllib.request.urlopen", _urlopen)
-    client = HuggingFaceClient(api_token="hf-token", model="mistralai/Mistral-7B-Instruct-v0.3")
+    client = HuggingFaceClient(api_token="hf-token", model="google/flan-t5-base")
 
     assert client.suggest("abc", "instr") == "OK fallback v0.2"
-    assert any("Mistral-7B-Instruct-v0.3" in call for call in calls)
+    assert any("flan-t5-base" in call for call in calls)
     assert any("Mistral-7B-Instruct-v0.2" in call for call in calls)
 
 

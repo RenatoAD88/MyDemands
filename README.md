@@ -15,7 +15,7 @@ Formato padrão de `configIA.txt`:
 
 ```txt
 HF_API_TOKEN=xxxx
-HF_MODEL=mistralai/Mistral-7B-Instruct-v0.3
+HF_MODEL=google/flan-t5-base
 temperature=0.5
 max_new_tokens=150
 top_p=0.9

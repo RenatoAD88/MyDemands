@@ -13,8 +13,8 @@ from typing import Optional
 DEFAULT_CONNECTIVITY_URL = "https://huggingface.co/api/whoami-v2"
 
 MODEL_FALLBACKS = {
-    "mistralai/Mistral-7B-Instruct-v0.2": ["mistralai/Mistral-7B-Instruct-v0.3"],
-    "mistralai/Mistral-7B-Instruct-v0.3": ["mistralai/Mistral-7B-Instruct-v0.2"],
+    "mistralai/Mistral-7B-Instruct-v0.2": ["google/flan-t5-base"],
+    "google/flan-t5-base": ["mistralai/Mistral-7B-Instruct-v0.2"],
 }
 
 class AIWritingError(RuntimeError):
@@ -45,14 +45,14 @@ class HuggingFaceClient:
     def __init__(
         self,
         api_token: str,
-        model: str = "mistralai/Mistral-7B-Instruct-v0.3",
+        model: str = "google/flan-t5-base",
         temperature: float = 0.5,
         max_new_tokens: int = 150,
         top_p: Optional[float] = None,
         timeout: float = 30.0,
     ):
         self.api_token = (api_token or "").strip()
-        self.model = model.strip() or "mistralai/Mistral-7B-Instruct-v0.3"
+        self.model = model.strip() or "google/flan-t5-base"
         self.temperature = float(temperature)
         self.max_new_tokens = int(max_new_tokens)
         self.top_p = top_p
