@@ -12,8 +12,9 @@ from typing import Optional
 
 DEFAULT_CONNECTIVITY_URL = "https://huggingface.co/api/whoami-v2"
 
-LEGACY_MODEL_ALIASES = {
-    "mistralai/Mistral-7B-Instruct-v0.2": "mistralai/Mistral-7B-Instruct-v0.3",
+MODEL_FALLBACKS = {
+    "mistralai/Mistral-7B-Instruct-v0.2": ["mistralai/Mistral-7B-Instruct-v0.3"],
+    "mistralai/Mistral-7B-Instruct-v0.3": ["mistralai/Mistral-7B-Instruct-v0.2"],
 }
 
 class AIWritingError(RuntimeError):
@@ -91,9 +92,9 @@ class HuggingFaceClient:
     def _request_with_fallback(self, payload: dict):
         last_http_error = None
         candidate_models = [self.model]
-        alias_model = LEGACY_MODEL_ALIASES.get(self.model)
-        if alias_model and alias_model not in candidate_models:
-            candidate_models.append(alias_model)
+        for fallback_model in MODEL_FALLBACKS.get(self.model, []):
+            if fallback_model not in candidate_models:
+                candidate_models.append(fallback_model)
 
         for model in candidate_models:
             endpoints = [

@@ -1756,7 +1756,11 @@ class MainWindow(QMainWindow):
             dlg.setWindowTitle(f"Editar {col_name}")
             editor = QTextEdit()
             editor.setPlainText(current_text)
-            wrapped = self._attach_ai_widget(editor, lambda: self._ai_context_provider(_id, col_name))
+
+            wrapped = editor
+            if self.ai_settings.enabled:
+                wrapped = self._attach_ai_widget(editor, lambda: self._ai_context_provider(_id, col_name))
+
             save_btn = QPushButton("Salvar")
             cancel_btn = QPushButton("Cancelar")
             save_btn.clicked.connect(dlg.accept)
