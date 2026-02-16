@@ -3,8 +3,14 @@ from __future__ import annotations
 import socket
 from typing import Optional
 
-from huggingface_hub import InferenceClient
-from huggingface_hub.errors import HfHubHTTPError
+try:
+    from huggingface_hub import InferenceClient
+    from huggingface_hub.errors import HfHubHTTPError
+    _HF_IMPORT_ERROR = None
+except ModuleNotFoundError as exc:
+    InferenceClient = None
+    HfHubHTTPError = Exception
+    _HF_IMPORT_ERROR = exc
 
 
 class AIWritingError(RuntimeError):
@@ -47,7 +53,7 @@ class HuggingFaceClient:
         self.max_new_tokens = int(max_new_tokens)
         self.top_p = top_p
         self.timeout = float(timeout)
-        self._client = InferenceClient(api_key=self.api_token, timeout=self.timeout)
+        self._client = InferenceClient(api_key=self.api_token, timeout=self.timeout) if InferenceClient else None
 
     @staticmethod
     def sanitize_text(text: str) -> str:
@@ -84,6 +90,12 @@ class HuggingFaceClient:
             raise MissingAPIKeyError("Token do Hugging Face não configurado")
 
     def _chat_completion(self, messages: list[dict[str, str]], max_tokens: Optional[int] = None):
+        if self._client is None:
+            raise AIWritingError(
+                "Dependência 'huggingface_hub' não encontrada. "
+                "Instale com: pip install huggingface_hub"
+            ) from _HF_IMPORT_ERROR
+
         request_max_tokens = int(max_tokens if max_tokens is not None else self.max_new_tokens)
         payload = {
             "model": self.model,
