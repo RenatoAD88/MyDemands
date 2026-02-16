@@ -50,7 +50,7 @@ from ai_writing.huggingface_client import (
     UsageLimitReachedError,
 )
 from ai_writing.settings import AISettingsStore, AISettingsDialog
-from ai_writing.config_store import AIConfigStore
+from ai_writing.config_store import AIConfigStore, OPENAI_PROVIDER
 from ai_writing.service import AIWritingService
 from ai_writing.audit import AIAuditLogger
 from ai_writing.integration import attach_ai_writing
@@ -2247,8 +2247,10 @@ class MainWindow(QMainWindow):
                 btn.hide()
                 continue
             btn.show()
-            cfg = self.ai_config_store.load_config()
-            if not cfg.hf_api_token.strip():
+            provider = self.ai_settings.provider
+            cfg = self.ai_config_store.load_config(provider=provider)
+            has_credential = cfg.openai_api_key.strip() if provider == OPENAI_PROVIDER else cfg.hf_api_token.strip()
+            if not has_credential:
                 btn.setEnabled(False)
                 btn.setToolTip("Configurar IA…")
             else:
@@ -2264,7 +2266,7 @@ class MainWindow(QMainWindow):
             raise AIWritingError("IA desabilitada")
 
         try:
-            suggestion = self.ai_service.generate(input_text=input_text, instruction=instruction, context=context)
+            suggestion = self.ai_service.generate(input_text=input_text, instruction=instruction, context=context, provider=self.ai_settings.provider)
             self.ai_audit.log_event("generate", str(context.get("demand_id", "")), str(context.get("field", "")), input_text, True, privacy_mode=self.ai_settings.privacy_mode, debug_mode=self.ai_settings.debug_log_text)
             return suggestion
         except MissingAPIKeyError:
@@ -2277,9 +2279,13 @@ class MainWindow(QMainWindow):
         if btn is not None:
             if not self.ai_settings.enabled:
                 btn.hide()
-            elif not self.ai_config_store.load_config().hf_api_token.strip():
-                btn.setEnabled(False)
-                btn.setToolTip("Configurar IA…")
+            else:
+                provider = self.ai_settings.provider
+                cfg = self.ai_config_store.load_config(provider=provider)
+                has_credential = cfg.openai_api_key.strip() if provider == OPENAI_PROVIDER else cfg.hf_api_token.strip()
+                if not has_credential:
+                    btn.setEnabled(False)
+                    btn.setToolTip("Configurar IA…")
         return wrapper
 
     def show_general_information(self):

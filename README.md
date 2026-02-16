@@ -1,17 +1,27 @@
-# MyDemands - Redigir com IA (Hugging Face)
+# MyDemands - Redigir com IA (Hugging Face / OpenAI)
 
-## Token Hugging Face
+## Configurando o provedor de IA
+No app, abra **Configurações da IA** e selecione o provedor desejado (**Hugging Face** ou **OpenAI**).
+
+### Hugging Face
 1. Acesse https://huggingface.co/settings/tokens.
 2. Crie um token com permissão de inferência.
-3. Abra **Configurações da IA** no app e preencha **Token Hugging Face**.
+3. Em **Configurações da IA**, selecione **Hugging Face** e preencha **Token Hugging Face**.
 
-## Arquivos de persistência
-O app cria automaticamente:
+### OpenAI
+1. Acesse https://platform.openai.com/api-keys.
+2. Gere uma chave de API.
+3. Em **Configurações da IA**, selecione **OpenAI** e preencha **Chave OpenAI**.
 
-- `C:\MyDemands\ai_writing\configIA.txt`
-- `C:\MyDemands\ai_writing\cacheIA.json`
+## Arquivos de persistência por provedor
+O app cria automaticamente configurações e cache separados por IA:
 
-Formato padrão de `configIA.txt`:
+- `C:\MyDemands\ai_writing\huggingface\configIA.txt`
+- `C:\MyDemands\ai_writing\huggingface\cacheIA.json`
+- `C:\MyDemands\ai_writing\openai\configOpenAI.txt`
+- `C:\MyDemands\ai_writing\openai\cacheOpenAI.json`
+
+Formato padrão de `configIA.txt` (Hugging Face):
 
 ```txt
 HF_API_TOKEN=xxxx
@@ -25,25 +35,23 @@ IA_LAST_RESET=2026-01-01
 IA_CACHE_ENABLED=true
 ```
 
-## Contador mensal
-- `IA_USAGE_COUNT` incrementa somente após resposta bem-sucedida da API.
+Formato padrão de `configOpenAI.txt` (OpenAI):
+
+```txt
+OPENAI_API_KEY=xxxx
+OPENAI_MODEL=gpt-4o-mini
+temperature=0.5
+max_new_tokens=150
+top_p=0.9
+IA_USAGE_COUNT=0
+IA_USAGE_LIMIT=200
+IA_LAST_RESET=2026-01-01
+IA_CACHE_ENABLED=true
+```
+
+## Contador mensal e cache
+- Contador e cache funcionam de forma independente por provedor.
+- `IA_USAGE_COUNT` incrementa somente após resposta bem-sucedida.
 - `IA_USAGE_LIMIT` bloqueia novas gerações ao atingir o limite.
 - `IA_LAST_RESET` é usado para reset automático a cada 30 dias.
-
-## Cache inteligente
-- Hash SHA256 com `prompt + modelo + temperatura`.
-- Se o hash já existir em `cacheIA.json`, a resposta é retornada sem nova chamada.
-- Em hits de cache, o contador **não** incrementa.
-- Limite de 1000 entradas: remove os registros mais antigos quando ultrapassa.
-
-## Dashboard de consumo
-No modal **Consumo de IA** você visualiza:
-- Uso atual e percentual
-- Último reset e próxima data de reset
-- Modelo atual e status do cache
-- Barra de progresso com alertas visuais (>80% amarelo; limite vermelho)
-
-## Limitações do free tier (Hugging Face)
-- Pode haver latência maior e filas em horários de pico.
-- Alguns modelos podem retornar 429 por limite de taxa.
-- Certos modelos podem não estar disponíveis sem plano pago.
+- Hash SHA256 usa `prompt + modelo + temperatura` dentro do cache da IA selecionada.
