@@ -2276,6 +2276,18 @@ class MainWindow(QMainWindow):
         except MissingAPIKeyError:
             self.ai_audit.log_event("generate", str(context.get("demand_id", "")), str(context.get("field", "")), input_text, False, error_message="missing_key", privacy_mode=self.ai_settings.privacy_mode, debug_mode=self.ai_settings.debug_log_text)
             raise
+        except (RateLimitError, ModelNotFoundError, AIRequestTimeoutError, UsageLimitReachedError) as exc:
+            self.ai_audit.log_event(
+                "generate",
+                str(context.get("demand_id", "")),
+                str(context.get("field", "")),
+                input_text,
+                False,
+                error_message=str(exc),
+                privacy_mode=self.ai_settings.privacy_mode,
+                debug_mode=self.ai_settings.debug_log_text,
+            )
+            raise
         except Exception as exc:
             self.ai_audit.log_event(
                 "generate",
