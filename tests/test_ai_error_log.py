@@ -25,3 +25,11 @@ def test_append_ai_error_log_writes_message_context_and_trace(tmp_path, monkeypa
     assert "Falha de teste" in content
     assert "demand_id" in content
     assert "Traceback test line" in content
+
+
+def test_append_ai_error_log_uses_openia_error_filename(tmp_path, monkeypatch):
+    monkeypatch.setattr(error_log, "resolve_storage_root", lambda: str(tmp_path))
+
+    log_path = error_log.append_ai_error_log("Falha")
+
+    assert Path(log_path).name == "openIA_error.log"
