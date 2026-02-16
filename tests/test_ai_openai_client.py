@@ -24,6 +24,7 @@ class FakeOpenAI:
 
 def test_suggest_returns_output_text(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("ai_writing.openai_client.load_api_key", lambda: "")
 
     fake = FakeOpenAI()
     monkeypatch.setattr("ai_writing.openai_client.OpenAI", lambda *args, **kwargs: fake)
@@ -34,6 +35,7 @@ def test_suggest_returns_output_text(monkeypatch):
 
 def test_suggest_retries_on_429(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("ai_writing.openai_client.load_api_key", lambda: "")
     calls = {"count": 0}
 
     class RetryOpenAI:
@@ -58,6 +60,7 @@ def test_suggest_retries_on_429(monkeypatch):
 
 def test_missing_key_raises_specific_error(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr("ai_writing.openai_client.load_api_key", lambda: "")
     monkeypatch.setattr("ai_writing.openai_client.OpenAI", lambda *args, **kwargs: FakeOpenAI())
     client = OpenAIWritingClient(api_key=None)
     with pytest.raises(MissingAPIKeyError):
@@ -66,6 +69,7 @@ def test_missing_key_raises_specific_error(monkeypatch):
 
 def test_missing_openai_dependency_raises_specific_error(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("ai_writing.openai_client.load_api_key", lambda: "")
     monkeypatch.setattr("ai_writing.openai_client.OpenAI", None)
 
     from ai_writing.openai_client import MissingOpenAIDependencyError

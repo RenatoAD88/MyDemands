@@ -42,6 +42,7 @@ from notifications.settings_view import NotificationSettingsDialog
 from notifications.system_notifier import SystemNotifier
 from ai_writing.openai_client import OpenAIWritingClient, AIWritingError, MissingAPIKeyError
 from ai_writing.settings import AISettingsStore, AISettingsDialog
+from ai_writing.key_store import has_api_key
 from ai_writing.audit import AIAuditLogger
 from ai_writing.integration import attach_ai_writing
 
@@ -2230,7 +2231,7 @@ class MainWindow(QMainWindow):
                 btn.hide()
                 continue
             btn.show()
-            if not os.getenv("OPENAI_API_KEY"):
+            if not has_api_key():
                 btn.setEnabled(False)
                 btn.setToolTip("Configurar IA…")
             else:
@@ -2259,7 +2260,7 @@ class MainWindow(QMainWindow):
         if btn is not None:
             if not self.ai_settings.enabled:
                 btn.hide()
-            elif not os.getenv("OPENAI_API_KEY"):
+            elif not has_api_key():
                 btn.setEnabled(False)
                 btn.setToolTip("Configurar IA…")
         return wrapper

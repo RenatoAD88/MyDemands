@@ -5,6 +5,8 @@ import random
 import time
 from typing import Any, Dict, Optional
 
+from ai_writing.key_store import load_api_key
+
 try:
     from openai import OpenAI
 except ModuleNotFoundError:  # pragma: no cover - depende do ambiente da máquina
@@ -36,7 +38,7 @@ class OpenAIWritingClient:
         self.temperature = float(temperature)
         self.timeout = float(timeout)
         self.max_retries = int(max_retries)
-        self._api_key = api_key or os.getenv("OPENAI_API_KEY", "")
+        self._api_key = (api_key or load_api_key() or os.getenv("OPENAI_API_KEY", "")).strip()
         if OpenAI is None:
             self.client = None
             return
