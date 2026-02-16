@@ -54,7 +54,7 @@ from ai_writing.config_store import AIConfigStore, OPENAI_PROVIDER
 from ai_writing.service import AIWritingService
 from ai_writing.audit import AIAuditLogger
 from ai_writing.integration import attach_ai_writing
-from ai_writing.error_log import append_ai_error_log
+from ai_writing.error_log import log_ai_generation_error
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
@@ -2263,6 +2263,13 @@ class MainWindow(QMainWindow):
     def _ai_context_provider(self, demand_id: str, field_name: str) -> Dict[str, Any]:
         return {"demand_id": str(demand_id or ""), "field": field_name}
 
+    def _log_ai_generation_error(self, exc: Exception, context: Dict[str, Any], traceback_text: str = "") -> None:
+        try:
+            log_ai_generation_error(exc, context, traceback_text)
+        except Exception:
+            # O fluxo de UI deve manter a exceção original da IA.
+            pass
+
     def _generate_ai_suggestion(self, input_text: str, instruction: str, context: Dict[str, Any]) -> str:
         self.ai_settings = self.ai_settings_store.load()
         if not self.ai_settings.enabled:
@@ -2272,8 +2279,9 @@ class MainWindow(QMainWindow):
             suggestion = self.ai_service.generate(input_text=input_text, instruction=instruction, context=context, provider=self.ai_settings.provider)
             self.ai_audit.log_event("generate", str(context.get("demand_id", "")), str(context.get("field", "")), input_text, True, privacy_mode=self.ai_settings.privacy_mode, debug_mode=self.ai_settings.debug_log_text)
             return suggestion
-        except MissingAPIKeyError:
+        except MissingAPIKeyError as exc:
             self.ai_audit.log_event("generate", str(context.get("demand_id", "")), str(context.get("field", "")), input_text, False, error_message="missing_key", privacy_mode=self.ai_settings.privacy_mode, debug_mode=self.ai_settings.debug_log_text)
+            self._log_ai_generation_error(exc, context)
             raise
         except (RateLimitError, ModelNotFoundError, AIRequestTimeoutError, UsageLimitReachedError) as exc:
             self.ai_audit.log_event(
@@ -2286,6 +2294,7 @@ class MainWindow(QMainWindow):
                 privacy_mode=self.ai_settings.privacy_mode,
                 debug_mode=self.ai_settings.debug_log_text,
             )
+            self._log_ai_generation_error(exc, context)
             raise
         except Exception as exc:
             self.ai_audit.log_event(
@@ -2298,7 +2307,7 @@ class MainWindow(QMainWindow):
                 privacy_mode=self.ai_settings.privacy_mode,
                 debug_mode=self.ai_settings.debug_log_text,
             )
-            append_ai_error_log(str(exc), traceback.format_exc(), context)
+            self._log_ai_generation_error(exc, context, traceback.format_exc())
             raise
 
     def _attach_ai_widget(self, text_widget: QTextEdit, context_provider):

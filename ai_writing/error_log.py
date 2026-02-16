@@ -4,6 +4,8 @@ import os
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from ai_writing.errors import MissingAPIKeyError
+
 from bootstrap import ensure_storage_root, resolve_storage_root
 
 
@@ -36,3 +38,8 @@ def append_ai_error_log(message: str, traceback_text: str = "", context: Optiona
     with open(log_path, "a", encoding="utf-8") as f:
         f.write("\n".join(body) + "\n")
     return log_path
+
+
+def log_ai_generation_error(exc: Exception, context: Optional[Dict[str, Any]] = None, traceback_text: str = "") -> str:
+    message = "missing_key" if isinstance(exc, MissingAPIKeyError) else str(exc)
+    return append_ai_error_log(message, traceback_text, context)
