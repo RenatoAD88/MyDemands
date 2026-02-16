@@ -1,0 +1,12 @@
+HF_API_TOKEN=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
+HF_MODEL=mistralai/Mistral-7B-Instruct-v0.2
+
+temperature=0.5
+max_new_tokens=150
+top_p=0.9
+
+IA_USAGE_COUNT=0
+IA_USAGE_LIMIT=200
+IA_LAST_RESET=2026-02-15
+
+IA_CACHE_ENABLED=true
