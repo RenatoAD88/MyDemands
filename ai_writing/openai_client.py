@@ -7,7 +7,7 @@ import urllib.request
 from http import HTTPStatus
 from typing import Optional
 
-from ai_writing.huggingface_client import (
+from ai_writing.errors import (
     AIRequestTimeoutError,
     AIWritingError,
     MissingAPIKeyError,
