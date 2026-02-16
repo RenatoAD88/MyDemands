@@ -1,9 +1,10 @@
-import json
-import urllib.error
+from types import SimpleNamespace
 
 import pytest
 
 from ai_writing.huggingface_client import (
+    AIRequestTimeoutError,
+    AIWritingError,
     HuggingFaceClient,
     MissingAPIKeyError,
     ModelNotFoundError,
@@ -11,18 +12,48 @@ from ai_writing.huggingface_client import (
 )
 
 
-class _Response:
-    def __init__(self, payload):
-        self.payload = payload
+class _HTTPError(Exception):
+    def __init__(self, status_code, message="http error"):
+        super().__init__(message)
+        self.response = SimpleNamespace(status_code=status_code)
 
-    def read(self):
-        return json.dumps(self.payload).encode("utf-8")
 
-    def __enter__(self):
-        return self
+class _FakeInferenceClient:
+    def __init__(self, api_key, timeout=None):
+        self.api_key = api_key
+        self.timeout = timeout
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+        self.calls = []
+        self.behavior = None
 
-    def __exit__(self, exc_type, exc, tb):
-        return False
+    def _create(self, **kwargs):
+        self.calls.append(kwargs)
+        if callable(self.behavior):
+            return self.behavior(**kwargs)
+        return self.behavior
+
+
+@pytest.fixture
+def fake_client(monkeypatch):
+    holder = {}
+
+    def _factory(api_key, timeout=None):
+        client = _FakeInferenceClient(api_key=api_key, timeout=timeout)
+        holder["client"] = client
+        return client
+
+    monkeypatch.setattr("ai_writing.huggingface_client.InferenceClient", _factory)
+    return holder
+
+
+def _completion(content: str):
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=content),
+            )
+        ]
+    )
 
 
 def test_token_ausente():
@@ -31,118 +62,57 @@ def test_token_ausente():
         client.suggest("abc", "instr")
 
 
-def test_modelo_invalido(monkeypatch):
-    def _raise(*args, **kwargs):
-        raise urllib.error.HTTPError("", 404, "", None, None)
+def test_suggest_parseia_completion_content(fake_client):
+    client = HuggingFaceClient(api_token="hf-token", model="zai-org/GLM-5:novita")
+    fake_client["client"].behavior = _completion("Texto final")
 
-    monkeypatch.setattr("urllib.request.urlopen", _raise)
+    assert client.suggest("abc", "instr") == "Texto final"
+
+
+def test_modelo_invalido_404(fake_client):
     client = HuggingFaceClient(api_token="hf-token", model="invalid/model")
+    fake_client["client"].behavior = lambda **kwargs: (_ for _ in ()).throw(_HTTPError(404))
+
     with pytest.raises(ModelNotFoundError):
         client.suggest("abc", "instr")
 
 
-def test_sucesso_geracao(monkeypatch):
-    monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: _Response([{"generated_text": "Texto final"}]))
+def test_rate_limit_tratado(fake_client):
     client = HuggingFaceClient(api_token="hf-token")
-    assert client.suggest("abc", "instr") == "Texto final"
+    fake_client["client"].behavior = lambda **kwargs: (_ for _ in ()).throw(_HTTPError(429))
 
-
-def test_rate_limit_tratado(monkeypatch):
-    def _raise(*args, **kwargs):
-        raise urllib.error.HTTPError("", 429, "", None, None)
-
-    monkeypatch.setattr("urllib.request.urlopen", _raise)
-    client = HuggingFaceClient(api_token="hf-token")
     with pytest.raises(RateLimitError):
         client.suggest("abc", "instr")
 
 
-def test_http_410_faz_fallback_para_router(monkeypatch):
-    calls = []
-
-    def _urlopen(req, *args, **kwargs):
-        calls.append(req.full_url)
-        if "api-inference.huggingface.co" in req.full_url:
-            raise urllib.error.HTTPError(req.full_url, 410, "", None, None)
-        return _Response([{"generated_text": "OK via router"}])
-
-    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
-    client = HuggingFaceClient(api_token="hf-token", model="google/flan-t5-base")
-
-    assert client.suggest("abc", "instr") == "OK via router"
-    assert len(calls) == 2
-    assert "api-inference.huggingface.co" in calls[0]
-    assert "router.huggingface.co" in calls[1]
-
-
-def test_modelo_legado_faz_fallback_para_alias(monkeypatch):
-    calls = []
-
-    def _urlopen(req, *args, **kwargs):
-        calls.append(req.full_url)
-        if "Mistral-7B-Instruct-v0.2" in req.full_url:
-            raise urllib.error.HTTPError(req.full_url, 404, "", None, None)
-        return _Response([{"generated_text": "OK alias"}])
-
-    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
-    client = HuggingFaceClient(api_token="hf-token", model="mistralai/Mistral-7B-Instruct-v0.2")
-
-    assert client.suggest("abc", "instr") == "OK alias"
-    assert any("Mistral-7B-Instruct-v0.2" in call for call in calls)
-    assert any("flan-t5-base" in call for call in calls)
-
-
-def test_modelo_atual_faz_fallback_para_versao_anterior_quando_indisponivel(monkeypatch):
-    calls = []
-
-    def _urlopen(req, *args, **kwargs):
-        calls.append(req.full_url)
-        if "flan-t5-base" in req.full_url:
-            raise urllib.error.HTTPError(req.full_url, 404, "", None, None)
-        return _Response([{"generated_text": "OK fallback v0.2"}])
-
-    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
-    client = HuggingFaceClient(api_token="hf-token", model="google/flan-t5-base")
-
-    assert client.suggest("abc", "instr") == "OK fallback v0.2"
-    assert any("flan-t5-base" in call for call in calls)
-    assert any("Mistral-7B-Instruct-v0.2" in call for call in calls)
-
-
-def test_check_connectivity_token_invalido(monkeypatch):
-    def _raise(*args, **kwargs):
-        raise urllib.error.HTTPError("", 401, "", None, None)
-
-    monkeypatch.setattr("urllib.request.urlopen", _raise)
-    client = HuggingFaceClient(api_token="token-invalido")
-
-    with pytest.raises(MissingAPIKeyError):
-        client.check_connectivity()
-
-
-def test_check_connectivity_ok(monkeypatch):
-    monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: _Response({"name": "ok"}))
+def test_missing_api_key_401_403(fake_client):
     client = HuggingFaceClient(api_token="hf-token")
+    for status in (401, 403):
+        fake_client["client"].behavior = lambda **kwargs: (_ for _ in ()).throw(_HTTPError(status))
+        with pytest.raises(MissingAPIKeyError):
+            client.suggest("abc", "instr")
+
+
+def test_timeout_tratado(fake_client):
+    client = HuggingFaceClient(api_token="hf-token")
+    fake_client["client"].behavior = lambda **kwargs: (_ for _ in ()).throw(TimeoutError("timed out"))
+
+    with pytest.raises(AIRequestTimeoutError):
+        client.suggest("abc", "instr")
+
+
+def test_check_connectivity_faz_inferencia_minima(fake_client):
+    client = HuggingFaceClient(api_token="hf-token", max_new_tokens=64)
+    fake_client["client"].behavior = _completion("pong")
 
     assert client.check_connectivity() is None
+    assert fake_client["client"].calls
+    assert fake_client["client"].calls[0]["messages"] == [{"role": "user", "content": "ping"}]
 
 
-def test_payload_inclui_wait_for_model(monkeypatch):
-    captured_payloads = []
-
-    def _urlopen(req, *args, **kwargs):
-        captured_payloads.append(json.loads(req.data.decode("utf-8")))
-        return _Response([{"generated_text": "Texto final"}])
-
-    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+def test_check_connectivity_falha_se_retorno_vazio(fake_client):
     client = HuggingFaceClient(api_token="hf-token")
+    fake_client["client"].behavior = _completion("   ")
 
-    assert client.suggest("abc", "instr") == "Texto final"
-    assert captured_payloads[0]["options"]["wait_for_model"] is True
-
-
-def test_extract_text_erro_licenca_dispara_model_not_found():
-    payload = {"error": "Access to model is gated. Please accept license terms."}
-
-    with pytest.raises(ModelNotFoundError, match="aceite os termos"):
-        HuggingFaceClient._extract_text(payload, "prompt")
+    with pytest.raises(AIWritingError, match="(resposta vazia|conteúdo textual)"):
+        client.check_connectivity()

@@ -1,21 +1,11 @@
 from __future__ import annotations
 
-import json
 import socket
-import urllib.error
-import urllib.request
-from http import HTTPStatus
 from typing import Optional
 
+from huggingface_hub import InferenceClient
+from huggingface_hub.errors import HfHubHTTPError
 
-
-
-DEFAULT_CONNECTIVITY_URL = "https://huggingface.co/api/whoami-v2"
-
-MODEL_FALLBACKS = {
-    "mistralai/Mistral-7B-Instruct-v0.2": ["google/flan-t5-base"],
-    "google/flan-t5-base": ["mistralai/Mistral-7B-Instruct-v0.2"],
-}
 
 class AIWritingError(RuntimeError):
     pass
@@ -57,6 +47,7 @@ class HuggingFaceClient:
         self.max_new_tokens = int(max_new_tokens)
         self.top_p = top_p
         self.timeout = float(timeout)
+        self._client = InferenceClient(api_key=self.api_token, timeout=self.timeout)
 
     @staticmethod
     def sanitize_text(text: str) -> str:
@@ -69,114 +60,101 @@ class HuggingFaceClient:
         return f"{instruction}\n\nContexto: {context or {}}\n\nTexto:\n{sanitized}"
 
     def suggest(self, input_text: str, instruction: str, context: Optional[dict] = None) -> str:
+        self._ensure_api_key()
+
+        prompt = self.build_prompt(input_text, instruction, context)
+        messages = [
+            {"role": "system", "content": instruction},
+            {"role": "user", "content": prompt},
+        ]
+        completion = self._chat_completion(messages=messages)
+        return self._extract_text(completion)
+
+    def check_connectivity(self) -> None:
+        self._ensure_api_key()
+
+        messages = [{"role": "user", "content": "ping"}]
+        completion = self._chat_completion(messages=messages, max_tokens=min(self.max_new_tokens, 16))
+        content = self._extract_text(completion)
+        if not content.strip():
+            raise AIWritingError("Teste de conectividade falhou: resposta vazia do modelo.")
+
+    def _ensure_api_key(self) -> None:
         if not self.api_token:
             raise MissingAPIKeyError("Token do Hugging Face não configurado")
 
-        prompt = self.build_prompt(input_text, instruction, context)
-        parameters = {
+    def _chat_completion(self, messages: list[dict[str, str]], max_tokens: Optional[int] = None):
+        request_max_tokens = int(max_tokens if max_tokens is not None else self.max_new_tokens)
+        payload = {
+            "model": self.model,
+            "messages": messages,
             "temperature": self.temperature,
-            "max_new_tokens": self.max_new_tokens,
+            "max_tokens": request_max_tokens,
         }
         if self.top_p is not None:
-            parameters["top_p"] = float(self.top_p)
+            payload["top_p"] = float(self.top_p)
 
-        payload = {
-            "inputs": prompt,
-            "parameters": parameters,
-        }
-
-        raw = self._request_with_fallback(payload)
-
-        return self._extract_text(raw, prompt)
-
-    def _request_with_fallback(self, payload: dict):
-        request_payload = dict(payload)
-        options = dict(request_payload.get("options") or {})
-        options.setdefault("wait_for_model", True)
-        request_payload["options"] = options
-
-        last_http_error = None
-        candidate_models = [self.model]
-        for fallback_model in MODEL_FALLBACKS.get(self.model, []):
-            if fallback_model not in candidate_models:
-                candidate_models.append(fallback_model)
-
-        for model in candidate_models:
-            endpoints = [
-                f"https://api-inference.huggingface.co/models/{model}",
-                f"https://router.huggingface.co/hf-inference/models/{model}",
-            ]
-            for idx, endpoint in enumerate(endpoints):
-                req = urllib.request.Request(
-                    endpoint,
-                    data=json.dumps(request_payload).encode("utf-8"),
-                    headers={
-                        "Authorization": f"Bearer {self.api_token}",
-                        "Content-Type": "application/json",
-                    },
-                    method="POST",
-                )
-
-                try:
-                    with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                        return json.loads(response.read().decode("utf-8"))
-                except urllib.error.HTTPError as exc:
-                    last_http_error = exc
-                    if exc.code == 401:
-                        raise MissingAPIKeyError("Token do Hugging Face inválido ou ausente") from exc
-                    if exc.code == 404:
-                        if model != candidate_models[-1]:
-                            break
-                        raise ModelNotFoundError("Modelo do Hugging Face não encontrado") from exc
-                    if exc.code == 429:
-                        raise RateLimitError("Limite de requisições do Hugging Face atingido") from exc
-                    if exc.code == 410 and idx == 0:
-                        continue
-                    raise AIWritingError(f"Falha na API do Hugging Face (HTTP {exc.code})") from exc
-                except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
-                    raise AIRequestTimeoutError("Timeout na API do Hugging Face") from exc
-
-        if isinstance(last_http_error, urllib.error.HTTPError) and last_http_error.code == 410:
-            raise AIWritingError("Falha na API do Hugging Face (HTTP 410)") from last_http_error
-
-        raise AIWritingError("Falha inesperada ao chamar a API do Hugging Face")
-
-    def check_connectivity(self) -> None:
-        req = urllib.request.Request(
-            DEFAULT_CONNECTIVITY_URL,
-            headers={"Authorization": f"Bearer {self.api_token}"},
-            method="GET",
-        )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout):
-                return
-        except urllib.error.HTTPError as exc:
-            if exc.code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
-                raise MissingAPIKeyError("Token do Hugging Face inválido ou ausente") from exc
-            raise AIWritingError(f"Falha ao validar conectividade (HTTP {exc.code})") from exc
-        except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
-            raise AIRequestTimeoutError("Timeout na API do Hugging Face") from exc
+            return self._client.chat.completions.create(**payload)
+        except Exception as exc:  # noqa: BLE001
+            raise self._map_exception(exc) from exc
 
     @staticmethod
-    def _extract_text(payload, prompt: str) -> str:
-        if isinstance(payload, dict) and payload.get("error"):
-            error_message = str(payload.get("error"))
-            normalized_message = error_message.lower()
-            license_markers = ("license", "licen", "accept", "gated", "terms")
-            if any(marker in normalized_message for marker in license_markers):
-                raise ModelNotFoundError(
-                    "O modelo está protegido por licença/termos no Hugging Face. "
-                    "Acesse a página do modelo, aceite os termos de uso e tente novamente."
-                )
-            raise AIWritingError(error_message)
+    def _extract_text(completion) -> str:
+        choices = getattr(completion, "choices", None)
+        if choices is None and isinstance(completion, dict):
+            choices = completion.get("choices")
 
-        if isinstance(payload, list) and payload:
-            first = payload[0]
-            if isinstance(first, dict):
-                text = str(first.get("generated_text", "")).strip()
-                if text.startswith(prompt):
-                    text = text[len(prompt):].strip()
-                if text:
-                    return text
+        if not choices:
+            raise AIWritingError("Resposta sem conteúdo textual.")
 
-        raise AIWritingError("Resposta sem conteúdo textual.")
+        first = choices[0]
+        message = getattr(first, "message", None)
+        if message is None and isinstance(first, dict):
+            message = first.get("message")
+
+        content = getattr(message, "content", None)
+        if content is None and isinstance(message, dict):
+            content = message.get("content")
+
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict):
+                    parts.append(str(item.get("text", "")).strip())
+                else:
+                    parts.append(str(item).strip())
+            content = " ".join(part for part in parts if part).strip()
+
+        text = str(content or "").strip()
+        if not text:
+            raise AIWritingError("Resposta sem conteúdo textual.")
+        return text
+
+    @staticmethod
+    def _map_exception(exc: Exception) -> AIWritingError:
+        response = getattr(exc, "response", None)
+        status_code = getattr(exc, "status_code", None)
+        if status_code is None and response is not None:
+            status_code = getattr(response, "status_code", None)
+
+        message = str(exc)
+
+        if status_code in {401, 403}:
+            return MissingAPIKeyError("Token do Hugging Face inválido ou ausente")
+        if status_code == 404:
+            return ModelNotFoundError("Modelo do Hugging Face não encontrado")
+        if status_code == 429:
+            return RateLimitError("Limite de requisições do Hugging Face atingido")
+
+        timeout_markers = ("timeout", "timed out", "connection", "temporarily unavailable")
+        lowered_message = message.lower()
+        if isinstance(exc, (TimeoutError, socket.timeout)):
+            return AIRequestTimeoutError("Timeout na API do Hugging Face")
+        if isinstance(exc, OSError) and any(marker in lowered_message for marker in timeout_markers):
+            return AIRequestTimeoutError("Timeout na API do Hugging Face")
+        if isinstance(exc, HfHubHTTPError) and status_code is None:
+            if any(marker in lowered_message for marker in timeout_markers):
+                return AIRequestTimeoutError("Timeout na API do Hugging Face")
+
+        return AIWritingError(message or "Falha inesperada ao chamar a API do Hugging Face")
