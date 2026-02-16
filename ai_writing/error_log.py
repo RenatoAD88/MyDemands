@@ -4,14 +4,21 @@ import os
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from bootstrap import resolve_storage_root
+from bootstrap import ensure_storage_root, resolve_storage_root
 
 
 def ai_log_dir() -> str:
     root = resolve_storage_root()
-    path = os.path.join(root, "log")
-    os.makedirs(path, exist_ok=True)
-    return path
+    base_dir = ensure_storage_root(root)
+    if not base_dir:
+        raise OSError(f"Não foi possível criar a pasta base de armazenamento: {root}")
+
+    path = os.path.join(base_dir, "log")
+    log_dir = ensure_storage_root(path)
+    if not log_dir:
+        raise OSError(f"Não foi possível criar a pasta de log: {path}")
+
+    return log_dir
 
 
 def append_ai_error_log(message: str, traceback_text: str = "", context: Optional[Dict[str, Any]] = None) -> str:
