@@ -33,3 +33,23 @@ def test_append_ai_error_log_uses_openia_error_filename(tmp_path, monkeypatch):
     log_path = error_log.append_ai_error_log("Falha")
 
     assert Path(log_path).name == "openIA_error.log"
+
+
+def test_ai_log_dir_falls_back_when_primary_storage_root_fails(tmp_path, monkeypatch):
+    fallback_root = tmp_path / "fallback"
+
+    monkeypatch.setattr(error_log, "resolve_storage_root", lambda: str(tmp_path / "primary"))
+    monkeypatch.setenv("LOCALAPPDATA", "")
+    monkeypatch.setattr(error_log.os.path, "expanduser", lambda _: str(fallback_root.parent))
+
+    def fake_ensure_storage_root(path: str):
+        if path.startswith(str(tmp_path / "primary")):
+            return None
+        Path(path).mkdir(parents=True, exist_ok=True)
+        return path
+
+    monkeypatch.setattr(error_log, "ensure_storage_root", fake_ensure_storage_root)
+
+    log_dir = error_log.ai_log_dir()
+
+    assert log_dir == str(fallback_root.parent / ".mydemands" / "log")
