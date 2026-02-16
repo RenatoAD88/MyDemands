@@ -8,8 +8,8 @@ def test_ai_log_dir_uses_storage_root_and_creates_log_folder(tmp_path, monkeypat
 
     log_dir = error_log.ai_log_dir()
 
-    assert log_dir == str(tmp_path / "log")
-    assert (tmp_path / "log").is_dir()
+    assert log_dir == str(tmp_path / "Log")
+    assert (tmp_path / "Log").is_dir()
 
 
 def test_append_ai_error_log_writes_message_context_and_trace(tmp_path, monkeypatch):
@@ -32,7 +32,7 @@ def test_append_ai_error_log_uses_openia_error_filename(tmp_path, monkeypatch):
 
     log_path = error_log.append_ai_error_log("Falha")
 
-    assert Path(log_path).name == "openIA_error.log"
+    assert Path(log_path).name == "openIA_error.txt"
 
 
 def test_ai_log_dir_falls_back_when_primary_storage_root_fails(tmp_path, monkeypatch):
@@ -52,4 +52,4 @@ def test_ai_log_dir_falls_back_when_primary_storage_root_fails(tmp_path, monkeyp
 
     log_dir = error_log.ai_log_dir()
 
-    assert log_dir == str(fallback_root.parent / ".mydemands" / "log")
+    assert log_dir == str(fallback_root.parent / ".mydemands" / "Log")

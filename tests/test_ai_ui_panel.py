@@ -98,18 +98,21 @@ class _StatusLabel:
         self.text = text
 
 
-def test_on_error_maps_portuguese_rate_limit_message(monkeypatch):
+def test_on_error_displays_exact_error_and_log_path(monkeypatch):
     panel = AIWritingPanel.__new__(AIWritingPanel)
     panel.status = _StatusLabel()
 
     captured = {}
 
-    def _fake_warning(_parent, _title, message):
+    def _fake_warning(_parent, title, message):
+        captured["title"] = title
         captured["message"] = message
 
     monkeypatch.setattr("ai_writing.ui_panel.QMessageBox.warning", _fake_warning)
 
     panel._on_error("Limite de requisições da OpenAI atingido")
 
-    assert captured["message"] == "Limite de requisições atingido. Tente novamente em instantes."
+    assert captured["title"] == "IA - erro na geração"
+    assert "Limite de requisições da OpenAI atingido" in captured["message"]
+    assert "Log/openIA_error.txt" in captured["message"]
     assert panel.status.text == "error"

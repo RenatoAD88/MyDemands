@@ -9,7 +9,7 @@ from ai_writing.errors import MissingAPIKeyError
 from bootstrap import ensure_storage_root, resolve_storage_root
 
 
-AI_ERROR_LOG_FILE_NAME = "openIA_error.log"
+AI_ERROR_LOG_FILE_NAME = "openIA_error.txt"
 
 
 def _candidate_storage_roots() -> list[str]:
@@ -37,7 +37,7 @@ def ai_log_dir() -> str:
             errors.append(root)
             continue
 
-        path = os.path.join(base_dir, "log")
+        path = os.path.join(base_dir, "Log")
         log_dir = ensure_storage_root(path)
         if log_dir:
             return log_dir
@@ -52,10 +52,7 @@ def append_ai_error_log(message: str, traceback_text: str = "", context: Optiona
     log_path = os.path.join(ai_log_dir(), AI_ERROR_LOG_FILE_NAME)
     when = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     context_repr = context or {}
-    body = [
-        f"[{when}] {message}",
-        f"context={context_repr}",
-    ]
+    body = [f"[{when}] {message}", f"context={context_repr}"]
     if traceback_text:
         body.append(traceback_text.rstrip())
     body.append("-" * 80)
@@ -66,5 +63,7 @@ def append_ai_error_log(message: str, traceback_text: str = "", context: Optiona
 
 
 def log_ai_generation_error(exc: Exception, context: Optional[Dict[str, Any]] = None, traceback_text: str = "") -> str:
-    message = "missing_key" if isinstance(exc, MissingAPIKeyError) else str(exc)
+    message = str(exc)
+    if isinstance(exc, MissingAPIKeyError) and not message:
+        message = "Erro de credencial da OpenAI"
     return append_ai_error_log(message, traceback_text, context)
