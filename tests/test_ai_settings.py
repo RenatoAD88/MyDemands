@@ -6,6 +6,8 @@ def _install_qt_stubs():
     qtwidgets = types.ModuleType("PySide6.QtWidgets")
 
     class _Dummy:
+        Password = 1
+
         def __init__(self, *args, **kwargs):
             pass
 
@@ -39,7 +41,8 @@ def _install_qt_stubs():
         def setText(self, *args, **kwargs):
             pass
 
-        def clicked(self, *args, **kwargs):
+        @property
+        def clicked(self):
             return self
 
         def connect(self, *args, **kwargs):
@@ -57,14 +60,14 @@ def _install_qt_stubs():
         def addLayout(self, *args, **kwargs):
             pass
 
+        def text(self):
+            return ""
+
         def isChecked(self):
             return False
 
-        def currentText(self):
-            return "gpt-4.1-mini"
-
         def value(self):
-            return 0.3
+            return 0.5
 
     qtwidgets.QCheckBox = _Dummy
     qtwidgets.QComboBox = _Dummy
@@ -77,6 +80,8 @@ def _install_qt_stubs():
     qtwidgets.QPushButton = _Dummy
     qtwidgets.QVBoxLayout = _Dummy
     qtwidgets.QDoubleSpinBox = _Dummy
+    qtwidgets.QSpinBox = _Dummy
+    qtwidgets.QProgressBar = _Dummy
 
     pyside6 = types.ModuleType("PySide6")
     pyside6.QtWidgets = qtwidgets
@@ -90,12 +95,10 @@ _install_qt_stubs()
 from ai_writing.settings import AISettings, AISettingsStore
 
 
-def test_ai_settings_default_model_is_gpt_4_1_mini(tmp_path):
+def test_ai_settings_default_model_is_hf_mistral(tmp_path):
     store = AISettingsStore(str(tmp_path))
-
     loaded = store.load()
-
-    assert loaded.model == "gpt-4.1-mini"
+    assert loaded.model == "mistralai/Mistral-7B-Instruct-v0.2"
 
 
 def test_ai_settings_store_persists_last_saved_configuration(tmp_path):
@@ -103,7 +106,7 @@ def test_ai_settings_store_persists_last_saved_configuration(tmp_path):
     expected = AISettings(
         enabled=False,
         show_chips=False,
-        model="gpt-5.2",
+        model="meta-llama/Llama-3.1-8B-Instruct",
         temperature=0.9,
         privacy_mode=False,
         debug_log_text=True,
