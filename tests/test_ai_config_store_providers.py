@@ -22,3 +22,9 @@ def test_cache_isolated_by_provider(tmp_path):
 
     assert store.get_cached_response("key", provider=HF_PROVIDER) == "hf-response"
     assert store.get_cached_response("key", provider=OPENAI_PROVIDER) == "openai-response"
+
+
+def test_default_provider_is_openai():
+    from ai_writing.config_store import DEFAULT_PROVIDER
+
+    assert DEFAULT_PROVIDER == OPENAI_PROVIDER
