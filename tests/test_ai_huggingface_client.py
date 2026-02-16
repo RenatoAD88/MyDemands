@@ -67,9 +67,26 @@ def test_http_410_faz_fallback_para_router(monkeypatch):
         return _Response([{"generated_text": "OK via router"}])
 
     monkeypatch.setattr("urllib.request.urlopen", _urlopen)
-    client = HuggingFaceClient(api_token="hf-token", model="mistralai/Mistral-7B-Instruct-v0.2")
+    client = HuggingFaceClient(api_token="hf-token", model="mistralai/Mistral-7B-Instruct-v0.3")
 
     assert client.suggest("abc", "instr") == "OK via router"
     assert len(calls) == 2
     assert "api-inference.huggingface.co" in calls[0]
     assert "router.huggingface.co" in calls[1]
+
+
+def test_modelo_legado_faz_fallback_para_alias(monkeypatch):
+    calls = []
+
+    def _urlopen(req, *args, **kwargs):
+        calls.append(req.full_url)
+        if "Mistral-7B-Instruct-v0.2" in req.full_url:
+            raise urllib.error.HTTPError(req.full_url, 404, "", None, None)
+        return _Response([{"generated_text": "OK alias"}])
+
+    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+    client = HuggingFaceClient(api_token="hf-token", model="mistralai/Mistral-7B-Instruct-v0.2")
+
+    assert client.suggest("abc", "instr") == "OK alias"
+    assert any("Mistral-7B-Instruct-v0.2" in call for call in calls)
+    assert any("Mistral-7B-Instruct-v0.3" in call for call in calls)
