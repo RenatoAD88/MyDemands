@@ -127,7 +127,7 @@ class AIWritingPanel(QDialog):
             QMessageBox.warning(self, "IA", "Credencial da IA não configurada")
         elif "modelo" in lowered or "404" in lowered:
             QMessageBox.warning(self, "IA", "Modelo inválido ou não encontrado")
-        elif "rate" in lowered or "429" in lowered:
+        elif "rate" in lowered or "429" in lowered or "limite de requisi" in lowered:
             QMessageBox.warning(self, "IA", "Limite de requisições atingido. Tente novamente em instantes.")
         elif "timeout" in lowered:
             QMessageBox.warning(self, "IA", "Timeout na API de IA")
