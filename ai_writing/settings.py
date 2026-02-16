@@ -127,7 +127,7 @@ class AISettingsDialog(QDialog):
 
         self.api_key_input = QLineEdit(self._config.hf_api_token)
         self.api_key_input.setPlaceholderText("Cole aqui seu token do Hugging Face")
-        self.api_key_input.setEchoMode(QLineEdit.Password)
+        self.api_key_input.setEchoMode(QLineEdit.Normal)
 
         self.usage_label = QLabel(f"Uso atual: {self._config.ia_usage_count} / {self._config.ia_usage_limit}")
 
@@ -178,12 +178,19 @@ class AISettingsDialog(QDialog):
                 temperature=float(self.temperature.value()),
                 max_new_tokens=int(self.max_new_tokens.value()),
             )
-            client.suggest("Teste", "Responda apenas OK.", {"field": "connection_test"})
+            client.check_connectivity()
+            try:
+                client.suggest("Teste", "Responda apenas OK.", {"field": "connection_test"})
+            except ModelNotFoundError:
+                QMessageBox.warning(
+                    self,
+                    "IA",
+                    "Conectividade com Hugging Face OK, mas o modelo informado é inválido ou indisponível. Atualize o campo Modelo.",
+                )
+                return
             QMessageBox.information(self, "IA", "Conexão OK")
         except MissingAPIKeyError:
             QMessageBox.warning(self, "IA", "Token do Hugging Face inválido ou ausente")
-        except ModelNotFoundError:
-            QMessageBox.warning(self, "IA", "Modelo inválido ou não encontrado")
         except RateLimitError:
             QMessageBox.warning(self, "IA", "Limite de requisições atingido. Tente novamente em instantes.")
         except Exception as exc:

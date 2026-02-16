@@ -36,3 +36,10 @@ def test_stylesheet_keeps_native_dropdown_arrows_visible():
     assert "QComboBox::down-arrow, QDateEdit::down-arrow {" in APP_STYLESHEET
     block = APP_STYLESHEET.split("QComboBox::down-arrow, QDateEdit::down-arrow {", 1)[1].split("}", 1)[0]
     assert "image: none;" not in block
+
+
+def test_stylesheet_checkbox_indicator_has_explicit_high_contrast_checkmark():
+    assert "QCheckBox::indicator:checked {" in APP_STYLESHEET
+    assert "background: #1d4ed8;" in APP_STYLESHEET
+    assert "stroke='%23ffffff'" in APP_STYLESHEET
+    assert "QCheckBox::indicator:disabled {" in APP_STYLESHEET

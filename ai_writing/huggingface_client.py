@@ -4,8 +4,13 @@ import json
 import socket
 import urllib.error
 import urllib.request
+from http import HTTPStatus
 from typing import Optional
 
+
+
+
+DEFAULT_CONNECTIVITY_URL = "https://huggingface.co/api/whoami-v2"
 
 LEGACY_MODEL_ALIASES = {
     "mistralai/Mistral-7B-Instruct-v0.2": "mistralai/Mistral-7B-Instruct-v0.3",
@@ -129,6 +134,22 @@ class HuggingFaceClient:
             raise AIWritingError("Falha na API do Hugging Face (HTTP 410)") from last_http_error
 
         raise AIWritingError("Falha inesperada ao chamar a API do Hugging Face")
+
+    def check_connectivity(self) -> None:
+        req = urllib.request.Request(
+            DEFAULT_CONNECTIVITY_URL,
+            headers={"Authorization": f"Bearer {self.api_token}"},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout):
+                return
+        except urllib.error.HTTPError as exc:
+            if exc.code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
+                raise MissingAPIKeyError("Token do Hugging Face inválido ou ausente") from exc
+            raise AIWritingError(f"Falha ao validar conectividade (HTTP {exc.code})") from exc
+        except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+            raise AIRequestTimeoutError("Timeout na API do Hugging Face") from exc
 
     @staticmethod
     def _extract_text(payload, prompt: str) -> str:
