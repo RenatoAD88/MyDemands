@@ -90,3 +90,21 @@ def test_modelo_legado_faz_fallback_para_alias(monkeypatch):
     assert client.suggest("abc", "instr") == "OK alias"
     assert any("Mistral-7B-Instruct-v0.2" in call for call in calls)
     assert any("Mistral-7B-Instruct-v0.3" in call for call in calls)
+
+
+def test_check_connectivity_token_invalido(monkeypatch):
+    def _raise(*args, **kwargs):
+        raise urllib.error.HTTPError("", 401, "", None, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", _raise)
+    client = HuggingFaceClient(api_token="token-invalido")
+
+    with pytest.raises(MissingAPIKeyError):
+        client.check_connectivity()
+
+
+def test_check_connectivity_ok(monkeypatch):
+    monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: _Response({"name": "ok"}))
+    client = HuggingFaceClient(api_token="hf-token")
+
+    assert client.check_connectivity() is None

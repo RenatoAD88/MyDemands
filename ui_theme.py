@@ -134,12 +134,24 @@ QCheckBox::indicator {
     width: 16px;
     height: 16px;
     background: #ffffff;
-    border: 1px solid #111827;
+    border: 1px solid #374151;
     border-radius: 3px;
 }
+QCheckBox::indicator:unchecked:hover {
+    border: 1px solid #1d4ed8;
+}
 QCheckBox::indicator:checked {
-    background: #ffffff;
-    border: 1px solid #111827;
+    background: #1d4ed8;
+    border: 1px solid #1d4ed8;
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M3.2 8.4 6.6 11.8 12.8 4.8' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
+QCheckBox::indicator:disabled {
+    background: #e5e7eb;
+    border: 1px solid #9ca3af;
+}
+QCheckBox::indicator:checked:disabled {
+    background: #6b7280;
+    border: 1px solid #6b7280;
 }
 
 QLabel#errorText { color: #b42318; }
