@@ -41,8 +41,7 @@ from notifications.inapp_toast import InAppToastNotifier
 from notifications.scheduler import DeadlineScheduler
 from notifications.settings_view import NotificationSettingsDialog
 from notifications.system_notifier import SystemNotifier
-from ai_writing.huggingface_client import (
-    HuggingFaceClient,
+from ai_writing.errors import (
     AIWritingError,
     MissingAPIKeyError,
     ModelNotFoundError,
@@ -2253,7 +2252,7 @@ class MainWindow(QMainWindow):
             btn.show()
             provider = self.ai_settings.provider
             cfg = self.ai_config_store.load_config(provider=provider)
-            has_credential = cfg.openai_api_key.strip() if provider == OPENAI_PROVIDER else cfg.hf_api_token.strip()
+            has_credential = cfg.openai_api_key.strip()
             if not has_credential:
                 btn.setEnabled(False)
                 btn.setToolTip("Configurar IA…")
@@ -2311,7 +2310,7 @@ class MainWindow(QMainWindow):
             else:
                 provider = self.ai_settings.provider
                 cfg = self.ai_config_store.load_config(provider=provider)
-                has_credential = cfg.openai_api_key.strip() if provider == OPENAI_PROVIDER else cfg.hf_api_token.strip()
+                has_credential = cfg.openai_api_key.strip()
                 if not has_credential:
                     btn.setEnabled(False)
                     btn.setToolTip("Configurar IA…")
