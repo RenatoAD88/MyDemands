@@ -125,3 +125,24 @@ def test_check_connectivity_ok(monkeypatch):
     client = HuggingFaceClient(api_token="hf-token")
 
     assert client.check_connectivity() is None
+
+
+def test_payload_inclui_wait_for_model(monkeypatch):
+    captured_payloads = []
+
+    def _urlopen(req, *args, **kwargs):
+        captured_payloads.append(json.loads(req.data.decode("utf-8")))
+        return _Response([{"generated_text": "Texto final"}])
+
+    monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+    client = HuggingFaceClient(api_token="hf-token")
+
+    assert client.suggest("abc", "instr") == "Texto final"
+    assert captured_payloads[0]["options"]["wait_for_model"] is True
+
+
+def test_extract_text_erro_licenca_dispara_model_not_found():
+    payload = {"error": "Access to model is gated. Please accept license terms."}
+
+    with pytest.raises(ModelNotFoundError, match="aceite os termos"):
+        HuggingFaceClient._extract_text(payload, "prompt")

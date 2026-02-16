@@ -90,6 +90,11 @@ class HuggingFaceClient:
         return self._extract_text(raw, prompt)
 
     def _request_with_fallback(self, payload: dict):
+        request_payload = dict(payload)
+        options = dict(request_payload.get("options") or {})
+        options.setdefault("wait_for_model", True)
+        request_payload["options"] = options
+
         last_http_error = None
         candidate_models = [self.model]
         for fallback_model in MODEL_FALLBACKS.get(self.model, []):
@@ -104,7 +109,7 @@ class HuggingFaceClient:
             for idx, endpoint in enumerate(endpoints):
                 req = urllib.request.Request(
                     endpoint,
-                    data=json.dumps(payload).encode("utf-8"),
+                    data=json.dumps(request_payload).encode("utf-8"),
                     headers={
                         "Authorization": f"Bearer {self.api_token}",
                         "Content-Type": "application/json",
@@ -155,7 +160,15 @@ class HuggingFaceClient:
     @staticmethod
     def _extract_text(payload, prompt: str) -> str:
         if isinstance(payload, dict) and payload.get("error"):
-            raise AIWritingError(str(payload.get("error")))
+            error_message = str(payload.get("error"))
+            normalized_message = error_message.lower()
+            license_markers = ("license", "licen", "accept", "gated", "terms")
+            if any(marker in normalized_message for marker in license_markers):
+                raise ModelNotFoundError(
+                    "O modelo está protegido por licença/termos no Hugging Face. "
+                    "Acesse a página do modelo, aceite os termos de uso e tente novamente."
+                )
+            raise AIWritingError(error_message)
 
         if isinstance(payload, list) and payload:
             first = payload[0]
