@@ -10,7 +10,7 @@ from typing import Dict, Optional
 DEFAULT_AI_DIR = r"C:\MyDemands\ai_writing"
 HF_PROVIDER = "huggingface"
 OPENAI_PROVIDER = "openai"
-DEFAULT_PROVIDER = HF_PROVIDER
+DEFAULT_PROVIDER = OPENAI_PROVIDER
 CONFIG_FILE_NAME_BY_PROVIDER = {
     HF_PROVIDER: "configIA.txt",
     OPENAI_PROVIDER: "configOpenAI.txt",

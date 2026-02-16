@@ -33,9 +33,9 @@ from ai_writing.openai_client import OpenAIClient
 
 @dataclass
 class AISettings:
-    enabled: bool = True
+    enabled: bool = False
     show_chips: bool = True
-    provider: str = HF_PROVIDER
+    provider: str = OPENAI_PROVIDER
     model: str = "google/flan-t5-base"
     temperature: float = 0.5
     log_channel: str = "sqlite"
@@ -57,7 +57,7 @@ class AISettingsStore:
         merged: Dict[str, Any] = asdict(AISettings())
         merged.update({k: v for k, v in data.items() if k in merged})
         if merged.get("provider") not in {HF_PROVIDER, OPENAI_PROVIDER}:
-            merged["provider"] = HF_PROVIDER
+            merged["provider"] = OPENAI_PROVIDER
         return AISettings(**merged)
 
     def save(self, settings: AISettings) -> None:

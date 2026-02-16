@@ -95,10 +95,13 @@ _install_qt_stubs()
 from ai_writing.settings import AISettings, AISettingsStore
 
 
-def test_ai_settings_default_model_is_hf_mistral(tmp_path):
+def test_ai_settings_defaults_to_openai_disabled(tmp_path):
     store = AISettingsStore(str(tmp_path))
     loaded = store.load()
-    assert loaded.model == "google/flan-t5-base"
+
+    assert loaded.enabled is False
+    assert loaded.provider == "openai"
+
 
 
 def test_ai_settings_store_persists_last_saved_configuration(tmp_path):
