@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional
 
+
 PANEL_CLASS = None
 
 
@@ -24,7 +25,7 @@ class AIFieldBinding:
         self._last_original = ""
 
     def open_panel(self, parent=None):
-        source = get_widget_text(self.text_widget)
+        source = get_text(self.text_widget)
 
         global PANEL_CLASS
         if PANEL_CLASS is None:
@@ -37,27 +38,22 @@ class AIFieldBinding:
         if self.demand_id and not context.get("demand_id"):
             context["demand_id"] = self.demand_id
 
-        panel = PANEL_CLASS(source, self.generate_handler, context, parent=parent)
-        if panel.exec() != panel.Accepted:
-            return
+        self._last_original = source
 
-        suggestion = panel.after.toPlainText().strip()
-        if not suggestion:
-            from PySide6.QtWidgets import QMessageBox
+        def _apply_from_panel(suggestion: str) -> bool:
+            if callable(self.on_apply):
+                self.on_apply(suggestion)
+            else:
+                set_text(self.text_widget, suggestion)
+                focus_widget_end(self.text_widget)
+            return True
 
-            QMessageBox.warning(parent or self.text_widget.window(), "IA", "O texto gerado está vazio e não pode ser aplicado.")
-            return
-
-        self._last_original = get_widget_text(self.text_widget)
-        apply_suggestion_to_widget(self.text_widget, suggestion)
-        focus_widget_end(self.text_widget)
-
-        if callable(self.on_apply):
-            self.on_apply(suggestion)
+        panel = PANEL_CLASS(source, self.generate_handler, context, parent=parent, on_apply=_apply_from_panel)
+        panel.exec()
 
     def undo_last(self):
         if self._last_original:
-            apply_suggestion_to_widget(self.text_widget, self._last_original)
+            set_text(self.text_widget, self._last_original)
             focus_widget_end(self.text_widget)
 
 
@@ -93,7 +89,7 @@ def attach_ai_writing(
     return wrapper
 
 
-def apply_suggestion_to_widget(text_widget: Any, suggestion: str) -> None:
+def set_text(text_widget: Any, suggestion: str) -> None:
     if hasattr(text_widget, "setPlainText"):
         text_widget.setPlainText(suggestion)
         return
@@ -103,7 +99,7 @@ def apply_suggestion_to_widget(text_widget: Any, suggestion: str) -> None:
     raise TypeError(f"Widget {type(text_widget).__name__} não suportado para aplicação de IA")
 
 
-def get_widget_text(text_widget: Any) -> str:
+def get_text(text_widget: Any) -> str:
     if hasattr(text_widget, "toPlainText"):
         return text_widget.toPlainText()
     if hasattr(text_widget, "text"):
@@ -116,9 +112,21 @@ def focus_widget_end(text_widget: Any) -> None:
         text_widget.setFocus()
     if hasattr(text_widget, "setCursorPosition") and hasattr(text_widget, "text"):
         text_widget.setCursorPosition(len(text_widget.text()))
-    elif hasattr(text_widget, "textCursor") and hasattr(text_widget, "setTextCursor"):
+        return
+    if hasattr(text_widget, "moveCursor"):
+        cursor = text_widget.textCursor() if hasattr(text_widget, "textCursor") else None
+        move_op = getattr(getattr(cursor, "MoveOperation", None), "End", None) if cursor is not None else None
+        if move_op is not None:
+            text_widget.moveCursor(move_op)
+            return
+    if hasattr(text_widget, "textCursor") and hasattr(text_widget, "setTextCursor"):
         cursor = text_widget.textCursor()
         move_op = getattr(getattr(cursor, "MoveOperation", None), "End", None)
         if move_op is not None and hasattr(cursor, "movePosition"):
             cursor.movePosition(move_op)
         text_widget.setTextCursor(cursor)
+
+
+# Backward-compatible aliases
+apply_suggestion_to_widget = set_text
+get_widget_text = get_text

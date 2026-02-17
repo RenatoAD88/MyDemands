@@ -35,12 +35,20 @@ class _Worker(QObject):
 
 
 class AIWritingPanel(QDialog):
-    def __init__(self, source_text: str, on_generate: Callable[..., str], context: Dict[str, Any], parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        source_text: str,
+        on_generate: Callable[..., str],
+        context: Dict[str, Any],
+        parent: Optional[QWidget] = None,
+        on_apply: Optional[Callable[[str], bool]] = None,
+    ):
         super().__init__(parent)
         self.setWindowTitle("✨ Redigir com IA")
         self.source_text = source_text
         self.context = context
         self.on_generate = on_generate
+        self.on_apply = on_apply
         self.suggestion_text = ""
         self._previous_applied = ""
 
@@ -131,6 +139,16 @@ class AIWritingPanel(QDialog):
         self.status.setText("error")
 
     def _apply(self):
+        suggestion = self.after.toPlainText().strip()
+        if not suggestion:
+            QMessageBox.warning(self, "IA", "O texto gerado está vazio e não pode ser aplicado.")
+            return
+
+        if callable(self.on_apply):
+            should_close = bool(self.on_apply(suggestion))
+            if not should_close:
+                return
+
         self._previous_applied = self.source_text
         self.accept()
 
