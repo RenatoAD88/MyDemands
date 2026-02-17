@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import socket
 from collections.abc import Mapping
 from http import HTTPStatus
@@ -17,7 +18,10 @@ from ai_writing.errors import (
 from ai_writing.error_log import append_ai_error_log
 
 HF_ROUTER_BASE_URL = "https://router.huggingface.co/v1"
-HF_SYSTEM_PROMPT = "Você é um assistente que reescreve textos corporativos em português do Brasil."
+HF_SYSTEM_PROMPT = (
+    "Você é um assistente que reescreve textos corporativos em português do Brasil. "
+    "Retorne SOMENTE o texto final entre <final> e </final>. Não escreva nada fora dessas tags."
+)
 
 
 class HuggingFaceClient:
@@ -163,6 +167,67 @@ class HuggingFaceClient:
         return ""
 
     @staticmethod
+    def _extract_final_tag(text: str) -> str:
+        if not text:
+            return ""
+        match = re.search(r"<final>(.*?)</final>", text, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            return ""
+        return match.group(1).strip()
+
+    @staticmethod
+    def _looks_like_reasoning(text: str) -> bool:
+        if not text:
+            return False
+
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if not lines:
+            return False
+
+        markers = ("analyze", "analysis", "passo", "step", "racioc")
+        if any(line.lower().startswith(markers) for line in lines):
+            return True
+
+        numbered_prefixes = sum(1 for line in lines if re.match(r"^\d+[\.)\-:]", line))
+        return numbered_prefixes >= 2
+
+    @staticmethod
+    def _fallback_final_text(text: str) -> str:
+        if not text:
+            return ""
+
+        final_markers = ("final:", "resposta final:", "texto final:")
+        lowered = text.lower()
+        for marker in final_markers:
+            idx = lowered.rfind(marker)
+            if idx >= 0:
+                candidate = text[idx + len(marker) :].strip()
+                if candidate:
+                    return candidate
+
+        paragraphs = [chunk.strip() for chunk in re.split(r"\n\s*\n", text) if chunk.strip()]
+        if paragraphs:
+            return paragraphs[-1]
+
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return lines[-1] if lines else ""
+
+    @classmethod
+    def _normalize_output_text(cls, text: str) -> str:
+        normalized = (text or "").strip()
+        if not normalized:
+            return ""
+
+        final_tagged = cls._extract_final_tag(normalized)
+        if final_tagged:
+            return final_tagged
+
+        if cls._looks_like_reasoning(normalized):
+            return cls._fallback_final_text(normalized)
+
+        return normalized
+
+    @staticmethod
     def _sanitize_for_log(data: Any) -> Any:
         sensitive_keywords = ("token", "authorization", "api_key", "key")
         if isinstance(data, Mapping):
@@ -238,7 +303,17 @@ class HuggingFaceClient:
                 error_message = str(error_data)
             raise AIWritingError(error_message or "Falha na API do Hugging Face")
 
-        text = self._extract_text_content(completion).strip()
+        choice = self._safe_get(completion, "choices")
+        first_choice = choice[0] if isinstance(choice, list) and choice else None
+        msg = self._safe_get(first_choice, "message")
+
+        text = (self._safe_get(msg, "content") or "").strip()
+        if not text:
+            text = (self._safe_get(msg, "reasoning_content") or "").strip()
+        if not text:
+            text = self._extract_text_content(completion).strip()
+
+        text = self._normalize_output_text(text)
         if not text:
             self._log_unexpected_response(completion, context=context)
             raise AIWritingError("Resposta do provedor não contém texto (formato inesperado). Veja logs.")
@@ -248,8 +323,15 @@ class HuggingFaceClient:
         if not self.api_token:
             raise MissingAPIKeyError("Token do Hugging Face não configurado")
 
+        system_prompt = str(instruction or "").strip() or HF_SYSTEM_PROMPT
+        if "<final>" not in system_prompt.lower():
+            system_prompt = (
+                f"{system_prompt}\n\n"
+                "Retorne SOMENTE o texto final entre <final> e </final>. Não escreva nada fora dessas tags."
+            )
+
         return self._chat_completion(
-            system_message=str(instruction or "").strip() or HF_SYSTEM_PROMPT,
+            system_message=system_prompt,
             user_message=self.build_prompt(input_text, instruction, context),
             context=context,
         )
