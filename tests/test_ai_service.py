@@ -3,7 +3,7 @@ from datetime import date, timedelta
 import pytest
 
 from ai_writing.config_store import AIConfig, AIConfigStore, OPENAI_PROVIDER
-from ai_writing.errors import UsageLimitReachedError
+from ai_writing.errors import AIWritingError, UsageLimitReachedError
 from ai_writing.service import AIWritingService
 
 
@@ -22,7 +22,7 @@ class FakeClient:
 
 
 def _seed_config(store: AIConfigStore, **kwargs):
-    cfg = AIConfig(openai_api_key="sk-token")
+    cfg = AIConfig(openai_api_key="sk-token", ai_enabled=True)
     for key, value in kwargs.items():
         setattr(cfg, key, value)
     store.save_config(cfg, provider=OPENAI_PROVIDER)
@@ -32,7 +32,7 @@ def test_incremento_correto_do_contador(tmp_path, monkeypatch):
     store = AIConfigStore(str(tmp_path / "ai"))
     _seed_config(store, ia_usage_count=0, ia_usage_limit=200)
     service = AIWritingService(store)
-    monkeypatch.setattr(service, "_resolve_client", lambda provider: FakeClient)
+    monkeypatch.setattr(service, "_resolve_client", lambda provider, cfg: FakeClient())
 
     service.generate("txt", "instr", {}, provider=OPENAI_PROVIDER)
 
@@ -43,7 +43,7 @@ def test_bloqueio_ao_atingir_limite(tmp_path, monkeypatch):
     store = AIConfigStore(str(tmp_path / "ai"))
     _seed_config(store, ia_usage_count=3, ia_usage_limit=3, ia_last_reset=date.today().strftime("%Y-%m-%d"))
     service = AIWritingService(store)
-    monkeypatch.setattr(service, "_resolve_client", lambda provider: FakeClient)
+    monkeypatch.setattr(service, "_resolve_client", lambda provider, cfg: FakeClient())
 
     with pytest.raises(UsageLimitReachedError):
         service.generate("txt", "instr", {}, provider=OPENAI_PROVIDER)
@@ -54,7 +54,7 @@ def test_reset_automatico(tmp_path, monkeypatch):
     reset_date = (date.today() - timedelta(days=31)).strftime("%Y-%m-%d")
     _seed_config(store, ia_usage_count=10, ia_usage_limit=200, ia_last_reset=reset_date)
     service = AIWritingService(store)
-    monkeypatch.setattr(service, "_resolve_client", lambda provider: FakeClient)
+    monkeypatch.setattr(service, "_resolve_client", lambda provider, cfg: FakeClient())
 
     service.generate("txt", "instr", {}, provider=OPENAI_PROVIDER)
 
@@ -68,7 +68,7 @@ def test_cache_evita_nova_chamada(tmp_path, monkeypatch):
     store = AIConfigStore(str(tmp_path / "ai"))
     _seed_config(store, ia_usage_count=0, ia_usage_limit=200, ia_cache_enabled=True)
     service = AIWritingService(store)
-    monkeypatch.setattr(service, "_resolve_client", lambda provider: FakeClient)
+    monkeypatch.setattr(service, "_resolve_client", lambda provider, cfg: FakeClient())
 
     first = service.generate("txt", "instr", {"k": 1}, provider=OPENAI_PROVIDER)
     second = service.generate("txt", "instr", {"k": 1}, provider=OPENAI_PROVIDER)
@@ -87,3 +87,13 @@ def test_remocao_cache_antigo_ao_ultrapassar_1000(tmp_path):
     assert len(cache) == 1000
     assert "key-0" not in cache
     assert "key-1" not in cache
+
+
+def test_ai_disabled_blocks_suggest(tmp_path):
+    store = AIConfigStore(str(tmp_path / "ai"))
+    cfg = AIConfig(ai_enabled=False, openai_api_key="sk")
+    store.save_config(cfg)
+    service = AIWritingService(store)
+
+    with pytest.raises(AIWritingError, match="IA desativada"):
+        service.generate("txt", "instr", {}, provider=OPENAI_PROVIDER)

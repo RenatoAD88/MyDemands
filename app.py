@@ -2252,7 +2252,7 @@ class MainWindow(QMainWindow):
             btn.show()
             provider = self.ai_settings.provider
             cfg = self.ai_config_store.load_config(provider=provider)
-            has_credential = cfg.openai_api_key.strip()
+            has_credential = cfg.openai_api_key.strip() if provider == "openai" else cfg.hf_api_token.strip()
             if not has_credential:
                 btn.setEnabled(False)
                 btn.setToolTip("Configurar IA…")
@@ -2319,7 +2319,7 @@ class MainWindow(QMainWindow):
             else:
                 provider = self.ai_settings.provider
                 cfg = self.ai_config_store.load_config(provider=provider)
-                has_credential = cfg.openai_api_key.strip()
+                has_credential = cfg.openai_api_key.strip() if provider == "openai" else cfg.hf_api_token.strip()
                 if not has_credential:
                     btn.setEnabled(False)
                     btn.setToolTip("Configurar IA…")

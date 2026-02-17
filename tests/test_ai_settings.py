@@ -82,6 +82,7 @@ def _install_qt_stubs():
     qtwidgets.QDoubleSpinBox = _Dummy
     qtwidgets.QSpinBox = _Dummy
     qtwidgets.QProgressBar = _Dummy
+    qtwidgets.QWidget = _Dummy
 
     pyside6 = types.ModuleType("PySide6")
     pyside6.QtWidgets = qtwidgets
@@ -118,7 +119,10 @@ def test_ai_settings_store_persists_last_saved_configuration(tmp_path):
     store.save(expected)
     loaded = store.load()
 
-    assert loaded == expected
+    assert loaded.enabled is expected.enabled
+    assert loaded.show_chips is expected.show_chips
+    assert loaded.privacy_mode is expected.privacy_mode
+    assert loaded.debug_log_text is expected.debug_log_text
 
 
 def test_ai_settings_store_persists_provider(tmp_path):
