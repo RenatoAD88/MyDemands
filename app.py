@@ -152,6 +152,8 @@ TAB4_EDITABLE_COLUMNS = {
     "Time/Função",
 }
 DESC_COLUMN_MAX_CHARS = 45
+COMMENT_COLUMN_MAX_CHARS = 45
+MAX_TEXT_COL_WIDTH_PX = 600
 
 STATUS_EDIT_OPTIONS = [
     "Não iniciada",
@@ -1275,6 +1277,7 @@ class MainWindow(QMainWindow):
 
         self._filling = False
         self._restoring_prefs = False
+        self._resizing_columns = False
         self._table_sort_state: Dict[str, Optional[Tuple[int, Qt.SortOrder]]] = {
             "t1": None,
             "t3": None,
@@ -1606,10 +1609,8 @@ class MainWindow(QMainWindow):
             header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
             table.resizeColumnToContents(col)
             header.setSectionResizeMode(col, QHeaderView.Interactive)
-
-        desc_col = VISIBLE_COLUMNS.index("Descrição")
-        desc_width = table.fontMetrics().horizontalAdvance("M" * DESC_COLUMN_MAX_CHARS)
-        table.setColumnWidth(desc_col, desc_width)
+        self._apply_capped_text_column_width(table, "Descrição", DESC_COLUMN_MAX_CHARS)
+        self._apply_capped_text_column_width(table, "Comentário", COMMENT_COLUMN_MAX_CHARS)
         self._setup_sortable_header(table)
 
         return table
@@ -1619,6 +1620,31 @@ class MainWindow(QMainWindow):
         header.setSectionsClickable(True)
         header.setSortIndicatorShown(True)
         header.sectionClicked.connect(lambda col, t=table: self._on_header_section_clicked(t, col))
+
+    def _apply_capped_text_column_width(self, table: QTableWidget, col_name: str, max_chars: int) -> None:
+        if not isinstance(table, QTableWidget):
+            return
+        if col_name not in VISIBLE_COLUMNS:
+            return
+        idx = VISIBLE_COLUMNS.index(col_name)
+        width = table.fontMetrics().horizontalAdvance("M" * max_chars)
+        width = min(width, MAX_TEXT_COL_WIDTH_PX)
+        table.setColumnWidth(idx, width)
+        table.horizontalHeader().setSectionResizeMode(idx, QHeaderView.Interactive)
+
+    def _normalize_text_columns_widths(self) -> None:
+        if self._resizing_columns:
+            return
+
+        self._resizing_columns = True
+        try:
+            for table in (self.t3_table, self.t4_table, self.t4_cancelled_table):
+                if not isinstance(table, QTableWidget):
+                    continue
+                self._apply_capped_text_column_width(table, "Descrição", DESC_COLUMN_MAX_CHARS)
+                self._apply_capped_text_column_width(table, "Comentário", COMMENT_COLUMN_MAX_CHARS)
+        finally:
+            self._resizing_columns = False
 
     def _on_header_section_clicked(self, table: QTableWidget, col: int):
         table_key = str(table.property("tableSortKey") or "")
@@ -1806,6 +1832,7 @@ class MainWindow(QMainWindow):
                 except ValidationError as ve:
                     QMessageBox.warning(self, "Validação", str(ve))
                 self.refresh_all()
+                self._normalize_text_columns_widths()
             return
         if table_key in {"t4", "t4_cancelled"} and col_name not in PICKER_ONLY:
             return
@@ -2001,6 +2028,8 @@ class MainWindow(QMainWindow):
             self.emit_error_notification(str(e))
             debug_msg("Erro ao salvar", str(e))
         self.refresh_all()
+        if col_name in {"Descrição", "Comentário"}:
+            self._normalize_text_columns_widths()
 
     def _restore_preferences(self):
         self._restoring_prefs = True
@@ -2071,7 +2100,7 @@ class MainWindow(QMainWindow):
                     table.setColumnWidth(col_idx, width)
 
     def _on_table_section_resized(self, table: QTableWidget):
-        if self._restoring_prefs or not self._ui_ready:
+        if self._restoring_prefs or self._resizing_columns or not self._ui_ready:
             return
         table_key = str(table.property("tableSortKey") or "")
         if table_key not in {"t1", "t3", "t4", "t4_cancelled"}:
