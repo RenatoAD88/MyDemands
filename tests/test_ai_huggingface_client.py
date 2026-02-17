@@ -124,3 +124,13 @@ def test_connectivity_gated_error_message(monkeypatch):
 
     with pytest.raises(AIWritingError, match="acesso restrito"):
         client.check_connectivity()
+
+
+def test_extract_exception_metadata_uses_exception_name_when_message_is_empty():
+    class _SilentError(Exception):
+        def __str__(self):
+            return ""
+
+    meta = HuggingFaceClient._extract_exception_metadata(_SilentError())
+
+    assert meta["body"] == "_SilentError"
