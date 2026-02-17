@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from ai_writing.config_store import AIConfig, AIConfigStore, DEFAULT_HF_MODEL, HUGGINGFACE_PROVIDER, OPENAI_PROVIDER
 from ai_writing.errors import AIRequestTimeoutError, AIWritingError, MissingAPIKeyError, ModelNotFoundError, RateLimitError
 from ai_writing.error_log import log_ai_generation_error
+from ai_writing.huggingface_client import HuggingFaceClient
 from ai_writing.provider_factory import AIProviderFactory
 from ui_prefs import load_prefs, save_prefs
 
@@ -126,6 +127,7 @@ class AISettingsDialog(QDialog):
         self.hf_temperature = QDoubleSpinBox(); self.hf_temperature.setRange(0.0, 2.0); self.hf_temperature.setSingleStep(0.1)
         self.hf_max_tokens = QSpinBox(); self.hf_max_tokens.setRange(1, 8192)
         self.hf_top_p = QDoubleSpinBox(); self.hf_top_p.setRange(0.0, 1.0); self.hf_top_p.setSingleStep(0.1)
+        self.hf_timeout = QDoubleSpinBox(); self.hf_timeout.setRange(1.0, 120.0); self.hf_timeout.setSingleStep(1.0)
 
         self.monthly_limit = QSpinBox(); self.monthly_limit.setRange(1, 100000)
         self.cache_enabled = QCheckBox("IA_CACHE_ENABLED")
@@ -178,6 +180,7 @@ class AISettingsDialog(QDialog):
         f.addRow("temperature", self.hf_temperature)
         f.addRow("max_new_tokens", self.hf_max_tokens)
         f.addRow("top_p (opcional)", self.hf_top_p)
+        f.addRow("timeout (s)", self.hf_timeout)
         return widget
 
     def _provider(self) -> str:
@@ -211,6 +214,7 @@ class AISettingsDialog(QDialog):
         self.hf_temperature.setValue(float(cfg.hf_temperature))
         self.hf_max_tokens.setValue(int(cfg.hf_max_new_tokens))
         self.hf_top_p.setValue(float(cfg.hf_top_p))
+        self.hf_timeout.setValue(float(cfg.hf_timeout))
 
         self.monthly_limit.setValue(int(cfg.ia_usage_limit))
         self.cache_enabled.setChecked(cfg.ia_cache_enabled)
@@ -226,29 +230,56 @@ class AISettingsDialog(QDialog):
     def _test_connection(self):
         provider = self._provider()
         cfg = self._build_config_from_form()
-        context = {"action": "test_connection", "provider": provider, "model": cfg.hf_model if provider == HUGGINGFACE_PROVIDER else cfg.openai_model}
+        model = cfg.hf_model if provider == HUGGINGFACE_PROVIDER else cfg.openai_model
+        context = {"action": "test_connection", "provider": provider, "model": model}
         try:
             AIProviderFactory.create(provider, cfg).check_connectivity()
             QMessageBox.information(self, "IA", "Conexão OK")
         except MissingAPIKeyError as exc:
-            msg = "Chave/token ausente ou inválido"
-            log_ai_generation_error(exc, context=context, provider=provider)
-            QMessageBox.warning(self, "IA", msg)
+            self._log_test_connection_error(exc, provider=provider, model=model, context=context)
+            QMessageBox.warning(self, "IA", "Credencial inválida: verifique a chave/token")
         except ModelNotFoundError as exc:
-            log_ai_generation_error(exc, context=context, provider=provider)
-            QMessageBox.warning(self, "IA", "Modelo inválido")
+            self._log_test_connection_error(exc, provider=provider, model=model, context=context)
+            QMessageBox.warning(self, "IA", "Modelo inválido ou inexistente")
         except RateLimitError as exc:
-            log_ai_generation_error(exc, context=context, provider=provider)
-            QMessageBox.warning(self, "IA", "Cota/limite atingido")
+            self._log_test_connection_error(exc, provider=provider, model=model, context=context)
+            QMessageBox.warning(self, "IA", "Rate limit/cota atingida. Aguarde e tente novamente")
         except AIRequestTimeoutError as exc:
-            log_ai_generation_error(exc, context=context, provider=provider)
-            QMessageBox.warning(self, "IA", "Timeout/rede")
+            self._log_test_connection_error(exc, provider=provider, model=model, context=context)
+            QMessageBox.warning(self, "IA", "Timeout/rede. Verifique sua conexão")
         except AIWritingError as exc:
-            log_ai_generation_error(exc, context=context, provider=provider)
-            QMessageBox.warning(self, "IA", f"Falha ao testar conexão: {exc}")
+            self._log_test_connection_error(exc, provider=provider, model=model, context=context)
+            friendly = self._friendly_error_message(exc)
+            QMessageBox.warning(self, "IA", friendly)
         except Exception as exc:
-            log_ai_generation_error(exc, context=context, provider=provider)
+            self._log_test_connection_error(exc, provider=provider, model=model, context=context)
             QMessageBox.warning(self, "IA", f"Falha inesperada ao testar conexão: {exc}")
+
+    @staticmethod
+    def _friendly_error_message(exc: Exception) -> str:
+        text = str(exc).lower()
+        if "provider compatível" in text or "not supported by any provider" in text:
+            return "Modelo não suportado por provider serverless. Escolha um modelo com Inference Providers/Playground"
+        if "acesso restrito" in text or "gated" in text or "accept" in text:
+            return "Este modelo exige aceite de termos/licença na Hugging Face. Libere o acesso e teste novamente"
+        if "carregando" in text or "loading" in text:
+            return "Modelo ainda está carregando. Tente novamente em instantes"
+        return f"Falha ao testar conexão: {exc}"
+
+    @staticmethod
+    def _log_test_connection_error(exc: Exception, *, provider: str, model: str, context: Dict[str, Any]) -> None:
+        details = {}
+        if provider == HUGGINGFACE_PROVIDER:
+            details = getattr(exc, "hf_error_details", None) or HuggingFaceClient._extract_exception_metadata(exc)
+
+        enriched_context = {
+            **context,
+            "model": model,
+            "status_code": details.get("status_code"),
+            "error_body": details.get("body"),
+            "error_json": details.get("json"),
+        }
+        log_ai_generation_error(exc, context=enriched_context, provider=provider)
 
     def _build_config_from_form(self) -> AIConfig:
         cfg = self.config_store.load_config()
@@ -263,6 +294,7 @@ class AISettingsDialog(QDialog):
         cfg.hf_temperature = float(self.hf_temperature.value())
         cfg.hf_max_new_tokens = int(self.hf_max_tokens.value())
         cfg.hf_top_p = float(self.hf_top_p.value())
+        cfg.hf_timeout = float(self.hf_timeout.value())
         cfg.ia_usage_limit = int(self.monthly_limit.value())
         cfg.ia_cache_enabled = self.cache_enabled.isChecked()
         if cfg.ia_last_reset == "":

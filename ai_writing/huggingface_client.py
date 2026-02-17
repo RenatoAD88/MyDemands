@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import socket
+import time
 from http import HTTPStatus
 from typing import Optional
 
@@ -41,40 +43,82 @@ class HuggingFaceClient:
         return f"{instruction}\n\nContexto: {context or {}}\n\nTexto:\n{sanitized}"
 
     @staticmethod
-    def _extract_exception_message(exc: Exception) -> str:
-        body = getattr(exc, "response", None)
-        text = ""
-        if body is not None:
-            data = getattr(body, "text", None)
-            if data:
-                text = str(data)
-        if not text:
-            text = str(exc)
-        return text.strip()
-
-    def _raise_hf_error(self, exc: Exception) -> None:
+    def _extract_exception_metadata(exc: Exception) -> dict:
+        response = getattr(exc, "response", None)
         status_code = getattr(exc, "status_code", None)
+        if status_code is None and response is not None:
+            status_code = getattr(response, "status_code", None)
+
+        body_text = ""
+        body_json = None
+        if response is not None:
+            body_text = str(getattr(response, "text", "") or "").strip()
+            if not body_text:
+                data = getattr(response, "content", b"")
+                if isinstance(data, bytes):
+                    body_text = data.decode("utf-8", errors="replace").strip()
+            if body_text:
+                try:
+                    body_json = json.loads(body_text)
+                except (TypeError, ValueError):
+                    body_json = None
+
+        if not body_text:
+            body_text = str(exc).strip()
+
+        return {
+            "status_code": status_code,
+            "body": body_text,
+            "json": body_json,
+        }
+
+    @staticmethod
+    def _matches_any(text: str, *needles: str) -> bool:
+        lowered = text.lower()
+        return any(needle.lower() in lowered for needle in needles)
+
+    def _map_hf_error(self, exc: Exception) -> AIWritingError:
+        metadata = self._extract_exception_metadata(exc)
+        status_code = metadata.get("status_code")
+        detail = str(metadata.get("body", "") or "")
+
         if status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
-            raise MissingAPIKeyError("Token inválido/ausente") from exc
-        if status_code == HTTPStatus.NOT_FOUND:
-            raise ModelNotFoundError("Modelo não encontrado") from exc
-        if status_code == HTTPStatus.TOO_MANY_REQUESTS:
-            raise RateLimitError("Rate limit") from exc
+            mapped: AIWritingError = MissingAPIKeyError("Credencial inválida: verifique o token da Hugging Face")
+        elif status_code == HTTPStatus.NOT_FOUND:
+            mapped = ModelNotFoundError("Modelo não encontrado")
+        elif status_code == HTTPStatus.TOO_MANY_REQUESTS:
+            mapped = RateLimitError("Rate limit da Hugging Face atingido")
+        elif self._matches_any(detail, "not supported by any provider", "no provider"):
+            mapped = AIWritingError(
+                "Modelo sem provider compatível no Inference Providers; escolha um modelo com Playground/Providers habilitado"
+            )
+        elif self._matches_any(detail, "gated", "requires acceptance", "accept", "license", "terms"):
+            mapped = AIWritingError(
+                "Modelo com acesso restrito; aceite os termos/licença na página do modelo da Hugging Face"
+            )
+        elif self._matches_any(detail, "loading", "currently loading"):
+            mapped = AIWritingError("Modelo está carregando; aguarde e tente novamente")
+        else:
+            mapped = AIWritingError(detail or "Falha na API do Hugging Face")
 
-        detail = self._extract_exception_message(exc).lower()
-        if "gated" in detail or "license" in detail or "accept" in detail or "terms" in detail:
-            raise AIWritingError("Modelo requer aceite de termos/licença no site da Hugging Face") from exc
+        setattr(mapped, "hf_error_details", metadata)
+        setattr(mapped, "hf_model", self.model)
+        return mapped
 
-        raise AIWritingError(self._extract_exception_message(exc) or "Falha na API do Hugging Face") from exc
-
-    def _chat_completion(self, *, user_message: str, system_message: str) -> str:
+    def _create_inference_client(self):
         try:
             from huggingface_hub import InferenceClient
+        except ImportError as exc:
+            raise AIWritingError("Dependência ausente: instale huggingface_hub compatível no venv") from exc
+        return InferenceClient(api_key=self.api_token, timeout=self.timeout)
+
+    def _perform_chat_completion(self, *, user_message: str, system_message: str, retry_on_loading: bool = True):
+        try:
             from huggingface_hub.errors import HfHubHTTPError
         except ImportError as exc:
-            raise AIWritingError("Dependência ausente: instale huggingface_hub compatível") from exc
+            raise AIWritingError("Dependência ausente: instale huggingface_hub compatível no venv") from exc
 
-        client = InferenceClient(api_key=self.api_token, timeout=self.timeout)
+        client = self._create_inference_client()
         messages = [
             {"role": "system", "content": system_message},
             {"role": "user", "content": user_message},
@@ -90,9 +134,17 @@ class HuggingFaceClient:
             kwargs["top_p"] = float(self.top_p)
 
         try:
-            completion = client.chat.completions.create(**kwargs)
+            return client.chat.completions.create(**kwargs)
         except HfHubHTTPError as exc:
-            self._raise_hf_error(exc)
+            mapped = self._map_hf_error(exc)
+            if retry_on_loading and self._matches_any(str(mapped), "carregando"):
+                time.sleep(0.6)
+                return self._perform_chat_completion(
+                    user_message=user_message,
+                    system_message=system_message,
+                    retry_on_loading=False,
+                )
+            raise mapped from exc
         except (TimeoutError, socket.timeout) as exc:
             raise AIRequestTimeoutError("Timeout/rede") from exc
         except Exception as exc:
@@ -101,6 +153,8 @@ class HuggingFaceClient:
                 raise AIRequestTimeoutError("Timeout/rede") from exc
             raise AIWritingError(f"Falha na API do Hugging Face: {exc}") from exc
 
+    def _chat_completion(self, *, user_message: str, system_message: str) -> str:
+        completion = self._perform_chat_completion(user_message=user_message, system_message=system_message)
         try:
             content = completion.choices[0].message.content
         except Exception as exc:
@@ -122,6 +176,17 @@ class HuggingFaceClient:
     def check_connectivity(self) -> None:
         if not self.api_token:
             raise MissingAPIKeyError("Token do Hugging Face não configurado")
+
+        try:
+            from huggingface_hub import HfApi
+        except ImportError as exc:
+            raise AIWritingError("Dependência ausente: instale huggingface_hub compatível no venv") from exc
+
+        try:
+            HfApi().whoami(token=self.api_token)
+        except Exception as exc:
+            raise self._map_hf_error(exc) from exc
+
         response = self._chat_completion(system_message="Responda apenas: OK", user_message="ping")
         if not str(response).strip():
             raise AIWritingError("Falha no teste de conectividade: resposta vazia")

@@ -48,6 +48,13 @@ HF_TOP_P=0.9
 IA_CACHE_ENABLED=true
 ```
 
+
+## Como escolher um modelo no Hugging Face
+- Abra a página do modelo no Hugging Face e confira se existe seção **Inference Providers** e/ou **Playground**.
+- Copie exatamente o **model id** exibido (ex.: `meta-llama/Llama-3.1-8B-Instruct`).
+- Se o modelo não mostrar provider compatível para serverless, ele **não vai funcionar** via `InferenceClient` no app.
+- Se aparecer aviso de modelo **gated**/**requires acceptance**, aceite os termos na página do modelo antes de testar no app.
+
 ## Observações
 - Tokens/chaves são exibidos como campo de senha na tela.
 - O app não expõe tokens em logs da funcionalidade.

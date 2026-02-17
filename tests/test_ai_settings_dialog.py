@@ -112,6 +112,7 @@ def _build_dialog(tmp_path):
     dlg.hf_temperature = _NumField(0.4)
     dlg.hf_max_tokens = _NumField(222)
     dlg.hf_top_p = _NumField(0.8)
+    dlg.hf_timeout = _NumField(19.0)
     dlg.monthly_limit = _NumField(200)
     dlg.cache_enabled = _BoolField(True)
     dlg._provider = lambda: HUGGINGFACE_PROVIDER
