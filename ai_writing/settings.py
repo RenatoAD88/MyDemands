@@ -116,13 +116,11 @@ class AISettingsDialog(QDialog):
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
 
         self.openai_key = QLineEdit()
-        self.openai_key.setEchoMode(QLineEdit.Password)
         self.openai_model = QLineEdit()
         self.openai_temperature = QDoubleSpinBox(); self.openai_temperature.setRange(0.0, 2.0); self.openai_temperature.setSingleStep(0.1)
         self.openai_max_tokens = QSpinBox(); self.openai_max_tokens.setRange(1, 8192)
 
         self.hf_token = QLineEdit()
-        self.hf_token.setEchoMode(QLineEdit.Password)
         self.hf_model = QLineEdit()
         self.hf_temperature = QDoubleSpinBox(); self.hf_temperature.setRange(0.0, 2.0); self.hf_temperature.setSingleStep(0.1)
         self.hf_max_tokens = QSpinBox(); self.hf_max_tokens.setRange(1, 8192)
