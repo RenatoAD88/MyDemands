@@ -1253,6 +1253,7 @@ class MainWindow(QMainWindow):
     def __init__(self, store: CsvStore):
         super().__init__()
         self.store = store
+        self._ui_ready = False
         self.setWindowTitle("DemandasApp")
         icon_path = _app_icon_path()
         if os.path.exists(icon_path):
@@ -1302,6 +1303,7 @@ class MainWindow(QMainWindow):
         self.refresh_all()
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self._restore_preferences()
+        self._ui_ready = True
 
     def _init_notifications(self) -> None:
         self.notification_center_dialog: Optional[NotificationCenterDialog] = None
@@ -1999,7 +2001,10 @@ class MainWindow(QMainWindow):
             self._restoring_prefs = False
 
     def _save_preferences(self):
-        if self._restoring_prefs:
+        if self._restoring_prefs or not self._ui_ready:
+            return
+
+        if not hasattr(self, "tabs") or self.tabs is None:
             return
 
         data = {
@@ -2042,7 +2047,7 @@ class MainWindow(QMainWindow):
                     table.setColumnWidth(col_idx, width)
 
     def _on_table_section_resized(self, table: QTableWidget):
-        if self._restoring_prefs:
+        if self._restoring_prefs or not self._ui_ready:
             return
         table_key = str(table.property("tableSortKey") or "")
         if table_key not in {"t1", "t3", "t4", "t4_cancelled"}:
