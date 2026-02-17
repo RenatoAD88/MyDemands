@@ -2270,7 +2270,8 @@ class MainWindow(QMainWindow):
 
     def _log_ai_generation_error(self, exc: Exception, context: Dict[str, Any], traceback_text: str = "") -> None:
         try:
-            log_ai_generation_error(exc, context, traceback_text)
+            provider = getattr(self.ai_settings, "provider", "openai")
+            log_ai_generation_error(exc, context, traceback_text, provider=provider)
         except Exception:
             # O fluxo de UI deve manter a exceção original da IA.
             pass

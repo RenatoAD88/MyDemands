@@ -9,7 +9,17 @@ from ai_writing.errors import MissingAPIKeyError
 from bootstrap import ensure_storage_root, resolve_storage_root
 
 
-AI_ERROR_LOG_FILE_NAME = "openIA_error.txt"
+AI_ERROR_LOG_FILE_NAMES = {
+    "openai": "openIA_error.txt",
+    "huggingface": "huggingFace_error.txt",
+}
+DEFAULT_PROVIDER = "openai"
+LOG_FOLDER_NAME = "log"
+
+
+def _normalize_provider(provider: Optional[str]) -> str:
+    normalized = str(provider or "").strip().lower()
+    return normalized if normalized in AI_ERROR_LOG_FILE_NAMES else DEFAULT_PROVIDER
 
 
 def _candidate_storage_roots() -> list[str]:
@@ -37,7 +47,7 @@ def ai_log_dir() -> str:
             errors.append(root)
             continue
 
-        path = os.path.join(base_dir, "Log")
+        path = os.path.join(base_dir, LOG_FOLDER_NAME)
         log_dir = ensure_storage_root(path)
         if log_dir:
             return log_dir
@@ -48,8 +58,15 @@ def ai_log_dir() -> str:
     raise OSError(f"Não foi possível criar a pasta de log em nenhum caminho: {attempted}")
 
 
-def append_ai_error_log(message: str, traceback_text: str = "", context: Optional[Dict[str, Any]] = None) -> str:
-    log_path = os.path.join(ai_log_dir(), AI_ERROR_LOG_FILE_NAME)
+def append_ai_error_log(
+    message: str,
+    traceback_text: str = "",
+    context: Optional[Dict[str, Any]] = None,
+    provider: Optional[str] = None,
+) -> str:
+    normalized_provider = _normalize_provider(provider)
+    log_filename = AI_ERROR_LOG_FILE_NAMES[normalized_provider]
+    log_path = os.path.join(ai_log_dir(), log_filename)
     when = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     context_repr = context or {}
     body = [f"[{when}] {message}", f"context={context_repr}"]
@@ -62,8 +79,14 @@ def append_ai_error_log(message: str, traceback_text: str = "", context: Optiona
     return log_path
 
 
-def log_ai_generation_error(exc: Exception, context: Optional[Dict[str, Any]] = None, traceback_text: str = "") -> str:
+def log_ai_generation_error(
+    exc: Exception,
+    context: Optional[Dict[str, Any]] = None,
+    traceback_text: str = "",
+    provider: Optional[str] = None,
+) -> str:
     message = str(exc)
     if isinstance(exc, MissingAPIKeyError) and not message:
-        message = "Erro de credencial da OpenAI"
-    return append_ai_error_log(message, traceback_text, context)
+        normalized_provider = _normalize_provider(provider)
+        message = "Erro de credencial da Hugging Face" if normalized_provider == "huggingface" else "Erro de credencial da OpenAI"
+    return append_ai_error_log(message, traceback_text, context, provider=provider)
