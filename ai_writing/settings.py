@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from ai_writing.config_store import AIConfig, AIConfigStore, DEFAULT_HF_MODEL, HUGGINGFACE_PROVIDER, OPENAI_PROVIDER
 from ai_writing.errors import AIRequestTimeoutError, AIWritingError, MissingAPIKeyError, ModelNotFoundError, RateLimitError
+from ai_writing.error_log import log_ai_generation_error
 from ai_writing.provider_factory import AIProviderFactory
 from ui_prefs import load_prefs, save_prefs
 
@@ -225,21 +226,28 @@ class AISettingsDialog(QDialog):
     def _test_connection(self):
         provider = self._provider()
         cfg = self._build_config_from_form()
+        context = {"action": "test_connection", "provider": provider, "model": cfg.hf_model if provider == HUGGINGFACE_PROVIDER else cfg.openai_model}
         try:
             AIProviderFactory.create(provider, cfg).check_connectivity()
             QMessageBox.information(self, "IA", "Conexão OK")
-        except MissingAPIKeyError:
+        except MissingAPIKeyError as exc:
             msg = "Chave/token ausente ou inválido"
+            log_ai_generation_error(exc, context=context, provider=provider)
             QMessageBox.warning(self, "IA", msg)
-        except ModelNotFoundError:
+        except ModelNotFoundError as exc:
+            log_ai_generation_error(exc, context=context, provider=provider)
             QMessageBox.warning(self, "IA", "Modelo inválido")
-        except RateLimitError:
+        except RateLimitError as exc:
+            log_ai_generation_error(exc, context=context, provider=provider)
             QMessageBox.warning(self, "IA", "Cota/limite atingido")
-        except AIRequestTimeoutError:
+        except AIRequestTimeoutError as exc:
+            log_ai_generation_error(exc, context=context, provider=provider)
             QMessageBox.warning(self, "IA", "Timeout/rede")
         except AIWritingError as exc:
+            log_ai_generation_error(exc, context=context, provider=provider)
             QMessageBox.warning(self, "IA", f"Falha ao testar conexão: {exc}")
         except Exception as exc:
+            log_ai_generation_error(exc, context=context, provider=provider)
             QMessageBox.warning(self, "IA", f"Falha inesperada ao testar conexão: {exc}")
 
     def _build_config_from_form(self) -> AIConfig:
