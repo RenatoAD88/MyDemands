@@ -49,14 +49,29 @@ class _FakeInferenceClient:
         self.timeout = timeout
         self.chat = types.SimpleNamespace(completions=_FAKE_COMPLETIONS)
 
+    def text_generation(self, **kwargs):
+        _FAKE_COMPLETIONS.calls.append({"text_generation": kwargs})
+        text_generation_error = getattr(_FAKE_COMPLETIONS, "text_generation_error", None)
+        if text_generation_error is not None:
+            raise text_generation_error
+        return _FAKE_COMPLETIONS.response_text
+
 
 _FAKE_COMPLETIONS = _FakeCompletions()
 _FAKE_HF_API = _FakeHfApi()
 
 
-def _install_fake_hf_hub(monkeypatch, *, response_text: str = "OK", error: Exception | None = None, whoami_error: Exception | None = None):
+def _install_fake_hf_hub(
+    monkeypatch,
+    *,
+    response_text: str = "OK",
+    error: Exception | None = None,
+    text_generation_error: Exception | None = None,
+    whoami_error: Exception | None = None,
+):
     global _FAKE_COMPLETIONS, _FAKE_HF_API
     _FAKE_COMPLETIONS = _FakeCompletions(response_text=response_text, error=error)
+    _FAKE_COMPLETIONS.text_generation_error = text_generation_error
     _FAKE_HF_API = _FakeHfApi()
     _FAKE_HF_API.error = whoami_error
 
@@ -136,9 +151,11 @@ def test_extract_exception_metadata_uses_exception_name_when_message_is_empty():
     assert meta["body"] == "_SilentError"
 
 
-def test_chat_completion_maps_stop_iteration_to_provider_message(monkeypatch):
-    _install_fake_hf_hub(monkeypatch, error=StopIteration())
+def test_chat_completion_falls_back_to_text_generation_when_provider_is_missing(monkeypatch):
+    _install_fake_hf_hub(monkeypatch, response_text="fallback-ok", error=StopIteration())
     client = HuggingFaceClient(api_token="hf_test", model="repo/model")
 
-    with pytest.raises(AIWritingError, match="sem provider compatível"):
-        client.suggest("entrada", "instrucao", {"k": 1})
+    result = client.suggest("entrada", "instrucao", {"k": 1})
+
+    assert result == "fallback-ok"
+    assert any("text_generation" in call for call in _FAKE_COMPLETIONS.calls)

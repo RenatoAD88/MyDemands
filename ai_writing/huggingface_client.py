@@ -148,6 +148,8 @@ class HuggingFaceClient:
         if self.top_p is not None:
             kwargs["top_p"] = float(self.top_p)
 
+        fallback_prompt = f"{system_message}\n\n{user_message}".strip()
+
         try:
             return client.chat.completions.create(**kwargs)
         except HfHubHTTPError as exc:
@@ -161,9 +163,17 @@ class HuggingFaceClient:
                 )
             raise mapped from exc
         except StopIteration as exc:
-            raise AIWritingError(
-                "Modelo sem provider compatível no Inference Providers; escolha um modelo com Playground/Providers habilitado"
-            ) from exc
+            try:
+                return self._perform_text_generation(client=client, prompt=fallback_prompt)
+            except Exception as fallback_exc:
+                if isinstance(fallback_exc, (TimeoutError, socket.timeout)):
+                    raise AIRequestTimeoutError("Timeout/rede") from fallback_exc
+                detail = str(fallback_exc).lower()
+                if "timeout" in detail:
+                    raise AIRequestTimeoutError("Timeout/rede") from fallback_exc
+                raise AIWritingError(
+                    "Modelo sem provider compatível no Inference Providers; escolha um modelo com Playground/Providers habilitado"
+                ) from exc
         except (TimeoutError, socket.timeout) as exc:
             raise AIRequestTimeoutError("Timeout/rede") from exc
         except Exception as exc:
@@ -172,6 +182,26 @@ class HuggingFaceClient:
                 raise AIRequestTimeoutError("Timeout/rede") from exc
             detail = str(exc).strip() or exc.__class__.__name__
             raise AIWritingError(f"Falha na API do Hugging Face: {detail}") from exc
+
+    def _perform_text_generation(self, *, client, prompt: str):
+        kwargs = {
+            "model": self.model,
+            "prompt": prompt,
+            "temperature": self.temperature,
+            "max_new_tokens": self.max_new_tokens,
+            "return_full_text": False,
+        }
+        if self.top_p is not None:
+            kwargs["top_p"] = float(self.top_p)
+
+        text = client.text_generation(**kwargs)
+        content = str(text or "").strip()
+        if not content:
+            raise AIWritingError("Resposta sem conteúdo textual.")
+
+        return type("_HFTextGenerationFallback", (), {
+            "choices": [type("_Choice", (), {"message": type("_Message", (), {"content": content})()})()]
+        })()
 
     def _chat_completion(self, *, user_message: str, system_message: str) -> str:
         completion = self._perform_chat_completion(user_message=user_message, system_message=system_message)
