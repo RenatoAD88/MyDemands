@@ -122,19 +122,12 @@ class AIWritingPanel(QDialog):
         self.status.setText("success")
 
     def _on_error(self, message: str):
-        lowered = message.lower()
-        if "token" in lowered or "chave" in lowered or "401" in lowered:
-            QMessageBox.warning(self, "IA", "Credencial da IA não configurada")
-        elif "modelo" in lowered or "404" in lowered:
-            QMessageBox.warning(self, "IA", "Modelo inválido ou não encontrado")
-        elif "rate" in lowered or "429" in lowered or "limite de requisi" in lowered:
-            QMessageBox.warning(self, "IA", "Limite de requisições atingido. Tente novamente em instantes.")
-        elif "timeout" in lowered:
-            QMessageBox.warning(self, "IA", "Timeout na API de IA")
-        elif "limite mensal" in lowered:
-            QMessageBox.warning(self, "IA", "Limite mensal de uso da IA atingido")
-        else:
-            QMessageBox.warning(self, "IA", "Falha ao gerar sugestão (ver logs)")
+        details = (message or "").strip() or "Erro desconhecido durante a geração com IA"
+        QMessageBox.warning(
+            self,
+            "IA - erro na geração",
+            f"Erro recebido da IA:\n{details}\n\nDetalhes completos também foram salvos em Log/openIA_error.txt.",
+        )
         self.status.setText("error")
 
     def _apply(self):
