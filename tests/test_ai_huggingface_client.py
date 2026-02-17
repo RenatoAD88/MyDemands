@@ -1,19 +1,20 @@
 from __future__ import annotations
 
+import importlib.util
 import sys
 import types
 
 import pytest
 
 from ai_writing.errors import AIRequestTimeoutError, AIWritingError, MissingAPIKeyError, ModelNotFoundError, RateLimitError
-from ai_writing.huggingface_client import HuggingFaceClient
+from ai_writing.huggingface_client import HF_ROUTER_BASE_URL, HuggingFaceClient
 
 
-class _FakeHfHubHTTPError(Exception):
-    def __init__(self, status_code: int, message: str = ""):
+class _FakeOpenAIError(Exception):
+    def __init__(self, status_code: int | None = None, message: str = ""):
         super().__init__(message)
         self.status_code = status_code
-        self.response = types.SimpleNamespace(text=message)
+        self.response = types.SimpleNamespace(status_code=status_code, text=message)
 
 
 class _FakeCompletions:
@@ -31,63 +32,32 @@ class _FakeCompletions:
         )
 
 
-class _FakeHfApi:
-    def __init__(self):
-        self.calls = []
-        self.error = None
-
-    def whoami(self, token: str):
-        self.calls.append(token)
-        if self.error is not None:
-            raise self.error
-        return {"name": "test"}
-
-
-class _FakeInferenceClient:
-    def __init__(self, *, api_key: str, timeout: float):
+class _FakeOpenAIClient:
+    def __init__(self, *, base_url: str, api_key: str, timeout: float):
+        self.base_url = base_url
         self.api_key = api_key
         self.timeout = timeout
         self.chat = types.SimpleNamespace(completions=_FAKE_COMPLETIONS)
 
-    def text_generation(self, **kwargs):
-        _FAKE_COMPLETIONS.calls.append({"text_generation": kwargs})
-        text_generation_error = getattr(_FAKE_COMPLETIONS, "text_generation_error", None)
-        if text_generation_error is not None:
-            raise text_generation_error
-        return _FAKE_COMPLETIONS.response_text
-
 
 _FAKE_COMPLETIONS = _FakeCompletions()
-_FAKE_HF_API = _FakeHfApi()
 
 
-def _install_fake_hf_hub(
-    monkeypatch,
-    *,
-    response_text: str = "OK",
-    error: Exception | None = None,
-    text_generation_error: Exception | None = None,
-    whoami_error: Exception | None = None,
-):
-    global _FAKE_COMPLETIONS, _FAKE_HF_API
+def _install_fake_openai(monkeypatch, *, response_text: str = "OK", error: Exception | None = None):
+    global _FAKE_COMPLETIONS
     _FAKE_COMPLETIONS = _FakeCompletions(response_text=response_text, error=error)
-    _FAKE_COMPLETIONS.text_generation_error = text_generation_error
-    _FAKE_HF_API = _FakeHfApi()
-    _FAKE_HF_API.error = whoami_error
 
-    fake_module = types.ModuleType("huggingface_hub")
-    fake_module.InferenceClient = _FakeInferenceClient
-    fake_module.HfApi = lambda: _FAKE_HF_API
+    fake_module = types.ModuleType("openai")
+    fake_module.OpenAI = _FakeOpenAIClient
+    fake_module.__spec__ = types.SimpleNamespace()
 
-    fake_errors = types.ModuleType("huggingface_hub.errors")
-    fake_errors.HfHubHTTPError = _FakeHfHubHTTPError
-
-    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_module)
-    monkeypatch.setitem(sys.modules, "huggingface_hub.errors", fake_errors)
+    monkeypatch.setitem(sys.modules, "openai", fake_module)
+    original_find_spec = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object() if name == "openai" else original_find_spec(name))
 
 
 def test_hf_chat_completions_parsing(monkeypatch):
-    _install_fake_hf_hub(monkeypatch, response_text="texto-final")
+    _install_fake_openai(monkeypatch, response_text="texto-final")
     client = HuggingFaceClient(api_token="hf_test", model="repo/model")
 
     result = client.suggest("entrada", "instrucao", {"k": 1})
@@ -96,16 +66,24 @@ def test_hf_chat_completions_parsing(monkeypatch):
     assert _FAKE_COMPLETIONS.calls[0]["model"] == "repo/model"
 
 
-def test_connectivity_validates_whoami_and_chat(monkeypatch):
-    _install_fake_hf_hub(monkeypatch, response_text="OK")
-    client = HuggingFaceClient(api_token="hf_test", model="repo/model")
+def test_connectivity_uses_router_and_ping(monkeypatch):
+    _install_fake_openai(monkeypatch, response_text="OK")
+    client = HuggingFaceClient(api_token="hf_test", model="repo/model", max_new_tokens=300)
 
     client.check_connectivity()
 
-    assert _FAKE_HF_API.calls == ["hf_test"]
     call = _FAKE_COMPLETIONS.calls[0]
-    assert call["messages"][0]["content"] == "Responda apenas: OK"
     assert call["messages"][1]["content"] == "ping"
+    assert call["max_tokens"] == 16
+
+
+def test_client_initializes_with_router_url(monkeypatch):
+    _install_fake_openai(monkeypatch, response_text="ok")
+    client = HuggingFaceClient(api_token="hf_test", model="repo/model")
+
+    client.suggest("entrada", "instrucao", {})
+
+    assert client._create_router_client().base_url == HF_ROUTER_BASE_URL
 
 
 @pytest.mark.parametrize(
@@ -118,7 +96,7 @@ def test_connectivity_validates_whoami_and_chat(monkeypatch):
     ],
 )
 def test_connectivity_maps_http_errors(monkeypatch, status, expected):
-    _install_fake_hf_hub(monkeypatch, error=_FakeHfHubHTTPError(status, "erro"))
+    _install_fake_openai(monkeypatch, error=_FakeOpenAIError(status, "erro"))
     client = HuggingFaceClient(api_token="hf_test", model="repo/model")
 
     with pytest.raises(expected):
@@ -126,18 +104,18 @@ def test_connectivity_maps_http_errors(monkeypatch, status, expected):
 
 
 def test_connectivity_timeout(monkeypatch):
-    _install_fake_hf_hub(monkeypatch, error=TimeoutError("timeout"))
+    _install_fake_openai(monkeypatch, error=TimeoutError("timeout"))
     client = HuggingFaceClient(api_token="hf_test", model="repo/model")
 
     with pytest.raises(AIRequestTimeoutError):
         client.check_connectivity()
 
 
-def test_connectivity_gated_error_message(monkeypatch):
-    _install_fake_hf_hub(monkeypatch, error=_FakeHfHubHTTPError(400, "Model is gated and requires acceptance"))
+def test_connectivity_provider_not_supported_maps_model_error(monkeypatch):
+    _install_fake_openai(monkeypatch, error=_FakeOpenAIError(400, "not supported by any provider"))
     client = HuggingFaceClient(api_token="hf_test", model="repo/model")
 
-    with pytest.raises(AIWritingError, match="acesso restrito"):
+    with pytest.raises(ModelNotFoundError):
         client.check_connectivity()
 
 
@@ -151,11 +129,10 @@ def test_extract_exception_metadata_uses_exception_name_when_message_is_empty():
     assert meta["body"] == "_SilentError"
 
 
-def test_chat_completion_falls_back_to_text_generation_when_provider_is_missing(monkeypatch):
-    _install_fake_hf_hub(monkeypatch, response_text="fallback-ok", error=StopIteration())
+def test_missing_openai_dependency_returns_friendly_error(monkeypatch):
+    monkeypatch.delitem(sys.modules, "openai", raising=False)
+    monkeypatch.setattr("importlib.util.find_spec", lambda _: None)
     client = HuggingFaceClient(api_token="hf_test", model="repo/model")
 
-    result = client.suggest("entrada", "instrucao", {"k": 1})
-
-    assert result == "fallback-ok"
-    assert any("text_generation" in call for call in _FAKE_COMPLETIONS.calls)
+    with pytest.raises(AIWritingError, match="instale openai"):
+        client.check_connectivity()

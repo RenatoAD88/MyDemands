@@ -234,7 +234,7 @@ class AISettingsDialog(QDialog):
         context = {"action": "test_connection", "provider": provider, "model": model}
         try:
             AIProviderFactory.create(provider, cfg).check_connectivity()
-            QMessageBox.information(self, "IA", "Conexão OK")
+            QMessageBox.information(self, "IA", "Conectividade OK")
         except MissingAPIKeyError as exc:
             self._log_test_connection_error(exc, provider=provider, model=model, context=context)
             QMessageBox.warning(self, "IA", "Credencial inválida: verifique a chave/token")
@@ -264,6 +264,8 @@ class AISettingsDialog(QDialog):
             return "Este modelo exige aceite de termos/licença na Hugging Face. Libere o acesso e teste novamente"
         if "carregando" in text or "loading" in text:
             return "Modelo ainda está carregando. Tente novamente em instantes"
+        if "instale openai" in text or "dependência ausente" in text:
+            return "Dependência ausente: instale openai para usar o provider Hugging Face"
         return f"Falha ao testar conexão: {exc}"
 
     @staticmethod
@@ -278,6 +280,7 @@ class AISettingsDialog(QDialog):
             "status_code": details.get("status_code"),
             "error_body": details.get("body"),
             "error_json": details.get("json"),
+            "error_message": str(exc),
         }
         log_ai_generation_error(exc, context=enriched_context, provider=provider)
 
