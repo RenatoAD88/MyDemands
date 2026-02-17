@@ -50,7 +50,7 @@ def test_selection_replaces_only_selected_text(monkeypatch):
 
     monkeypatch.setattr("ai_writing.integration.PANEL_CLASS", FakePanel)
     binding.open_panel()
-    assert widget.toPlainText() == "inicio TROCA fim"
+    assert widget.toPlainText() == "TROCA"
 
 
 def test_no_selection_replaces_entire_text_and_undo(monkeypatch):
@@ -69,3 +69,27 @@ def test_no_selection_replaces_entire_text_and_undo(monkeypatch):
     assert widget.toPlainText() == "novo"
     binding.undo_last()
     assert widget.toPlainText() == "texto original"
+
+
+def test_on_apply_receives_suggestion(monkeypatch):
+    widget = FakeTextWidget("texto original")
+    applied = []
+    binding = AIFieldBinding(
+        widget,
+        lambda: {"field": "Comentário", "demand_id": "10"},
+        lambda **kwargs: "novo",
+        on_apply=applied.append,
+    )
+
+    class FakePanel:
+        Accepted = 1
+
+        def __init__(self, source, handler, context, parent=None):
+            self.after = type("A", (), {"toPlainText": lambda self: "novo"})()
+
+        def exec(self):
+            return 1
+
+    monkeypatch.setattr("ai_writing.integration.PANEL_CLASS", FakePanel)
+    binding.open_panel()
+    assert applied == ["novo"]
