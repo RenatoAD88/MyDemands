@@ -129,6 +129,7 @@ def test_test_connection_uses_unsaved_modal_values(tmp_path, monkeypatch):
     original = open(config_path, "r", encoding="utf-8").read()
 
     monkeypatch.setattr("ai_writing.settings.AIProviderFactory", _FakeFactory)
+    monkeypatch.setattr("ai_writing.settings.QMessageBox", _MessageBox)
     dlg._test_connection()
 
     provider, received_cfg = _FakeFactory.created

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import socket
-import time
 from http import HTTPStatus
 from typing import Optional
 
@@ -14,19 +14,22 @@ from ai_writing.errors import (
     RateLimitError,
 )
 
+HF_ROUTER_BASE_URL = "https://router.huggingface.co/v1"
+HF_SYSTEM_PROMPT = "Você é um assistente que reescreve textos corporativos em português do Brasil."
+
 
 class HuggingFaceClient:
     def __init__(
         self,
         api_token: str,
-        model: str = "stepfun-ai/Step-3.5-Flash",
+        model: str = "zai-org/GLM-5:novita",
         temperature: float = 0.5,
         max_new_tokens: int = 150,
         top_p: Optional[float] = 0.9,
         timeout: float = 30.0,
     ):
         self.api_token = (api_token or "").strip()
-        self.model = model.strip() or "stepfun-ai/Step-3.5-Flash"
+        self.model = model.strip() or "zai-org/GLM-5:novita"
         self.temperature = float(temperature)
         self.max_new_tokens = int(max_new_tokens)
         self.top_p = top_p
@@ -57,6 +60,8 @@ class HuggingFaceClient:
                 data = getattr(response, "content", b"")
                 if isinstance(data, bytes):
                     body_text = data.decode("utf-8", errors="replace").strip()
+                elif data is not None:
+                    body_text = str(data).strip()
             if body_text:
                 try:
                     body_json = json.loads(body_text)
@@ -65,18 +70,6 @@ class HuggingFaceClient:
 
         if not body_text:
             body_text = str(exc).strip()
-
-        if not body_text:
-            raw_message = getattr(exc, "message", None)
-            if raw_message is not None:
-                body_text = str(raw_message).strip()
-
-        if not body_text:
-            args = getattr(exc, "args", ())
-            if args:
-                non_empty_args = [str(arg).strip() for arg in args if str(arg).strip()]
-                if non_empty_args:
-                    body_text = " | ".join(non_empty_args)
 
         if not body_text:
             body_text = exc.__class__.__name__
@@ -100,19 +93,11 @@ class HuggingFaceClient:
         if status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
             mapped: AIWritingError = MissingAPIKeyError("Credencial inválida: verifique o token da Hugging Face")
         elif status_code == HTTPStatus.NOT_FOUND:
-            mapped = ModelNotFoundError("Modelo não encontrado")
+            mapped = ModelNotFoundError("Modelo/provider inválido no Hugging Face Router")
         elif status_code == HTTPStatus.TOO_MANY_REQUESTS:
             mapped = RateLimitError("Rate limit da Hugging Face atingido")
         elif self._matches_any(detail, "not supported by any provider", "no provider"):
-            mapped = AIWritingError(
-                "Modelo sem provider compatível no Inference Providers; escolha um modelo com Playground/Providers habilitado"
-            )
-        elif self._matches_any(detail, "gated", "requires acceptance", "accept", "license", "terms"):
-            mapped = AIWritingError(
-                "Modelo com acesso restrito; aceite os termos/licença na página do modelo da Hugging Face"
-            )
-        elif self._matches_any(detail, "loading", "currently loading"):
-            mapped = AIWritingError("Modelo está carregando; aguarde e tente novamente")
+            mapped = ModelNotFoundError("Modelo/provider inválido no Hugging Face Router")
         else:
             mapped = AIWritingError(detail or "Falha na API do Hugging Face")
 
@@ -120,91 +105,38 @@ class HuggingFaceClient:
         setattr(mapped, "hf_model", self.model)
         return mapped
 
-    def _create_inference_client(self):
-        try:
-            from huggingface_hub import InferenceClient
-        except ImportError as exc:
-            raise AIWritingError("Dependência ausente: instale huggingface_hub compatível no venv") from exc
-        return InferenceClient(api_key=self.api_token, timeout=self.timeout)
+    def _create_router_client(self):
+        if importlib.util.find_spec("openai") is None:
+            raise AIWritingError("Dependência ausente: instale openai")
 
-    def _perform_chat_completion(self, *, user_message: str, system_message: str, retry_on_loading: bool = True):
-        try:
-            from huggingface_hub.errors import HfHubHTTPError
-        except ImportError as exc:
-            raise AIWritingError("Dependência ausente: instale huggingface_hub compatível no venv") from exc
+        from openai import OpenAI
 
-        client = self._create_inference_client()
-        messages = [
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_message},
-        ]
+        return OpenAI(base_url=HF_ROUTER_BASE_URL, api_key=self.api_token, timeout=self.timeout)
 
-        kwargs = {
+    def _chat_completion(self, *, user_message: str, system_message: str, max_tokens: Optional[int] = None) -> str:
+        client = self._create_router_client()
+
+        payload = {
             "model": self.model,
-            "messages": messages,
+            "messages": [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message},
+            ],
             "temperature": self.temperature,
-            "max_tokens": self.max_new_tokens,
+            "max_tokens": int(max_tokens if max_tokens is not None else self.max_new_tokens),
         }
         if self.top_p is not None:
-            kwargs["top_p"] = float(self.top_p)
-
-        fallback_prompt = f"{system_message}\n\n{user_message}".strip()
+            payload["top_p"] = float(self.top_p)
 
         try:
-            return client.chat.completions.create(**kwargs)
-        except HfHubHTTPError as exc:
-            mapped = self._map_hf_error(exc)
-            if retry_on_loading and self._matches_any(str(mapped), "carregando"):
-                time.sleep(0.6)
-                return self._perform_chat_completion(
-                    user_message=user_message,
-                    system_message=system_message,
-                    retry_on_loading=False,
-                )
-            raise mapped from exc
-        except StopIteration as exc:
-            try:
-                return self._perform_text_generation(client=client, prompt=fallback_prompt)
-            except Exception as fallback_exc:
-                if isinstance(fallback_exc, (TimeoutError, socket.timeout)):
-                    raise AIRequestTimeoutError("Timeout/rede") from fallback_exc
-                detail = str(fallback_exc).lower()
-                if "timeout" in detail:
-                    raise AIRequestTimeoutError("Timeout/rede") from fallback_exc
-                raise AIWritingError(
-                    "Modelo sem provider compatível no Inference Providers; escolha um modelo com Playground/Providers habilitado"
-                ) from exc
+            completion = client.chat.completions.create(**payload)
         except (TimeoutError, socket.timeout) as exc:
             raise AIRequestTimeoutError("Timeout/rede") from exc
         except Exception as exc:
-            message = str(exc).lower()
-            if "timeout" in message:
+            if "timeout" in str(exc).lower():
                 raise AIRequestTimeoutError("Timeout/rede") from exc
-            detail = str(exc).strip() or exc.__class__.__name__
-            raise AIWritingError(f"Falha na API do Hugging Face: {detail}") from exc
+            raise self._map_hf_error(exc) from exc
 
-    def _perform_text_generation(self, *, client, prompt: str):
-        kwargs = {
-            "model": self.model,
-            "prompt": prompt,
-            "temperature": self.temperature,
-            "max_new_tokens": self.max_new_tokens,
-            "return_full_text": False,
-        }
-        if self.top_p is not None:
-            kwargs["top_p"] = float(self.top_p)
-
-        text = client.text_generation(**kwargs)
-        content = str(text or "").strip()
-        if not content:
-            raise AIWritingError("Resposta sem conteúdo textual.")
-
-        return type("_HFTextGenerationFallback", (), {
-            "choices": [type("_Choice", (), {"message": type("_Message", (), {"content": content})()})()]
-        })()
-
-    def _chat_completion(self, *, user_message: str, system_message: str) -> str:
-        completion = self._perform_chat_completion(user_message=user_message, system_message=system_message)
         try:
             content = completion.choices[0].message.content
         except Exception as exc:
@@ -218,8 +150,9 @@ class HuggingFaceClient:
     def suggest(self, input_text: str, instruction: str, context: Optional[dict] = None) -> str:
         if not self.api_token:
             raise MissingAPIKeyError("Token do Hugging Face não configurado")
+
         return self._chat_completion(
-            system_message=str(instruction or "").strip() or "Você é um assistente útil.",
+            system_message=str(instruction or "").strip() or HF_SYSTEM_PROMPT,
             user_message=self.build_prompt(input_text, instruction, context),
         )
 
@@ -227,16 +160,6 @@ class HuggingFaceClient:
         if not self.api_token:
             raise MissingAPIKeyError("Token do Hugging Face não configurado")
 
-        try:
-            from huggingface_hub import HfApi
-        except ImportError as exc:
-            raise AIWritingError("Dependência ausente: instale huggingface_hub compatível no venv") from exc
-
-        try:
-            HfApi().whoami(token=self.api_token)
-        except Exception as exc:
-            raise self._map_hf_error(exc) from exc
-
-        response = self._chat_completion(system_message="Responda apenas: OK", user_message="ping")
-        if not str(response).strip():
+        response = self._chat_completion(system_message="Responda apenas: OK", user_message="ping", max_tokens=16)
+        if not response:
             raise AIWritingError("Falha no teste de conectividade: resposta vazia")
