@@ -160,6 +160,10 @@ class HuggingFaceClient:
                     retry_on_loading=False,
                 )
             raise mapped from exc
+        except StopIteration as exc:
+            raise AIWritingError(
+                "Modelo sem provider compatível no Inference Providers; escolha um modelo com Playground/Providers habilitado"
+            ) from exc
         except (TimeoutError, socket.timeout) as exc:
             raise AIRequestTimeoutError("Timeout/rede") from exc
         except Exception as exc:
