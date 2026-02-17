@@ -867,8 +867,20 @@ class NewDemandDialog(BaseModalDialog):
         self.descricao_widget = self.descricao
         self.comentario_widget = self.comentario
         if callable(ai_attach):
-            self.descricao_widget = ai_attach(self.descricao, lambda: context_provider("Descrição") if callable(context_provider) else {"field": "Descrição"})
-            self.comentario_widget = ai_attach(self.comentario, lambda: context_provider("Comentário") if callable(context_provider) else {"field": "Comentário"})
+            desc_context = context_provider("Descrição") if callable(context_provider) else {"field": "Descrição"}
+            com_context = context_provider("Comentário") if callable(context_provider) else {"field": "Comentário"}
+            self.descricao_widget = ai_attach(
+                self.descricao,
+                lambda: desc_context,
+                field_name="Descrição",
+                demand_id=str(desc_context.get("demand_id", "")),
+            )
+            self.comentario_widget = ai_attach(
+                self.comentario,
+                lambda: com_context,
+                field_name="Comentário",
+                demand_id=str(com_context.get("demand_id", "")),
+            )
 
         self.urgente = QComboBox()
         self.urgente.setEditable(False)
@@ -1762,7 +1774,12 @@ class MainWindow(QMainWindow):
 
             wrapped = editor
             if self.ai_settings.enabled:
-                wrapped = self._attach_ai_widget(editor, lambda: self._ai_context_provider(_id, col_name))
+                wrapped = self._attach_ai_widget(
+                    editor,
+                    lambda: self._ai_context_provider(_id, col_name),
+                    field_name=col_name,
+                    demand_id=str(_id),
+                )
 
             save_btn = QPushButton("Salvar")
             cancel_btn = QPushButton("Cancelar")
@@ -2316,8 +2333,15 @@ class MainWindow(QMainWindow):
             self._log_ai_generation_error(exc, context, traceback.format_exc())
             raise
 
-    def _attach_ai_widget(self, text_widget: QTextEdit, context_provider):
-        wrapper = attach_ai_writing(text_widget, context_provider, self._generate_ai_suggestion)
+    def _attach_ai_widget(self, text_widget: QTextEdit, context_provider, on_apply=None, field_name: str = "", demand_id: str = ""):
+        wrapper = attach_ai_writing(
+            text_widget,
+            context_provider,
+            self._generate_ai_suggestion,
+            on_apply=on_apply,
+            field_name=field_name,
+            demand_id=demand_id,
+        )
         btn = getattr(text_widget, "_ai_button", None)
         if btn is not None:
             if not self.ai_settings.enabled:
