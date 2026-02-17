@@ -9,23 +9,33 @@ from typing import Dict, Optional
 
 DEFAULT_AI_DIR = r"C:\MyDemands\ai_writing"
 OPENAI_PROVIDER = "openai"
+HUGGINGFACE_PROVIDER = "huggingface"
 DEFAULT_PROVIDER = OPENAI_PROVIDER
-CONFIG_FILE_NAME = "configOpenAI.txt"
-CACHE_FILE_NAME = "cacheOpenAI.json"
+CONFIG_FILE_NAME = "configIA.txt"
+CACHE_FILE_NAME = "cacheIA.json"
 MAX_CACHE_ENTRIES = 1000
 
 
 @dataclass
 class AIConfig:
-    temperature: float = 0.5
-    max_new_tokens: int = 150
-    top_p: float = 0.9
+    ai_enabled: bool = False
+    ai_provider: str = DEFAULT_PROVIDER
+
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    openai_temperature: float = 0.5
+    openai_max_output_tokens: int = 300
+
+    hf_api_token: str = ""
+    hf_model: str = "HuggingFaceH4/zephyr-7b-beta"
+    hf_temperature: float = 0.5
+    hf_max_new_tokens: int = 150
+    hf_top_p: float = 0.9
+
     ia_usage_count: int = 0
     ia_usage_limit: int = 200
     ia_last_reset: str = "2026-01-01"
     ia_cache_enabled: bool = True
-    openai_api_key: str = ""
-    openai_model: str = "gpt-4o-mini"
 
     @property
     def last_reset_date(self) -> date:
@@ -43,18 +53,15 @@ class AIConfigStore:
     def __init__(self, ai_dir: Optional[str] = None):
         self.ai_dir = ai_dir or os.getenv("MYDEMANDS_AI_DIR", DEFAULT_AI_DIR)
 
-    def _provider_dir(self, provider: str = DEFAULT_PROVIDER) -> str:
-        return os.path.join(self.ai_dir, OPENAI_PROVIDER)
-
     def _config_path(self, provider: str = DEFAULT_PROVIDER) -> str:
-        return os.path.join(self._provider_dir(provider), CONFIG_FILE_NAME)
+        return os.path.join(self.ai_dir, CONFIG_FILE_NAME)
 
     def _cache_path(self, provider: str = DEFAULT_PROVIDER) -> str:
-        return os.path.join(self._provider_dir(provider), CACHE_FILE_NAME)
+        suffix = provider if provider in {OPENAI_PROVIDER, HUGGINGFACE_PROVIDER} else DEFAULT_PROVIDER
+        return os.path.join(self.ai_dir, f"{suffix}_{CACHE_FILE_NAME}")
 
     def ensure_files(self, provider: str = DEFAULT_PROVIDER) -> None:
-        provider_dir = self._provider_dir(provider)
-        os.makedirs(provider_dir, exist_ok=True)
+        os.makedirs(self.ai_dir, exist_ok=True)
 
         config_path = self._config_path(provider)
         cache_path = self._cache_path(provider)
@@ -62,15 +69,26 @@ class AIConfigStore:
         if not os.path.exists(config_path):
             default_cfg = AIConfig()
             lines = [
+                "AI_ENABLED=false",
+                f"AI_PROVIDER={DEFAULT_PROVIDER}",
+                "",
+                "# OpenAI",
                 f"OPENAI_API_KEY={default_cfg.openai_api_key}",
                 f"OPENAI_MODEL={default_cfg.openai_model}",
-                f"temperature={default_cfg.temperature}",
-                f"max_new_tokens={default_cfg.max_new_tokens}",
-                f"top_p={default_cfg.top_p}",
+                f"OPENAI_TEMPERATURE={default_cfg.openai_temperature}",
+                f"OPENAI_MAX_OUTPUT_TOKENS={default_cfg.openai_max_output_tokens}",
+                "",
+                "# Hugging Face",
+                f"HF_API_TOKEN={default_cfg.hf_api_token}",
+                f"HF_MODEL={default_cfg.hf_model}",
+                f"HF_TEMPERATURE={default_cfg.hf_temperature}",
+                f"HF_MAX_NEW_TOKENS={default_cfg.hf_max_new_tokens}",
+                f"HF_TOP_P={default_cfg.hf_top_p}",
+                "IA_CACHE_ENABLED=true",
+                "",
                 f"IA_USAGE_COUNT={default_cfg.ia_usage_count}",
                 f"IA_USAGE_LIMIT={default_cfg.ia_usage_limit}",
                 f"IA_LAST_RESET={default_cfg.ia_last_reset}",
-                "IA_CACHE_ENABLED=true",
             ]
             with open(config_path, "w", encoding="utf-8") as fp:
                 fp.write("\n".join(lines) + "\n")
@@ -84,17 +102,23 @@ class AIConfigStore:
         with open(self._config_path(provider), "r", encoding="utf-8") as fp:
             for line in fp:
                 line = line.strip()
-                if not line or "=" not in line:
+                if not line or line.startswith("#") or "=" not in line:
                     continue
                 key, value = line.split("=", 1)
                 parsed[key.strip()] = value.strip()
 
         return AIConfig(
+            ai_enabled=_to_bool(parsed.get("AI_ENABLED"), AIConfig.ai_enabled),
+            ai_provider=_normalize_provider(parsed.get("AI_PROVIDER", AIConfig.ai_provider)),
             openai_api_key=parsed.get("OPENAI_API_KEY", ""),
             openai_model=parsed.get("OPENAI_MODEL", AIConfig.openai_model),
-            temperature=_to_float(parsed.get("temperature"), AIConfig.temperature),
-            max_new_tokens=_to_int(parsed.get("max_new_tokens"), AIConfig.max_new_tokens),
-            top_p=_to_float(parsed.get("top_p"), AIConfig.top_p),
+            openai_temperature=_to_float(parsed.get("OPENAI_TEMPERATURE", parsed.get("temperature")), AIConfig.openai_temperature),
+            openai_max_output_tokens=_to_int(parsed.get("OPENAI_MAX_OUTPUT_TOKENS", parsed.get("max_new_tokens")), AIConfig.openai_max_output_tokens),
+            hf_api_token=parsed.get("HF_API_TOKEN", ""),
+            hf_model=parsed.get("HF_MODEL", AIConfig.hf_model),
+            hf_temperature=_to_float(parsed.get("HF_TEMPERATURE"), AIConfig.hf_temperature),
+            hf_max_new_tokens=_to_int(parsed.get("HF_MAX_NEW_TOKENS"), AIConfig.hf_max_new_tokens),
+            hf_top_p=_to_float(parsed.get("HF_TOP_P", parsed.get("top_p")), AIConfig.hf_top_p),
             ia_usage_count=_to_int(parsed.get("IA_USAGE_COUNT"), AIConfig.ia_usage_count),
             ia_usage_limit=max(1, _to_int(parsed.get("IA_USAGE_LIMIT"), AIConfig.ia_usage_limit)),
             ia_last_reset=parsed.get("IA_LAST_RESET", AIConfig.ia_last_reset),
@@ -104,15 +128,26 @@ class AIConfigStore:
     def save_config(self, cfg: AIConfig, provider: str = DEFAULT_PROVIDER) -> None:
         self.ensure_files(provider)
         lines = [
+            f"AI_ENABLED={'true' if cfg.ai_enabled else 'false'}",
+            f"AI_PROVIDER={_normalize_provider(cfg.ai_provider)}",
+            "",
+            "# OpenAI",
             f"OPENAI_API_KEY={cfg.openai_api_key.strip()}",
             f"OPENAI_MODEL={cfg.openai_model.strip() or AIConfig.openai_model}",
-            f"temperature={float(cfg.temperature)}",
-            f"max_new_tokens={int(cfg.max_new_tokens)}",
-            f"top_p={float(cfg.top_p)}",
+            f"OPENAI_TEMPERATURE={float(cfg.openai_temperature)}",
+            f"OPENAI_MAX_OUTPUT_TOKENS={int(cfg.openai_max_output_tokens)}",
+            "",
+            "# Hugging Face",
+            f"HF_API_TOKEN={cfg.hf_api_token.strip()}",
+            f"HF_MODEL={cfg.hf_model.strip() or AIConfig.hf_model}",
+            f"HF_TEMPERATURE={float(cfg.hf_temperature)}",
+            f"HF_MAX_NEW_TOKENS={int(cfg.hf_max_new_tokens)}",
+            f"HF_TOP_P={float(cfg.hf_top_p)}",
+            f"IA_CACHE_ENABLED={'true' if cfg.ia_cache_enabled else 'false'}",
+            "",
             f"IA_USAGE_COUNT={int(cfg.ia_usage_count)}",
             f"IA_USAGE_LIMIT={max(1, int(cfg.ia_usage_limit))}",
             f"IA_LAST_RESET={cfg.ia_last_reset}",
-            f"IA_CACHE_ENABLED={'true' if cfg.ia_cache_enabled else 'false'}",
         ]
         with open(self._config_path(provider), "w", encoding="utf-8") as fp:
             fp.write("\n".join(lines) + "\n")
@@ -167,6 +202,13 @@ class AIConfigStore:
             for old_key, _ in ordered[:overflow]:
                 cache.pop(old_key, None)
         self.save_cache(cache, provider)
+
+
+def _normalize_provider(provider: Optional[str]) -> str:
+    value = str(provider or "").strip().lower()
+    if value in {OPENAI_PROVIDER, HUGGINGFACE_PROVIDER}:
+        return value
+    return DEFAULT_PROVIDER
 
 
 def _to_int(value: Optional[str], fallback: int) -> int:

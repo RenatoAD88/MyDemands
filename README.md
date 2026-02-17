@@ -1,57 +1,42 @@
-# MyDemands - Redigir com IA (Hugging Face / OpenAI)
+# MyDemands - Configuração de IA (OpenAI / Hugging Face)
 
-## Configurando o provedor de IA
-No app, abra **Configurações da IA** e selecione o provedor desejado (**Hugging Face** ou **OpenAI**).
+## Onde fica o arquivo de configuração
+As preferências de IA são persistidas em:
 
-### Hugging Face
-1. Acesse https://huggingface.co/settings/tokens.
-2. Crie um token com permissão de inferência.
-3. Em **Configurações da IA**, selecione **Hugging Face** e preencha **Token Hugging Face**.
+- `C:\MyDemands\ai_writing\configIA.txt`
 
-### OpenAI
-1. Acesse https://platform.openai.com/api-keys.
-2. Gere uma chave de API.
-3. Em **Configurações da IA**, selecione **OpenAI** e preencha **Chave OpenAI**.
+O app cria automaticamente a pasta/arquivo com valores padrão seguros caso não existam.
 
-## Arquivos de persistência por provedor
-O app cria automaticamente configurações e cache separados por IA:
+## Como habilitar e trocar provedor
+1. Abra **Configuração de IA** no app.
+2. Marque **Habilitar IA**.
+3. Em **Provedor de IA**, escolha **OpenAI** ou **Hugging Face**.
+4. Preencha os campos do provedor selecionado.
+5. Clique em **Testar conexão** e depois em **Salvar**.
 
-- `C:\MyDemands\ai_writing\huggingface\configIA.txt`
-- `C:\MyDemands\ai_writing\huggingface\cacheIA.json`
-- `C:\MyDemands\ai_writing\openai\configOpenAI.txt`
-- `C:\MyDemands\ai_writing\openai\cacheOpenAI.json`
+> Ao trocar o provedor, os dados do outro provedor não são apagados.
 
-Formato padrão de `configIA.txt` (Hugging Face):
-
+## Chaves/variáveis salvas em `configIA.txt`
 ```txt
-HF_API_TOKEN=xxxx
-HF_MODEL=google/flan-t5-base
-temperature=0.5
-max_new_tokens=150
-top_p=0.9
-IA_USAGE_COUNT=0
-IA_USAGE_LIMIT=200
-IA_LAST_RESET=2026-01-01
-IA_CACHE_ENABLED=true
-```
+AI_ENABLED=true
+AI_PROVIDER=openai
 
-Formato padrão de `configOpenAI.txt` (OpenAI):
-
-```txt
+# OpenAI
 OPENAI_API_KEY=xxxx
 OPENAI_MODEL=gpt-4o-mini
-temperature=0.5
-max_new_tokens=150
-top_p=0.9
-IA_USAGE_COUNT=0
-IA_USAGE_LIMIT=200
-IA_LAST_RESET=2026-01-01
+OPENAI_TEMPERATURE=0.5
+OPENAI_MAX_OUTPUT_TOKENS=300
+
+# Hugging Face
+HF_API_TOKEN=xxxx
+HF_MODEL=HuggingFaceH4/zephyr-7b-beta
+HF_TEMPERATURE=0.5
+HF_MAX_NEW_TOKENS=150
+HF_TOP_P=0.9
 IA_CACHE_ENABLED=true
 ```
 
-## Contador mensal e cache
-- Contador e cache funcionam de forma independente por provedor.
-- `IA_USAGE_COUNT` incrementa somente após resposta bem-sucedida.
-- `IA_USAGE_LIMIT` bloqueia novas gerações ao atingir o limite.
-- `IA_LAST_RESET` é usado para reset automático a cada 30 dias.
-- Hash SHA256 usa `prompt + modelo + temperatura` dentro do cache da IA selecionada.
+## Observações
+- Tokens/chaves são exibidos como campo de senha na tela.
+- O app não expõe tokens em logs da funcionalidade.
+- O fluxo **Redigir com IA** respeita `AI_ENABLED` e o `AI_PROVIDER` salvo.
