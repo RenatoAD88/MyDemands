@@ -162,3 +162,50 @@ def test_missing_openai_dependency_returns_friendly_error(monkeypatch):
 
     with pytest.raises(AIWritingError, match="instale openai"):
         client.check_connectivity()
+
+
+def test_reasoning_content_with_final_tag_is_used(monkeypatch):
+    _install_fake_openai(
+        monkeypatch,
+        response=types.SimpleNamespace(
+            choices=[
+                types.SimpleNamespace(
+                    message=types.SimpleNamespace(
+                        content="",
+                        reasoning_content="Análise interna...\n<final>Texto final limpo</final>",
+                    )
+                )
+            ]
+        ),
+    )
+    client = HuggingFaceClient(api_token="hf_test", model="repo/model")
+
+    result = client.suggest("entrada", "instrucao", {"field": "Descrição"})
+
+    assert result == "Texto final limpo"
+
+
+def test_reasoning_content_without_tags_uses_last_useful_paragraph(monkeypatch):
+    _install_fake_openai(
+        monkeypatch,
+        response=types.SimpleNamespace(
+            choices=[
+                types.SimpleNamespace(
+                    message=types.SimpleNamespace(
+                        content="",
+                        reasoning_content=(
+                            "Analyze the request\n"
+                            "1. Revisar contexto\n"
+                            "2. Ajustar tom\n\n"
+                            "Parágrafo final para o usuário."
+                        ),
+                    )
+                )
+            ]
+        ),
+    )
+    client = HuggingFaceClient(api_token="hf_test", model="repo/model")
+
+    result = client.suggest("entrada", "instrucao", {"field": "Descrição"})
+
+    assert result == "Parágrafo final para o usuário."
