@@ -11,6 +11,7 @@ DEFAULT_AI_DIR = r"C:\MyDemands\ai_writing"
 OPENAI_PROVIDER = "openai"
 HUGGINGFACE_PROVIDER = "huggingface"
 DEFAULT_PROVIDER = OPENAI_PROVIDER
+DEFAULT_HF_MODEL = "stepfun-ai/Step-3.5-Flash"
 CONFIG_FILE_NAME = "configIA.txt"
 CACHE_FILE_NAME = "cacheIA.json"
 MAX_CACHE_ENTRIES = 1000
@@ -27,7 +28,7 @@ class AIConfig:
     openai_max_output_tokens: int = 300
 
     hf_api_token: str = ""
-    hf_model: str = "HuggingFaceH4/zephyr-7b-beta"
+    hf_model: str = DEFAULT_HF_MODEL
     hf_temperature: float = 0.5
     hf_max_new_tokens: int = 150
     hf_top_p: float = 0.9
@@ -115,7 +116,7 @@ class AIConfigStore:
             openai_temperature=_to_float(parsed.get("OPENAI_TEMPERATURE", parsed.get("temperature")), AIConfig.openai_temperature),
             openai_max_output_tokens=_to_int(parsed.get("OPENAI_MAX_OUTPUT_TOKENS", parsed.get("max_new_tokens")), AIConfig.openai_max_output_tokens),
             hf_api_token=parsed.get("HF_API_TOKEN", ""),
-            hf_model=parsed.get("HF_MODEL", AIConfig.hf_model),
+            hf_model=parsed.get("HF_MODEL", AIConfig.hf_model) or DEFAULT_HF_MODEL,
             hf_temperature=_to_float(parsed.get("HF_TEMPERATURE"), AIConfig.hf_temperature),
             hf_max_new_tokens=_to_int(parsed.get("HF_MAX_NEW_TOKENS"), AIConfig.hf_max_new_tokens),
             hf_top_p=_to_float(parsed.get("HF_TOP_P", parsed.get("top_p")), AIConfig.hf_top_p),
@@ -139,7 +140,7 @@ class AIConfigStore:
             "",
             "# Hugging Face",
             f"HF_API_TOKEN={cfg.hf_api_token.strip()}",
-            f"HF_MODEL={cfg.hf_model.strip() or AIConfig.hf_model}",
+            f"HF_MODEL={cfg.hf_model.strip() or DEFAULT_HF_MODEL}",
             f"HF_TEMPERATURE={float(cfg.hf_temperature)}",
             f"HF_MAX_NEW_TOKENS={int(cfg.hf_max_new_tokens)}",
             f"HF_TOP_P={float(cfg.hf_top_p)}",
