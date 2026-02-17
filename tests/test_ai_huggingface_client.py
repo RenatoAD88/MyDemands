@@ -134,3 +134,11 @@ def test_extract_exception_metadata_uses_exception_name_when_message_is_empty():
     meta = HuggingFaceClient._extract_exception_metadata(_SilentError())
 
     assert meta["body"] == "_SilentError"
+
+
+def test_chat_completion_maps_stop_iteration_to_provider_message(monkeypatch):
+    _install_fake_hf_hub(monkeypatch, error=StopIteration())
+    client = HuggingFaceClient(api_token="hf_test", model="repo/model")
+
+    with pytest.raises(AIWritingError, match="sem provider compatível"):
+        client.suggest("entrada", "instrucao", {"k": 1})
