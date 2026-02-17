@@ -25,6 +25,7 @@ class AIProviderFactory:
                 temperature=cfg.hf_temperature,
                 max_new_tokens=cfg.hf_max_new_tokens,
                 top_p=cfg.hf_top_p,
+                timeout=cfg.hf_timeout,
             )
         return OpenAIClient(
             api_key=cfg.openai_api_key,

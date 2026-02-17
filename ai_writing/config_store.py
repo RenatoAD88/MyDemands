@@ -32,6 +32,7 @@ class AIConfig:
     hf_temperature: float = 0.5
     hf_max_new_tokens: int = 150
     hf_top_p: float = 0.9
+    hf_timeout: float = 30.0
 
     ia_usage_count: int = 0
     ia_usage_limit: int = 200
@@ -85,6 +86,7 @@ class AIConfigStore:
                 f"HF_TEMPERATURE={default_cfg.hf_temperature}",
                 f"HF_MAX_NEW_TOKENS={default_cfg.hf_max_new_tokens}",
                 f"HF_TOP_P={default_cfg.hf_top_p}",
+                f"HF_TIMEOUT={default_cfg.hf_timeout}",
                 "IA_CACHE_ENABLED=true",
                 "",
                 f"IA_USAGE_COUNT={default_cfg.ia_usage_count}",
@@ -120,6 +122,7 @@ class AIConfigStore:
             hf_temperature=_to_float(parsed.get("HF_TEMPERATURE"), AIConfig.hf_temperature),
             hf_max_new_tokens=_to_int(parsed.get("HF_MAX_NEW_TOKENS"), AIConfig.hf_max_new_tokens),
             hf_top_p=_to_float(parsed.get("HF_TOP_P", parsed.get("top_p")), AIConfig.hf_top_p),
+            hf_timeout=_to_float(parsed.get("HF_TIMEOUT"), AIConfig.hf_timeout),
             ia_usage_count=_to_int(parsed.get("IA_USAGE_COUNT"), AIConfig.ia_usage_count),
             ia_usage_limit=max(1, _to_int(parsed.get("IA_USAGE_LIMIT"), AIConfig.ia_usage_limit)),
             ia_last_reset=parsed.get("IA_LAST_RESET", AIConfig.ia_last_reset),
@@ -144,6 +147,7 @@ class AIConfigStore:
             f"HF_TEMPERATURE={float(cfg.hf_temperature)}",
             f"HF_MAX_NEW_TOKENS={int(cfg.hf_max_new_tokens)}",
             f"HF_TOP_P={float(cfg.hf_top_p)}",
+            f"HF_TIMEOUT={float(cfg.hf_timeout)}",
             f"IA_CACHE_ENABLED={'true' if cfg.ia_cache_enabled else 'false'}",
             "",
             f"IA_USAGE_COUNT={int(cfg.ia_usage_count)}",
