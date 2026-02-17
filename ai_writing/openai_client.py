@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import socket
+import time
 import urllib.error
 import urllib.request
 from http import HTTPStatus
@@ -73,19 +74,30 @@ class OpenAIClient:
             },
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                raw = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            if exc.code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
-                raise MissingAPIKeyError("Chave da OpenAI inválida ou ausente") from exc
-            if exc.code == HTTPStatus.NOT_FOUND:
-                raise ModelNotFoundError("Modelo da OpenAI não encontrado") from exc
-            if exc.code == HTTPStatus.TOO_MANY_REQUESTS:
-                raise RateLimitError("Limite de requisições da OpenAI atingido") from exc
-            raise AIWritingError(f"Falha na API da OpenAI (HTTP {exc.code})") from exc
-        except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
-            raise AIRequestTimeoutError("Timeout na API da OpenAI") from exc
+        attempt = 0
+        max_attempts = 2
+        while True:
+            attempt += 1
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                    raw = json.loads(response.read().decode("utf-8"))
+                    break
+            except urllib.error.HTTPError as exc:
+                if exc.code == HTTPStatus.TOO_MANY_REQUESTS and attempt < max_attempts:
+                    retry_after = self._retry_after_seconds(exc)
+                    if retry_after is not None and 0 < retry_after <= 5:
+                        time.sleep(retry_after)
+                        continue
+
+                if exc.code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
+                    raise MissingAPIKeyError("Chave da OpenAI inválida ou ausente") from exc
+                if exc.code == HTTPStatus.NOT_FOUND:
+                    raise ModelNotFoundError("Modelo da OpenAI não encontrado") from exc
+                if exc.code == HTTPStatus.TOO_MANY_REQUESTS:
+                    raise RateLimitError(self._build_rate_limit_message(exc)) from exc
+                raise AIWritingError(f"Falha na API da OpenAI (HTTP {exc.code})") from exc
+            except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+                raise AIRequestTimeoutError("Timeout na API da OpenAI") from exc
 
         choices = raw.get("choices") if isinstance(raw, dict) else None
         if isinstance(choices, list) and choices:
@@ -95,6 +107,32 @@ class OpenAIClient:
                 if content:
                     return content
         raise AIWritingError("Resposta sem conteúdo textual.")
+
+    @staticmethod
+    def _retry_after_seconds(exc: urllib.error.HTTPError) -> Optional[float]:
+        value = exc.headers.get("Retry-After") if exc.headers else None
+        if not value:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _build_rate_limit_message(exc: urllib.error.HTTPError) -> str:
+        default = "Limite de requisições da OpenAI atingido"
+        try:
+            payload = json.loads(exc.read().decode("utf-8"))
+        except Exception:
+            return default
+
+        error = payload.get("error") if isinstance(payload, dict) else None
+        code = str(error.get("code", "")) if isinstance(error, dict) else ""
+        message = str(error.get("message", "")) if isinstance(error, dict) else ""
+        text = f"{code} {message}".lower()
+        if "insufficient_quota" in text or "quota" in text:
+            return "Cota da OpenAI esgotada. Verifique faturamento e limites da conta."
+        return default
 
     def check_connectivity(self) -> None:
         req = urllib.request.Request(
