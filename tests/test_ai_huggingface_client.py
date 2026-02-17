@@ -3,10 +3,11 @@ from __future__ import annotations
 import importlib.util
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
-from ai_writing.errors import AIRequestTimeoutError, AIWritingError, MissingAPIKeyError, ModelNotFoundError, RateLimitError
+from ai_writing.errors import AIRequestTimeoutError, AIWritingError
 from ai_writing.huggingface_client import HF_ROUTER_BASE_URL, HuggingFaceClient
 
 
@@ -18,8 +19,9 @@ class _FakeOpenAIError(Exception):
 
 
 class _FakeCompletions:
-    def __init__(self, response_text: str = "OK", error: Exception | None = None):
+    def __init__(self, response_text: str = "OK", response=None, error: Exception | None = None):
         self.response_text = response_text
+        self.response = response
         self.error = error
         self.calls = []
 
@@ -27,6 +29,8 @@ class _FakeCompletions:
         self.calls.append(kwargs)
         if self.error is not None:
             raise self.error
+        if self.response is not None:
+            return self.response
         return types.SimpleNamespace(
             choices=[types.SimpleNamespace(message=types.SimpleNamespace(content=self.response_text))]
         )
@@ -43,9 +47,9 @@ class _FakeOpenAIClient:
 _FAKE_COMPLETIONS = _FakeCompletions()
 
 
-def _install_fake_openai(monkeypatch, *, response_text: str = "OK", error: Exception | None = None):
+def _install_fake_openai(monkeypatch, *, response_text: str = "OK", response=None, error: Exception | None = None):
     global _FAKE_COMPLETIONS
-    _FAKE_COMPLETIONS = _FakeCompletions(response_text=response_text, error=error)
+    _FAKE_COMPLETIONS = _FakeCompletions(response_text=response_text, response=response, error=error)
 
     fake_module = types.ModuleType("openai")
     fake_module.OpenAI = _FakeOpenAIClient
@@ -86,20 +90,12 @@ def test_client_initializes_with_router_url(monkeypatch):
     assert client._create_router_client().base_url == HF_ROUTER_BASE_URL
 
 
-@pytest.mark.parametrize(
-    ("status", "expected"),
-    [
-        (401, MissingAPIKeyError),
-        (403, MissingAPIKeyError),
-        (404, ModelNotFoundError),
-        (429, RateLimitError),
-    ],
-)
-def test_connectivity_maps_http_errors(monkeypatch, status, expected):
+@pytest.mark.parametrize("status", [401, 403, 404, 429])
+def test_connectivity_raises_aiwriting_error_with_sdk_message(monkeypatch, status):
     _install_fake_openai(monkeypatch, error=_FakeOpenAIError(status, "erro"))
     client = HuggingFaceClient(api_token="hf_test", model="repo/model")
 
-    with pytest.raises(expected):
+    with pytest.raises(AIWritingError, match="erro"):
         client.check_connectivity()
 
 
@@ -111,12 +107,42 @@ def test_connectivity_timeout(monkeypatch):
         client.check_connectivity()
 
 
-def test_connectivity_provider_not_supported_maps_model_error(monkeypatch):
+def test_connectivity_provider_not_supported_uses_sdk_message(monkeypatch):
     _install_fake_openai(monkeypatch, error=_FakeOpenAIError(400, "not supported by any provider"))
     client = HuggingFaceClient(api_token="hf_test", model="repo/model")
 
-    with pytest.raises(ModelNotFoundError):
+    with pytest.raises(AIWritingError, match="not supported by any provider"):
         client.check_connectivity()
+
+
+def test_extracts_text_from_multiple_response_shapes(monkeypatch):
+    _install_fake_openai(
+        monkeypatch,
+        response={"choices": [{"message": {"content": "  texto-dict  "}}]},
+    )
+    client = HuggingFaceClient(api_token="hf_test", model="repo/model")
+
+    assert client.suggest("entrada", "instrucao", {"field": "Descrição"}) == "texto-dict"
+
+    _install_fake_openai(monkeypatch, response=[{"generated_text": "lista-gerada"}])
+
+    assert client.suggest("entrada", "instrucao", {"field": "Descrição"}) == "lista-gerada"
+
+
+def test_logs_dump_and_raises_when_response_has_no_text(monkeypatch, tmp_path):
+    _install_fake_openai(monkeypatch, response={"foo": "bar", "token": "secret"})
+    monkeypatch.setattr("ai_writing.error_log.resolve_storage_root", lambda: str(tmp_path))
+    client = HuggingFaceClient(api_token="hf_test", model="repo/model")
+
+    with pytest.raises(AIWritingError, match="formato inesperado"):
+        client.suggest("entrada", "instrucao", {"demand_id": "D-1", "field": "Descrição"})
+
+    log_file = Path(tmp_path / "log" / "huggingFace_error.txt")
+    content = log_file.read_text(encoding="utf-8")
+    assert "provider" in content
+    assert "demand_id" in content
+    assert "response_dump" in content
+    assert "secret" not in content
 
 
 def test_extract_exception_metadata_uses_exception_name_when_message_is_empty():
