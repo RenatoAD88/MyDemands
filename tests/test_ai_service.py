@@ -97,3 +97,27 @@ def test_ai_disabled_blocks_suggest(tmp_path):
 
     with pytest.raises(AIWritingError, match="IA desativada"):
         service.generate("txt", "instr", {}, provider=OPENAI_PROVIDER)
+
+
+def test_variation_bypasses_cache_with_different_variation_index(tmp_path, monkeypatch):
+    FakeClient.calls = 0
+    store = AIConfigStore(str(tmp_path / "ai"))
+    _seed_config(store, ia_usage_count=0, ia_usage_limit=200, ia_cache_enabled=True)
+    service = AIWritingService(store)
+    monkeypatch.setattr(service, "_resolve_client", lambda provider, cfg: FakeClient())
+
+    first = service.generate(
+        "txt",
+        "instr",
+        {"action": "clear", "tone": "Neutro", "size": "Curto", "is_variation": True, "variation_index": 1},
+        provider=OPENAI_PROVIDER,
+    )
+    second = service.generate(
+        "txt",
+        "instr",
+        {"action": "clear", "tone": "Neutro", "size": "Curto", "is_variation": True, "variation_index": 2},
+        provider=OPENAI_PROVIDER,
+    )
+
+    assert first != second
+    assert FakeClient.calls == 2

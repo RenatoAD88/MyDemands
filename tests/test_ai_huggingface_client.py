@@ -71,7 +71,7 @@ def test_hf_chat_completions_parsing(monkeypatch):
 
 
 def test_connectivity_uses_router_and_ping(monkeypatch):
-    _install_fake_openai(monkeypatch, response_text="OK")
+    _install_fake_openai(monkeypatch, response_text="conectividade ativa")
     client = HuggingFaceClient(api_token="hf_test", model="repo/model", max_new_tokens=300)
 
     client.check_connectivity()
@@ -82,7 +82,7 @@ def test_connectivity_uses_router_and_ping(monkeypatch):
 
 
 def test_client_initializes_with_router_url(monkeypatch):
-    _install_fake_openai(monkeypatch, response_text="ok")
+    _install_fake_openai(monkeypatch, response_text="resposta")
     client = HuggingFaceClient(api_token="hf_test", model="repo/model")
 
     client.suggest("entrada", "instrucao", {})

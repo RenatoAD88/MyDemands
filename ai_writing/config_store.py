@@ -184,9 +184,33 @@ class AIConfigStore:
         return cfg
 
     @staticmethod
-    def build_cache_key(prompt: str, model: str, temperature: float) -> str:
-        payload = f"{prompt}|{model}|{temperature}".encode("utf-8")
-        return hashlib.sha256(payload).hexdigest()
+    def build_cache_key(
+        *,
+        provider: str,
+        model: str,
+        instruction: str,
+        action: str,
+        tone: str,
+        size: str,
+        input_text: str,
+        variation_index: int,
+        temperature: float,
+        top_p: float | None,
+    ) -> str:
+        payload = {
+            "provider": provider,
+            "model": model,
+            "instruction": instruction,
+            "action": action,
+            "tone": tone,
+            "size": size,
+            "input_text": input_text,
+            "variation_index": int(variation_index),
+            "temperature": float(temperature),
+            "top_p": top_p,
+        }
+        raw = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        return hashlib.sha256(raw).hexdigest()
 
     def get_cached_response(self, key: str, provider: str = DEFAULT_PROVIDER) -> Optional[str]:
         cache = self.load_cache(provider)

@@ -58,11 +58,22 @@ def test_openai_client_retries_once_on_429_with_retry_after(monkeypatch):
         calls["count"] += 1
         if calls["count"] == 1:
             raise _http_429({"error": {"code": "rate_limit_exceeded", "message": "slow down"}}, retry_after="0.01")
-        return _Response({"choices": [{"message": {"content": "ok"}}]})
+        return _Response({"choices": [{"message": {"content": "texto-ok"}}]})
 
     monkeypatch.setattr("ai_writing.openai_client.urllib.request.urlopen", _fake_urlopen)
     monkeypatch.setattr("ai_writing.openai_client.time.sleep", lambda value: slept.__setitem__("seconds", value))
 
-    assert client.suggest("texto", "instrucao", {}) == "ok"
+    assert client.suggest("texto", "instrucao", {}) == "texto-ok"
     assert calls["count"] == 2
     assert slept["seconds"] == 0.01
+
+
+def test_openai_client_extracts_final_tag_before_content(monkeypatch):
+    client = OpenAIClient(api_key="sk-test")
+
+    def _fake_urlopen(_req, timeout=None):
+        return _Response({"choices": [{"message": {"content": "pensando... <final>teste de conectividade</final>"}}]})
+
+    monkeypatch.setattr("ai_writing.openai_client.urllib.request.urlopen", _fake_urlopen)
+
+    assert client.suggest("texte de conequitiidade", "instrucao", {}) == "teste de conectividade"

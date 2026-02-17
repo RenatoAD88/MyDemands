@@ -43,6 +43,7 @@ class AIWritingPanel(QDialog):
         self.on_generate = on_generate
         self.suggestion_text = ""
         self._previous_applied = ""
+        self._variation_counter = 0
 
         self.before = QTextEdit()
         self.before.setReadOnly(True)
@@ -68,7 +69,7 @@ class AIWritingPanel(QDialog):
         undo_btn = QPushButton("Desfazer")
 
         generate_btn.clicked.connect(self.generate)
-        regenerate_btn.clicked.connect(self.generate)
+        regenerate_btn.clicked.connect(self.generate_variation)
         apply_btn.clicked.connect(self._apply)
         copy_btn.clicked.connect(self._copy)
         undo_btn.clicked.connect(self._undo)
@@ -95,16 +96,31 @@ class AIWritingPanel(QDialog):
         layout.addLayout(actions)
 
     def generate(self):
+        self._variation_counter = 0
+        self._start_generation(is_variation=False)
+
+    def generate_variation(self):
+        self._variation_counter += 1
+        self._start_generation(is_variation=True)
+
+    def _start_generation(self, is_variation: bool):
         self.status.setText("loading")
-        instruction = build_instruction(
-            self.action_combo.currentData(),
-            tone=self.tone.currentText(),
-            length=self.length.currentText(),
-        )
+        action = self.action_combo.currentData()
+        tone = self.tone.currentText()
+        size = self.length.currentText()
+        instruction = build_instruction(action, tone=tone, length=size)
+        context = dict(self.context or {})
+        context.update({
+            "action": action,
+            "tone": tone,
+            "size": size,
+            "variation_index": self._variation_counter if is_variation else 0,
+            "is_variation": is_variation,
+        })
         kwargs = {
             "input_text": self.source_text,
             "instruction": instruction,
-            "context": self.context,
+            "context": context,
         }
         self._thread = QThread(self)
         self._worker = _Worker(self.on_generate, kwargs)

@@ -15,6 +15,24 @@ class AIWritingService:
     def _resolve_client(provider: str, cfg):
         return AIProviderFactory.create(provider, cfg)
 
+    @staticmethod
+    def _is_variation(context: Dict[str, Any]) -> bool:
+        return bool((context or {}).get("is_variation"))
+
+    @staticmethod
+    def _variation_index(context: Dict[str, Any]) -> int:
+        try:
+            return int((context or {}).get("variation_index", 0))
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _build_effective_instruction(instruction: str, context: Dict[str, Any]) -> str:
+        if not AIWritingService._is_variation(context):
+            return instruction
+        idx = AIWritingService._variation_index(context)
+        return f"{instruction}\n\nVariação: {idx} - Gere uma alternativa diferente."
+
     def generate(self, input_text: str, instruction: str, context: Dict[str, Any], provider: str = DEFAULT_PROVIDER) -> str:
         cfg = self.config_store.reset_usage_if_needed(self.config_store.load_config(provider=provider), provider=provider)
         if not cfg.ai_enabled:
@@ -27,16 +45,42 @@ class AIWritingService:
 
         model = cfg.openai_model if current_provider == "openai" else cfg.hf_model
         temp = cfg.openai_temperature if current_provider == "openai" else cfg.hf_temperature
+        top_p = cfg.hf_top_p if current_provider == "huggingface" else None
 
-        prompt = client.build_prompt(input_text=input_text, instruction=instruction, context=context)
-        cache_key = self.config_store.build_cache_key(prompt, model, temp)
+        if self._is_variation(context):
+            temp = min(1.0, float(temp) + 0.2)
+            client.temperature = temp
+            if hasattr(client, "top_p"):
+                client.top_p = 0.95
+                top_p = 0.95
+
+        effective_instruction = self._build_effective_instruction(instruction, context)
+        cache_key = self.config_store.build_cache_key(
+            provider=current_provider,
+            model=model,
+            instruction=effective_instruction,
+            action=str((context or {}).get("action", "")),
+            tone=str((context or {}).get("tone", "")),
+            size=str((context or {}).get("size", "")),
+            input_text=input_text,
+            variation_index=self._variation_index(context),
+            temperature=float(temp),
+            top_p=top_p,
+        )
+
+        if bool((context or {}).get("debug_log_text")):
+            print(
+                f"[AI][service] provider={current_provider} model={model} temp={temp} top_p={top_p} "
+                f"max_tokens={getattr(client, 'max_new_tokens', getattr(client, 'max_output_tokens', None))} "
+                f"variation_index={self._variation_index(context)}"
+            )
 
         if cfg.ia_cache_enabled:
             cached = self.config_store.get_cached_response(cache_key, provider=current_provider)
             if cached:
                 return cached
 
-        response = client.suggest(input_text=input_text, instruction=instruction, context=context)
+        response = client.suggest(input_text=input_text, instruction=effective_instruction, context=context)
         if cfg.ia_cache_enabled:
             self.config_store.save_cache_response(cache_key, response, provider=current_provider)
         self.config_store.increment_usage(cfg, provider=provider)

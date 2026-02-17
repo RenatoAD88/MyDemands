@@ -2281,6 +2281,9 @@ class MainWindow(QMainWindow):
         if not self.ai_settings.enabled:
             raise AIWritingError("IA desabilitada")
 
+        context = dict(context or {})
+        context["debug_log_text"] = bool(self.ai_settings.debug_log_text)
+
         try:
             suggestion = self.ai_service.generate(input_text=input_text, instruction=instruction, context=context, provider=self.ai_settings.provider)
             self.ai_audit.log_event("generate", str(context.get("demand_id", "")), str(context.get("field", "")), input_text, True, privacy_mode=self.ai_settings.privacy_mode, debug_mode=self.ai_settings.debug_log_text)

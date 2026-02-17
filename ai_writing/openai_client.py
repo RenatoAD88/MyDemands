@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import socket
 import time
 import urllib.error
@@ -19,6 +20,7 @@ from ai_writing.errors import (
 
 DEFAULT_OPENAI_URL = "https://api.openai.com/v1/chat/completions"
 DEFAULT_CONNECTIVITY_URL = "https://api.openai.com/v1/models"
+_INVALID_SHORT_OUTPUTS = {"and", "ok", "success"}
 
 
 class OpenAIClient:
@@ -48,23 +50,49 @@ class OpenAIClient:
             raise AIWritingError("Texto vazio para sugestão.")
         return f"{instruction}\n\nContexto: {context or {}}\n\nTexto:\n{sanitized}"
 
-    def suggest(self, input_text: str, instruction: str, context: Optional[dict] = None) -> str:
-        if not self.api_key:
-            raise MissingAPIKeyError("Chave da OpenAI não configurada")
+    @staticmethod
+    def _extract_final_tag(text: str) -> str:
+        match = re.search(r"<final>(.*?)</final>", str(text or ""), flags=re.IGNORECASE | re.DOTALL)
+        return match.group(1).strip() if match else ""
 
-        prompt = self.build_prompt(input_text, instruction, context)
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": "Você é um assistente que reescreve textos corporativos em português do Brasil."},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": self.temperature,
-            "max_tokens": self.max_new_tokens,
-        }
-        if self.top_p is not None:
-            payload["top_p"] = float(self.top_p)
+    @classmethod
+    def _sanitize_output(cls, text: str) -> str:
+        cleaned = (text or "").strip().replace("`", "").strip()
+        lowered = cleaned.lower()
+        if lowered in _INVALID_SHORT_OUTPUTS:
+            return ""
+        return cleaned
 
+    @classmethod
+    def _extract_text_from_raw(cls, raw: dict) -> tuple[str, str]:
+        choices = raw.get("choices") if isinstance(raw, dict) else None
+        if not (isinstance(choices, list) and choices):
+            return "", "none"
+        message = choices[0].get("message") if isinstance(choices[0], dict) else None
+        if not isinstance(message, dict):
+            return "", "none"
+
+        content = str(message.get("content", "") or "").strip()
+        final = cls._extract_final_tag(content)
+        if final:
+            return cls._sanitize_output(final), "final_tag"
+        if content:
+            return cls._sanitize_output(content), "content"
+
+        reasoning = str(message.get("reasoning_content", "") or "").strip()
+        final = cls._extract_final_tag(reasoning)
+        if final:
+            return cls._sanitize_output(final), "reasoning_final_tag"
+        if reasoning:
+            return cls._sanitize_output(reasoning), "reasoning_content"
+        return "", "none"
+
+    @staticmethod
+    def _is_invalid_output(text: str) -> bool:
+        normalized = (text or "").strip().lower()
+        return (not normalized) or len(normalized) <= 2 or normalized in _INVALID_SHORT_OUTPUTS
+
+    def _post_chat(self, payload: dict) -> dict:
         req = urllib.request.Request(
             DEFAULT_OPENAI_URL,
             data=json.dumps(payload).encode("utf-8"),
@@ -80,8 +108,7 @@ class OpenAIClient:
             attempt += 1
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                    raw = json.loads(response.read().decode("utf-8"))
-                    break
+                    return json.loads(response.read().decode("utf-8"))
             except urllib.error.HTTPError as exc:
                 if exc.code == HTTPStatus.TOO_MANY_REQUESTS and attempt < max_attempts:
                     retry_after = self._retry_after_seconds(exc)
@@ -99,14 +126,43 @@ class OpenAIClient:
             except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
                 raise AIRequestTimeoutError("Timeout na API da OpenAI") from exc
 
-        choices = raw.get("choices") if isinstance(raw, dict) else None
-        if isinstance(choices, list) and choices:
-            message = choices[0].get("message") if isinstance(choices[0], dict) else None
-            if isinstance(message, dict):
-                content = str(message.get("content", "")).strip()
-                if content:
-                    return content
-        raise AIWritingError("Resposta sem conteúdo textual.")
+    def suggest(self, input_text: str, instruction: str, context: Optional[dict] = None) -> str:
+        if not self.api_key:
+            raise MissingAPIKeyError("Chave da OpenAI não configurada")
+
+        prompt = self.build_prompt(input_text, instruction, context)
+        system_prompt = "Você é um assistente que reescreve textos corporativos em português do Brasil."
+        debug = bool((context or {}).get("debug_log_text"))
+
+        for generation_attempt in range(2):
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": self.temperature + (0.1 if generation_attempt == 1 else 0.0),
+                "max_tokens": self.max_new_tokens,
+            }
+            if self.top_p is not None:
+                payload["top_p"] = float(self.top_p)
+
+            raw = self._post_chat(payload)
+            text, used_field = self._extract_text_from_raw(raw)
+            if debug:
+                print(
+                    f"[AI][openai] model={self.model} temp={payload['temperature']} top_p={payload.get('top_p')} "
+                    f"max_tokens={self.max_new_tokens} source={used_field} output={text!r}"
+                )
+            if not self._is_invalid_output(text):
+                return text
+
+            system_prompt = (
+                "Você é um revisor de texto em pt-BR. Corrija ortografia e digitação agressivamente quando necessário. "
+                "Retorne somente o texto final útil, evitando respostas vazias ou tokens soltos."
+            )
+
+        raise AIWritingError("A IA não retornou texto útil. Tente novamente em instantes.")
 
     @staticmethod
     def _retry_after_seconds(exc: urllib.error.HTTPError) -> Optional[float]:

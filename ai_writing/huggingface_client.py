@@ -22,6 +22,7 @@ HF_SYSTEM_PROMPT = (
     "Você é um assistente que reescreve textos corporativos em português do Brasil. "
     "Retorne SOMENTE o texto final entre <final> e </final>. Não escreva nada fora dessas tags."
 )
+_INVALID_SHORT_OUTPUTS = {"and", "ok", "success"}
 
 
 class HuggingFaceClient:
@@ -214,18 +215,17 @@ class HuggingFaceClient:
 
     @classmethod
     def _normalize_output_text(cls, text: str) -> str:
-        normalized = (text or "").strip()
+        normalized = (text or "").strip().replace("`", "").strip()
         if not normalized:
             return ""
 
         final_tagged = cls._extract_final_tag(normalized)
         if final_tagged:
-            return final_tagged
+            normalized = final_tagged
+        elif cls._looks_like_reasoning(normalized):
+            normalized = cls._fallback_final_text(normalized)
 
-        if cls._looks_like_reasoning(normalized):
-            return cls._fallback_final_text(normalized)
-
-        return normalized
+        return "" if normalized.lower() in _INVALID_SHORT_OUTPUTS else normalized
 
     @staticmethod
     def _sanitize_for_log(data: Any) -> Any:
@@ -271,7 +271,7 @@ class HuggingFaceClient:
         system_message: str,
         max_tokens: Optional[int] = None,
         context: Optional[dict] = None,
-    ) -> str:
+    ) -> tuple[str, str]:
         client = self._create_router_client()
 
         payload = {
@@ -307,17 +307,32 @@ class HuggingFaceClient:
         first_choice = choice[0] if isinstance(choice, list) and choice else None
         msg = self._safe_get(first_choice, "message")
 
-        text = (self._safe_get(msg, "content") or "").strip()
-        if not text:
-            text = (self._safe_get(msg, "reasoning_content") or "").strip()
-        if not text:
-            text = self._extract_text_content(completion).strip()
+        content = (self._safe_get(msg, "content") or "").strip()
+        reasoning_content = (self._safe_get(msg, "reasoning_content") or "").strip()
+
+        used_field = "content"
+        text = self._extract_final_tag(content)
+        if text:
+            used_field = "final_tag"
+        elif content:
+            text = content
+            used_field = "content"
+        else:
+            text = self._extract_final_tag(reasoning_content)
+            if text:
+                used_field = "reasoning_final_tag"
+            elif reasoning_content:
+                text = reasoning_content
+                used_field = "reasoning_content"
+            else:
+                text = self._extract_text_content(completion).strip()
+                used_field = "fallback_extract"
 
         text = self._normalize_output_text(text)
         if not text:
             self._log_unexpected_response(completion, context=context)
             raise AIWritingError("Resposta do provedor não contém texto (formato inesperado). Veja logs.")
-        return text
+        return text, used_field
 
     def suggest(self, input_text: str, instruction: str, context: Optional[dict] = None) -> str:
         if not self.api_token:
@@ -330,16 +345,42 @@ class HuggingFaceClient:
                 "Retorne SOMENTE o texto final entre <final> e </final>. Não escreva nada fora dessas tags."
             )
 
-        return self._chat_completion(
-            system_message=system_prompt,
-            user_message=self.build_prompt(input_text, instruction, context),
-            context=context,
-        )
+        user_message = self.build_prompt(input_text, instruction, context)
+        debug = bool((context or {}).get("debug_log_text"))
+        base_temperature = float(self.temperature)
+
+        for generation_attempt in range(2):
+            self.temperature = min(1.0, base_temperature + (0.1 if generation_attempt == 1 else 0.0))
+            current_system_prompt = system_prompt
+            if generation_attempt == 1:
+                current_system_prompt = (
+                    "Você é um revisor de texto em pt-BR. Corrija ortografia e digitação agressivamente quando necessário. "
+                    "Retorne SOMENTE o texto final entre <final> e </final>."
+                )
+
+            text, used_field = self._chat_completion(
+                system_message=current_system_prompt,
+                user_message=user_message,
+                context=context,
+            )
+            if debug:
+                print(
+                    f"[AI][huggingface] model={self.model} temp={self.temperature} top_p={self.top_p} "
+                    f"max_tokens={self.max_new_tokens} source={used_field} output={text!r}"
+                )
+
+            normalized = (text or "").strip().lower()
+            if normalized and len(normalized) > 2 and normalized not in _INVALID_SHORT_OUTPUTS:
+                self.temperature = base_temperature
+                return text
+
+        self.temperature = base_temperature
+        raise AIWritingError("A IA não retornou texto útil. Tente novamente em instantes.")
 
     def check_connectivity(self) -> None:
         if not self.api_token:
             raise MissingAPIKeyError("Token do Hugging Face não configurado")
 
-        response = self._chat_completion(system_message="Responda apenas: OK", user_message="ping", max_tokens=16)
+        response, _ = self._chat_completion(system_message="Responda apenas: conectividade ativa", user_message="ping", max_tokens=16)
         if not response:
             raise AIWritingError("Falha no teste de conectividade: resposta vazia")
