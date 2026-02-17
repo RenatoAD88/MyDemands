@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ai_writing.config_store import AIConfig, AIConfigStore, HUGGINGFACE_PROVIDER, OPENAI_PROVIDER
+from ai_writing.config_store import AIConfig, AIConfigStore, DEFAULT_HF_MODEL, HUGGINGFACE_PROVIDER, OPENAI_PROVIDER
 from ai_writing.errors import AIRequestTimeoutError, AIWritingError, MissingAPIKeyError, ModelNotFoundError, RateLimitError
 from ai_writing.provider_factory import AIProviderFactory
 from ui_prefs import load_prefs, save_prefs
@@ -113,7 +113,7 @@ class AISettingsDialog(QDialog):
         self.provider_combo = QComboBox()
         self.provider_combo.addItem("OpenAI", OPENAI_PROVIDER)
         self.provider_combo.addItem("Hugging Face", HUGGINGFACE_PROVIDER)
-        self.provider_combo.currentIndexChanged.connect(self._toggle_provider_fields)
+        self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
 
         self.openai_key = QLineEdit()
         self.openai_key.setEchoMode(QLineEdit.Password)
@@ -189,6 +189,14 @@ class AISettingsDialog(QDialog):
         self.openai_widget.setVisible(is_openai)
         self.hf_widget.setVisible(not is_openai)
 
+    def _ensure_hf_default_model(self) -> None:
+        if self._provider() == HUGGINGFACE_PROVIDER and not self.hf_model.text().strip():
+            self.hf_model.setText(DEFAULT_HF_MODEL)
+
+    def _on_provider_changed(self):
+        self._toggle_provider_fields()
+        self._ensure_hf_default_model()
+
     def _sync_fields(self):
         cfg = self.config_store.load_config()
         self.enabled.setChecked(cfg.ai_enabled)
@@ -200,7 +208,7 @@ class AISettingsDialog(QDialog):
         self.openai_max_tokens.setValue(int(cfg.openai_max_output_tokens))
 
         self.hf_token.setText(cfg.hf_api_token)
-        self.hf_model.setText(cfg.hf_model)
+        self.hf_model.setText(cfg.hf_model or DEFAULT_HF_MODEL)
         self.hf_temperature.setValue(float(cfg.hf_temperature))
         self.hf_max_tokens.setValue(int(cfg.hf_max_new_tokens))
         self.hf_top_p.setValue(float(cfg.hf_top_p))
@@ -209,6 +217,7 @@ class AISettingsDialog(QDialog):
         self.cache_enabled.setChecked(cfg.ia_cache_enabled)
         self.usage_label.setText(f"Uso atual: {cfg.ia_usage_count} / {cfg.ia_usage_limit}")
         self._toggle_provider_fields()
+        self._ensure_hf_default_model()
 
     def _open_consumption_dialog(self):
         cfg = self.config_store.reset_usage_if_needed(self.config_store.load_config())
@@ -244,7 +253,7 @@ class AISettingsDialog(QDialog):
         cfg.openai_temperature = float(self.openai_temperature.value())
         cfg.openai_max_output_tokens = int(self.openai_max_tokens.value())
         cfg.hf_api_token = self.hf_token.text().strip()
-        cfg.hf_model = self.hf_model.text().strip() or cfg.hf_model
+        cfg.hf_model = self.hf_model.text().strip() or DEFAULT_HF_MODEL
         cfg.hf_temperature = float(self.hf_temperature.value())
         cfg.hf_max_new_tokens = int(self.hf_max_tokens.value())
         cfg.hf_top_p = float(self.hf_top_p.value())
