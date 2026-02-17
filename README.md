@@ -40,3 +40,4 @@ IA_CACHE_ENABLED=true
 - Tokens/chaves são exibidos como campo de senha na tela.
 - O app não expõe tokens em logs da funcionalidade.
 - O fluxo **Redigir com IA** respeita `AI_ENABLED` e o `AI_PROVIDER` salvo.
+- Para Hugging Face, o app prioriza `router.huggingface.co/hf-inference` quando `api-inference.huggingface.co` estiver descontinuado (HTTP 410).
