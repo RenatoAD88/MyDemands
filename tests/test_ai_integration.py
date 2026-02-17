@@ -43,9 +43,13 @@ def test_selection_replaces_only_selected_text(monkeypatch):
 
     class FakePanel:
         Accepted = 1
-        def __init__(self, source, handler, context, parent=None):
+
+        def __init__(self, source, handler, context, parent=None, on_apply=None):
+            self.on_apply = on_apply
             self.after = type("A", (), {"toPlainText": lambda self: "TROCA"})()
+
         def exec(self):
+            self.on_apply("TROCA")
             return 1
 
     monkeypatch.setattr("ai_writing.integration.PANEL_CLASS", FakePanel)
@@ -59,9 +63,13 @@ def test_no_selection_replaces_entire_text_and_undo(monkeypatch):
 
     class FakePanel:
         Accepted = 1
-        def __init__(self, source, handler, context, parent=None):
+
+        def __init__(self, source, handler, context, parent=None, on_apply=None):
+            self.on_apply = on_apply
             self.after = type("A", (), {"toPlainText": lambda self: "novo"})()
+
         def exec(self):
+            self.on_apply("novo")
             return 1
 
     monkeypatch.setattr("ai_writing.integration.PANEL_CLASS", FakePanel)
@@ -84,10 +92,12 @@ def test_on_apply_receives_suggestion(monkeypatch):
     class FakePanel:
         Accepted = 1
 
-        def __init__(self, source, handler, context, parent=None):
+        def __init__(self, source, handler, context, parent=None, on_apply=None):
+            self.on_apply = on_apply
             self.after = type("A", (), {"toPlainText": lambda self: "novo"})()
 
         def exec(self):
+            self.on_apply("novo")
             return 1
 
     monkeypatch.setattr("ai_writing.integration.PANEL_CLASS", FakePanel)

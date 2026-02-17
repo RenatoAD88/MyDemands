@@ -53,7 +53,7 @@ from ai_writing.settings import AISettingsStore, AISettingsDialog
 from ai_writing.config_store import AIConfigStore, OPENAI_PROVIDER
 from ai_writing.service import AIWritingService
 from ai_writing.audit import AIAuditLogger
-from ai_writing.integration import attach_ai_writing
+from ai_writing.integration import attach_ai_writing, set_text, get_text, focus_widget_end
 from ai_writing.error_log import log_ai_generation_error
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
@@ -872,12 +872,14 @@ class NewDemandDialog(BaseModalDialog):
             self.descricao_widget = ai_attach(
                 self.descricao,
                 lambda: desc_context,
+                on_apply=lambda txt: (set_text(self.descricao, txt), focus_widget_end(self.descricao)),
                 field_name="Descrição",
                 demand_id=str(desc_context.get("demand_id", "")),
             )
             self.comentario_widget = ai_attach(
                 self.comentario,
                 lambda: com_context,
+                on_apply=lambda txt: (set_text(self.comentario, txt), focus_widget_end(self.comentario)),
                 field_name="Comentário",
                 demand_id=str(com_context.get("demand_id", "")),
             )
@@ -1774,9 +1776,14 @@ class MainWindow(QMainWindow):
 
             wrapped = editor
             if self.ai_settings.enabled:
+                def _apply_ai_text(suggested_text: str) -> None:
+                    set_text(editor, suggested_text)
+                    focus_widget_end(editor)
+
                 wrapped = self._attach_ai_widget(
                     editor,
                     lambda: self._ai_context_provider(_id, col_name),
+                    on_apply=_apply_ai_text,
                     field_name=col_name,
                     demand_id=str(_id),
                 )
@@ -1793,7 +1800,7 @@ class MainWindow(QMainWindow):
             row_btn.addWidget(cancel_btn)
             lay.addLayout(row_btn)
             if dlg.exec() == QDialog.Accepted:
-                new_val = editor.toPlainText()
+                new_val = get_text(editor)
                 try:
                     self.store.update(_id, {col_name: new_val})
                 except ValidationError as ve:
@@ -2333,7 +2340,7 @@ class MainWindow(QMainWindow):
             self._log_ai_generation_error(exc, context, traceback.format_exc())
             raise
 
-    def _attach_ai_widget(self, text_widget: QTextEdit, context_provider, on_apply=None, field_name: str = "", demand_id: str = ""):
+    def _attach_ai_widget(self, text_widget: Any, context_provider, on_apply=None, field_name: str = "", demand_id: str = ""):
         wrapper = attach_ai_writing(
             text_widget,
             context_provider,
