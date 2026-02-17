@@ -66,6 +66,21 @@ class HuggingFaceClient:
         if not body_text:
             body_text = str(exc).strip()
 
+        if not body_text:
+            raw_message = getattr(exc, "message", None)
+            if raw_message is not None:
+                body_text = str(raw_message).strip()
+
+        if not body_text:
+            args = getattr(exc, "args", ())
+            if args:
+                non_empty_args = [str(arg).strip() for arg in args if str(arg).strip()]
+                if non_empty_args:
+                    body_text = " | ".join(non_empty_args)
+
+        if not body_text:
+            body_text = exc.__class__.__name__
+
         return {
             "status_code": status_code,
             "body": body_text,
@@ -151,7 +166,8 @@ class HuggingFaceClient:
             message = str(exc).lower()
             if "timeout" in message:
                 raise AIRequestTimeoutError("Timeout/rede") from exc
-            raise AIWritingError(f"Falha na API do Hugging Face: {exc}") from exc
+            detail = str(exc).strip() or exc.__class__.__name__
+            raise AIWritingError(f"Falha na API do Hugging Face: {detail}") from exc
 
     def _chat_completion(self, *, user_message: str, system_message: str) -> str:
         completion = self._perform_chat_completion(user_message=user_message, system_message=system_message)
