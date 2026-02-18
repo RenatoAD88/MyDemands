@@ -75,8 +75,9 @@ class PasswordResetService:
         normalized = self._norm(email)
         now = datetime.utcnow()
         settings = self.email_service.load_settings()
-        if not settings or self.email_service.secret_store.get("smtp_password") is None:
+        if not settings:
             raise RuntimeError("SMTP_NOT_CONFIGURED")
+        self.email_service.get_smtp_password_for_send()
 
         self._issue_provisional_password(normalized, now)
         return self.NEUTRAL_MESSAGE

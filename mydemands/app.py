@@ -13,9 +13,10 @@ from mydemands.infra.repositories.session_repository import SessionRepository
 from mydemands.infra.repositories.settings_repository import SettingsRepository
 from mydemands.infra.repositories.user_repository import UserRepository
 from mydemands.infra.secrets.dpapi_secret_store import WindowsDpapiSecretStore
-from mydemands.services.auth_service import AuthService
+from mydemands.services.auth_service import AuthService, MASTER_EMAIL
 from mydemands.services.email_service import EmailService
 from mydemands.services.password_reset_service import PasswordResetService
+from mydemands.services.master_password_admin_service import MasterPasswordAdminService
 from mydemands.services.user_context import UserContext, set_current_user
 from mydemands.app_controller import AppController
 from mydemands.ui.login_window import LoginWindow
@@ -35,12 +36,13 @@ def main() -> int:
     users = UserRepository(db)
     sessions = SessionRepository(paths.session_file)
     settings = SettingsRepository(paths.email_settings_file)
-    secrets_store = WindowsDpapiSecretStore(paths.secrets_file)
+    secrets_store = WindowsDpapiSecretStore(paths.user_secrets_file(MASTER_EMAIL))
     auth = AuthService(users, sessions, secrets_store)
     auth.seed_master()
 
     email_service = EmailService(settings, secrets_store)
     reset_service = PasswordResetService(users, email_service)
+    master_password_admin_service = MasterPasswordAdminService(users, email_service, reset_service)
 
     app_controller = AppController(auth, qt_app)
 
@@ -58,6 +60,8 @@ def main() -> int:
             logged_user_email=email,
             logged_user_role=user.role,
             email_service=email_service,
+            password_reset_service=reset_service,
+            master_password_admin_service=master_password_admin_service,
             backup_root=str(user_dir / "backups"),
             exports_root=str(user_dir / "exports"),
             on_logoff=app_controller.logoff_and_exit,

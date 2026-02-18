@@ -62,5 +62,22 @@ class UserRepository:
             )
             conn.commit()
 
+
+    def list_users(self) -> list[User]:
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                "SELECT email,password_hash,role,must_change_password,provisional_expires_at,provisional_issued_at FROM users ORDER BY email"
+            ).fetchall()
+        return [
+            User(
+                email=row["email"],
+                password_hash=row["password_hash"],
+                role=row["role"],
+                must_change_password=bool(row["must_change_password"]),
+                provisional_expires_at=row["provisional_expires_at"],
+                provisional_issued_at=row["provisional_issued_at"],
+            )
+            for row in rows
+        ]
     def exists(self, email: str) -> bool:
         return self.get_by_email(email) is not None

@@ -26,7 +26,7 @@ class ForgotPasswordDialog(QDialog):
             message = self.reset_service.request_password_reset(self.email.text())
             self.info.setText(message)
         except RuntimeError as exc:
-            if str(exc) == "SMTP_NOT_CONFIGURED":
+            if str(exc) in {"SMTP_NOT_CONFIGURED", "SMTP App Password não configurada"}:
                 QMessageBox.warning(
                     self,
                     "Configuração pendente",
