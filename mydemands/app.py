@@ -6,7 +6,6 @@ from PySide6.QtWidgets import QApplication
 
 from app import MainWindow
 from csv_store import CsvStore
-from ui_theme import APP_STYLESHEET
 from mydemands.infra.db import Database
 from mydemands.infra.paths import Paths
 from mydemands.infra.repositories.session_repository import SessionRepository
@@ -22,11 +21,12 @@ from mydemands.app_controller import AppController
 from mydemands.ui.login_window import LoginWindow
 from mydemands.infra.repositories.last_login_repository import LastLoginRepository
 from mydemands.infra.repositories.user_prefs_repository import UserPrefsRepository
+from mydemands.services.theme_service import ThemeService
+from mydemands.services.secure_csv_exchange_service import SecureCsvExchangeService
 
 
 def main() -> int:
     qt_app = QApplication(sys.argv)
-    qt_app.setStyleSheet(APP_STYLESHEET)
 
     paths = Paths()
     paths.ensure_base_dir()
@@ -45,6 +45,7 @@ def main() -> int:
     master_password_admin_service = MasterPasswordAdminService(users, email_service, reset_service)
 
     app_controller = AppController(auth, qt_app)
+    theme_service = ThemeService(qt_app)
 
     def _open_main(email: str):
         user = users.get_by_email(email)
@@ -55,6 +56,8 @@ def main() -> int:
         context = UserContext(email=user.email, role=user.role, user_id=paths.user_id_from_email(user.email), user_dir=user_dir)
         set_current_user(context)
         store = CsvStore(str(paths.user_data_dir(email)))
+        prefs = user_prefs.load(email)
+        theme_service.apply_theme(str(prefs.get("theme") or "light"))
         win = MainWindow(
             store,
             logged_user_email=email,
@@ -65,6 +68,9 @@ def main() -> int:
             backup_root=str(user_dir / "backups"),
             exports_root=str(user_dir / "exports"),
             on_logoff=app_controller.logoff_and_exit,
+            user_prefs_repo=user_prefs,
+            theme_service=theme_service,
+            secure_csv_service=SecureCsvExchangeService(secrets_store),
         )
         win.resize(1280, 720)
         win.show()

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QDialog, QFormLayout,
     QDateEdit, QLineEdit, QTextEdit, QPlainTextEdit, QComboBox,
     QListWidget, QListWidgetItem, QGroupBox, QAbstractItemView,
-    QMenu, QScrollArea, QCheckBox, QSystemTrayIcon
+    QMenu, QScrollArea, QCheckBox, QSystemTrayIcon, QRadioButton
 )
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QStyledItemDelegate
@@ -31,7 +31,7 @@ from csv_store import CsvStore, parse_prazos_list
 from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, build_team_control_report_rows, monthly_k_count, split_member_names
 from validation import ValidationError, normalize_prazo_text, validate_payload
 from bootstrap import resolve_storage_root, ensure_storage_root
-from ui_theme import APP_STYLESHEET, status_color, timing_color
+from ui_theme import status_color, timing_color
 from ui_filters import filter_rows, summary_counts
 from ui_prefs import load_prefs, save_prefs
 from form_rules import required_fields
@@ -56,6 +56,10 @@ from ai_writing.audit import AIAuditLogger
 from ai_writing.integration import attach_ai_writing, set_text, get_text, focus_widget_end
 from ai_writing.error_log import log_ai_generation_error
 from mydemands.ui.dialogs.master_settings_dialog import MasterSettingsDialog
+from mydemands.services.secure_csv_exchange_service import SecureCsvExchangeService, CsvExchangeError
+from mydemands.services.theme_service import ThemeService
+from mydemands.infra.repositories.user_prefs_repository import UserPrefsRepository
+from mydemands.infra.secrets.fake_secret_store import FakeSecretStore
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
@@ -1278,12 +1282,21 @@ class MainWindow(QMainWindow):
         backup_root: str | None = None,
         exports_root: str | None = None,
         on_logoff=None,
+        user_prefs_repo: UserPrefsRepository | None = None,
+        theme_service: ThemeService | None = None,
+        secure_csv_service: SecureCsvExchangeService | None = None,
     ):
         super().__init__()
         self.store = store
         self.backup_root = backup_root or os.path.join(self.store.base_dir, BACKUP_DIRNAME)
         self.exports_root = exports_root or self.store.base_dir
         self.on_logoff = on_logoff
+        self.user_prefs_repo = user_prefs_repo
+        app_instance = QApplication.instance()
+        if app_instance is None:
+            app_instance = QApplication([])
+        self.theme_service = theme_service or ThemeService(app_instance)
+        self.secure_csv_service = secure_csv_service or SecureCsvExchangeService(FakeSecretStore())
         self.logged_user_email = logged_user_email
         self.logged_user_role = logged_user_role
         self.email_service = email_service
@@ -2495,6 +2508,22 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout(dialog)
         layout.addWidget(content)
+
+        theme_switch = QCheckBox("Tema: Escuro / Claro")
+        current_theme = self.theme_service.current_theme() if self.theme_service else "light"
+        theme_switch.setChecked(current_theme == "dark")
+
+        def _on_theme_toggle(checked: bool) -> None:
+            if self.theme_service:
+                self.theme_service.apply_theme("dark" if checked else "light")
+            if self.user_prefs_repo and self.logged_user_email:
+                prefs = self.user_prefs_repo.load(self.logged_user_email)
+                prefs["theme"] = "dark" if checked else "light"
+                self.user_prefs_repo.save(self.logged_user_email, prefs)
+
+        theme_switch.toggled.connect(_on_theme_toggle)
+        layout.addWidget(theme_switch)
+
         logoff_btn = QPushButton("Logoff")
         logoff_btn.clicked.connect(lambda: (dialog.accept(), self._handle_logoff()))
         layout.addWidget(logoff_btn)
@@ -3337,14 +3366,38 @@ class MainWindow(QMainWindow):
 
         selected_rows = self._selected_rows_from_current_tab()
         rows_to_export = selected_rows if selected_rows else self.store.build_view()
+        is_master = (self.logged_user_role or "") == "master"
+
+        passphrase = ""
+        if not is_master:
+            passphrase, ok = QInputDialog.getText(
+                self,
+                "Palavra-passe",
+                "Informe a palavra-passe para criptografar:",
+                QLineEdit.Password,
+            )
+            if not ok:
+                return
+            passphrase = (passphrase or "").strip()
+            if len(passphrase) < 6:
+                QMessageBox.warning(self, "Validação", "A palavra-passe deve ter ao menos 6 caracteres.")
+                return
 
         try:
-            total = self.store.export_rows_to_csv(export_path, rows_to_export)
+            csv_text = self.secure_csv_service.render_csv_text(rows_to_export)
+            payload = self.secure_csv_service.export_payload(csv_text, passphrase=passphrase, is_master=is_master)
+            with open(export_path, "w", encoding="utf-8") as f:
+                f.write(payload)
         except Exception as e:
             QMessageBox.warning(self, "Falha na exportação", f"Não foi possível exportar o CSV.\n\n{e}")
             return
 
-        QMessageBox.information(self, "Exportação concluída", f"CSV exportado com sucesso.\nTotal de demandas: {total}")
+        suffix = "" if is_master else "\nUse a mesma palavra-passe no momento da importação."
+        QMessageBox.information(
+            self,
+            "Exportação concluída",
+            f"CSV exportado com sucesso.\nTotal de demandas: {len(rows_to_export)}{suffix}",
+        )
 
     def import_demands_csv(self):
         default_path = self.exports_root
@@ -3357,29 +3410,65 @@ class MainWindow(QMainWindow):
         if not import_path:
             return
 
-        confirm_box = QMessageBox(self)
-        confirm_box.setWindowTitle("Confirmar importação")
-        confirm_box.setIcon(QMessageBox.Warning)
-        confirm_box.setText(
-            "Atenção!\n\nAo fazer a importação todos os dados anteriores serão perdidos.\nDeseja prosseguir?"
-        )
-        import_button = confirm_box.addButton("Importar", QMessageBox.AcceptRole)
-        confirm_box.addButton("Cancelar", QMessageBox.RejectRole)
-        confirm_box.exec()
-        if confirm_box.clickedButton() is not import_button:
+        mode_box = QMessageBox(self)
+        mode_box.setWindowTitle("Importar dados")
+        mode_box.setText("Escolha o modo de importação:")
+        replace_btn = mode_box.addButton("Substituir dados existentes", QMessageBox.AcceptRole)
+        merge_btn = mode_box.addButton("Mesclar com dados existentes", QMessageBox.AcceptRole)
+        mode_box.addButton("Cancelar", QMessageBox.RejectRole)
+        mode_box.exec()
+        clicked = mode_box.clickedButton()
+        if clicked not in {replace_btn, merge_btn}:
             return
+        merge_mode = clicked is merge_btn
+
+        passphrase = ""
+        is_master = (self.logged_user_role or "") == "master"
+        if not is_master:
+            passphrase, ok = QInputDialog.getText(
+                self,
+                "Palavra-passe",
+                "Informe a palavra-passe do arquivo (se houver):",
+                QLineEdit.Password,
+            )
+            if not ok:
+                return
+            passphrase = (passphrase or "").strip()
 
         try:
-            total = self.store.import_from_exported_csv(import_path)
-        except ValidationError as ve:
-            QMessageBox.warning(self, "Falha na importação", str(ve))
+            with open(import_path, "r", encoding="utf-8") as f:
+                raw_text = f.read()
+            import_result = self.secure_csv_service.import_payload(raw_text, passphrase=passphrase, is_master=is_master)
+            imported_rows = self.store.parse_exported_csv_text(import_result.csv_text)
+            total = self.store.merge_with_rows(imported_rows) if merge_mode else self.store.replace_with_rows(imported_rows)
+        except (ValidationError, CsvExchangeError) as e:
+            self._offer_save_plain_copy(import_path)
+            QMessageBox.warning(self, "Falha na importação", str(e))
             return
         except Exception as e:
             QMessageBox.warning(self, "Falha na importação", f"Não foi possível importar o CSV.\n\n{e}")
             return
 
         self.refresh_all()
-        QMessageBox.information(self, "Importação concluída", f"CSV importado com sucesso.\nTotal de demandas: {total}")
+        action = "mesclado" if merge_mode else "substituído"
+        QMessageBox.information(self, "Importação concluída", f"CSV {action} com sucesso.\nTotal importado: {total}")
+
+    def _offer_save_plain_copy(self, source_path: str) -> bool:
+        choice = QMessageBox.question(
+            self,
+            "Arquivo incompatível",
+            "Arquivo incompatível / não foi possível descriptografar.\n"
+            "Deseja salvar uma cópia do CSV sem descriptografia para análise?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if choice != QMessageBox.Yes:
+            return False
+        target_path, _ = QFileDialog.getSaveFileName(self, "Salvar cópia do arquivo", source_path, "CSV (*.csv);;Texto (*.txt)")
+        if not target_path:
+            return False
+        shutil.copyfile(source_path, target_path)
+        return True
 
     def delete_demand(self):
         self._delete_selected_demands_from_table()
