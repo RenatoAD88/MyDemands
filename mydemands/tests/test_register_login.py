@@ -27,3 +27,21 @@ def test_hash_nao_contem_senha_pura(env):
     env["auth"].register("user@test.com", "Abcdef1!")
     saved = env["users"].get_by_email("user@test.com")
     assert "Abcdef1!" not in saved.password_hash
+
+
+def test_hash_password_fallback_quando_bcrypt_indisponivel(monkeypatch):
+    from mydemands.services import auth_service
+
+    monkeypatch.setattr(auth_service, "bcrypt", None)
+    hashed = auth_service.hash_password("Abcdef1!")
+
+    assert hashed.startswith(auth_service.PBKDF2_PREFIX)
+    assert auth_service.verify_password("Abcdef1!", hashed)
+    assert not auth_service.verify_password("errada", hashed)
+
+
+def test_verify_password_bcrypt_hash_sem_bcrypt_retorna_false(monkeypatch):
+    from mydemands.services import auth_service
+
+    monkeypatch.setattr(auth_service, "bcrypt", None)
+    assert not auth_service.verify_password("qualquer", "$2b$12$abcdefghijklmnopqrstuv")

@@ -5,7 +5,10 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 
-import bcrypt
+try:
+    import bcrypt  # type: ignore[import-not-found]
+except Exception:  # pragma: no cover - fallback path covered in tests via monkeypatch
+    bcrypt = None
 
 from mydemands.domain.models import User
 from mydemands.domain.password_policy import PasswordPolicy
@@ -16,6 +19,7 @@ from mydemands.infra.secrets.secret_store import ISecretStore
 MASTER_EMAIL = "renatoaugustod@gmail.com"
 MASTER_PASSWORD = "DANRe102023@@mydemands"
 REMEMBER_KEY = "remember_token"
+PBKDF2_PREFIX = "pbkdf2_sha256$"
 
 
 class AuthError(Exception):
@@ -31,12 +35,23 @@ class InvalidCredentialsError(AuthError):
 
 
 def hash_password(password: str) -> str:
-    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
-    return hashed.decode("utf-8")
+    if bcrypt is not None:
+        hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+        return hashed.decode("utf-8")
+
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 390000)
+    return f"{PBKDF2_PREFIX}{salt}${digest.hex()}"
 
 
 def verify_password(password: str, hashed: str) -> bool:
     try:
+        if hashed.startswith(PBKDF2_PREFIX):
+            _, salt, expected_hex = hashed.split("$", 2)
+            digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 390000)
+            return secrets.compare_digest(digest.hex(), expected_hex)
+        if bcrypt is None:
+            return False
         return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
     except Exception:
         return False
