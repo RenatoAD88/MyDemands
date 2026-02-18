@@ -5,3 +5,5 @@ transformers==4.57.6
 huggingface_hub==0.34.4
 openai>=1.0,<2
 bcrypt>=4,<5
+
+cryptography>=42,<44

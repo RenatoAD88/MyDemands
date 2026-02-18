@@ -633,69 +633,92 @@ class CsvStore:
         Retorna a quantidade de linhas importadas.
         """
         with open(import_path, "r", newline="", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f, delimiter=delimiter)
-            incoming_columns = reader.fieldnames or []
-            if incoming_columns != DISPLAY_COLUMNS:
-                raise ValidationError(
-                    "Formato de CSV inválido. Use um arquivo exportado pelo sistema, com as mesmas colunas e ordem."
+            imported_rows = self.parse_exported_csv_text(f.read(), delimiter=delimiter)
+        return self.replace_with_rows(imported_rows)
+
+    def parse_exported_csv_text(self, csv_text: str, delimiter: str = ",") -> List[DemandRow]:
+        reader = csv.DictReader(io.StringIO(csv_text), delimiter=delimiter)
+        incoming_columns = reader.fieldnames or []
+        if incoming_columns != DISPLAY_COLUMNS:
+            raise ValidationError(
+                "Formato de CSV inválido. Use um arquivo exportado pelo sistema, com as mesmas colunas e ordem."
+            )
+
+        imported_rows: List[DemandRow] = []
+        imported_used_ids = set()
+        imported_next_id = 1
+        for i, row in enumerate(reader, start=2):
+            payload = {
+                "É Urgente?": (row.get("É Urgente?") or "").strip(),
+                "Status": (row.get("Status") or "").strip(),
+                "Prioridade": (row.get("Prioridade") or "").strip(),
+                "Data de Registro": (row.get("Data de Registro") or "").strip(),
+                "Prazo": (row.get("Prazo") or "").strip(),
+                "Data Conclusão": (row.get("Data Conclusão") or "").strip(),
+                "Projeto": row.get("Projeto") or "",
+                "Descrição": row.get("Descrição") or "",
+                "Comentário": row.get("Comentário") or "",
+                "ID Azure": row.get("ID Azure") or "",
+                "% Conclusão": (row.get("% Conclusão") or "").strip(),
+                "Responsável": row.get("Responsável") or "",
+                "Reportar?": (row.get("Reportar?") or "").strip(),
+                "Nome": row.get("Nome") or "",
+                "Time/Função": row.get("Time/Função") or "",
+            }
+
+            try:
+                normalized = validate_payload(payload, mode="create")
+                normalized = _autofix_consistency(normalized)
+                _require_conclusao_date_if_needed(
+                    normalized.get("Status", ""),
+                    normalized.get("% Conclusão", ""),
+                    normalized.get("Data Conclusão", ""),
                 )
+            except ValidationError as e:
+                raise ValidationError(f"Erro na linha {i}: {e}") from e
 
-            imported_rows: List[DemandRow] = []
-            imported_used_ids = set()
-            imported_next_id = 1
-            for i, row in enumerate(reader, start=2):
-                payload = {
-                    "É Urgente?": (row.get("É Urgente?") or "").strip(),
-                    "Status": (row.get("Status") or "").strip(),
-                    "Prioridade": (row.get("Prioridade") or "").strip(),
-                    "Data de Registro": (row.get("Data de Registro") or "").strip(),
-                    "Prazo": (row.get("Prazo") or "").strip(),
-                    "Data Conclusão": (row.get("Data Conclusão") or "").strip(),
-                    "Projeto": row.get("Projeto") or "",
-                    "Descrição": row.get("Descrição") or "",
-                    "Comentário": row.get("Comentário") or "",
-                    "ID Azure": row.get("ID Azure") or "",
-                    "% Conclusão": (row.get("% Conclusão") or "").strip(),
-                    "Responsável": row.get("Responsável") or "",
-                    "Reportar?": (row.get("Reportar?") or "").strip(),
-                    "Nome": row.get("Nome") or "",
-                    "Time/Função": row.get("Time/Função") or "",
-                }
+            new_id = str(uuid.uuid4())
+            data = {c: "" for c in CSV_COLUMNS}
+            data["_id"] = new_id
 
-                try:
-                    normalized = validate_payload(payload, mode="create")
-                    normalized = _autofix_consistency(normalized)
-                    _require_conclusao_date_if_needed(
-                        normalized.get("Status", ""),
-                        normalized.get("% Conclusão", ""),
-                        normalized.get("Data Conclusão", ""),
-                    )
-                except ValidationError as e:
-                    raise ValidationError(f"Erro na linha {i}: {e}") from e
-
-                new_id = str(uuid.uuid4())
-                data = {c: "" for c in CSV_COLUMNS}
-                data["_id"] = new_id
-
-                imported_numeric_id_raw = (row.get("ID") or "").strip()
-                imported_numeric_id = int(imported_numeric_id_raw) if imported_numeric_id_raw.isdigit() else None
-                if imported_numeric_id is not None and imported_numeric_id > 0 and imported_numeric_id not in imported_used_ids:
-                    data["ID"] = str(imported_numeric_id)
-                    imported_used_ids.add(imported_numeric_id)
-                    imported_next_id = max(imported_next_id, imported_numeric_id + 1)
-                else:
-                    while imported_next_id in imported_used_ids:
-                        imported_next_id += 1
-                    data["ID"] = str(imported_next_id)
-                    imported_used_ids.add(imported_next_id)
+            imported_numeric_id_raw = (row.get("ID") or "").strip()
+            imported_numeric_id = int(imported_numeric_id_raw) if imported_numeric_id_raw.isdigit() else None
+            if imported_numeric_id is not None and imported_numeric_id > 0 and imported_numeric_id not in imported_used_ids:
+                data["ID"] = str(imported_numeric_id)
+                imported_used_ids.add(imported_numeric_id)
+                imported_next_id = max(imported_next_id, imported_numeric_id + 1)
+            else:
+                while imported_next_id in imported_used_ids:
                     imported_next_id += 1
-                for c in CSV_COLUMNS:
-                    if c in {"_id", "ID"}:
-                        continue
-                    data[c] = normalized.get(c, "")
-                imported_rows.append(DemandRow(_id=new_id, data=data))
+                data["ID"] = str(imported_next_id)
+                imported_used_ids.add(imported_next_id)
+                imported_next_id += 1
+            for c in CSV_COLUMNS:
+                if c in {"_id", "ID"}:
+                    continue
+                data[c] = normalized.get(c, "")
+            imported_rows.append(DemandRow(_id=new_id, data=data))
+        return imported_rows
 
+    def replace_with_rows(self, imported_rows: List[DemandRow]) -> int:
         self.rows = imported_rows
+        self.save()
+        return len(imported_rows)
+
+    def merge_with_rows(self, imported_rows: List[DemandRow]) -> int:
+        existing_by_id: Dict[str, DemandRow] = {
+            str(row.data.get("ID") or "").strip(): row
+            for row in self.rows
+            if str(row.data.get("ID") or "").strip()
+        }
+        for imported in imported_rows:
+            key = str(imported.data.get("ID") or "").strip()
+            if key:
+                existing_by_id[key] = imported
+            else:
+                existing_by_id[str(uuid.uuid4())] = imported
+
+        self.rows = sorted(existing_by_id.values(), key=lambda row: int(row.data.get("ID") or "0"))
         self.save()
         return len(imported_rows)
 
