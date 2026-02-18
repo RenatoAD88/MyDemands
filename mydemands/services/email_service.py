@@ -8,6 +8,7 @@ from mydemands.infra.secrets.secret_store import ISecretStore
 
 SMTP_PASSWORD_KEY = "smtp_password"
 DEFAULT_RECOVERY_SUBJECT = "MyDemands - Recuperação de senha"
+PROVISIONAL_MINUTES = 15
 
 
 class EmailService:
@@ -23,6 +24,23 @@ class EmailService:
 
     def load_settings(self) -> EmailSettings | None:
         return self.settings_repository.load_email_settings()
+
+
+    @staticmethod
+    def validate_recovery_template(body_template: str) -> None:
+        if "{PASSWORD}" not in body_template:
+            raise ValueError("Body deve conter {PASSWORD}")
+        if "{MINUTOS}" not in body_template:
+            raise ValueError("Body deve conter {MINUTOS}")
+        if "spam" not in body_template.lower():
+            raise ValueError("Body deve orientar verificação de spam")
+
+    @staticmethod
+    def render_recovery_body(body_template: str, provisional_password: str) -> str:
+        rendered = body_template.replace("{PASSWORD}", provisional_password).replace("{MINUTOS}", str(PROVISIONAL_MINUTES))
+        if "{PASSWORD}" in rendered or "{MINUTOS}" in rendered:
+            raise ValueError("Template de recuperação inválido")
+        return rendered
 
     def get_provider(self) -> IEmailProvider:
         if self._provider:
@@ -45,7 +63,8 @@ class EmailService:
         settings = self.settings_repository.load_email_settings()
         if not settings:
             raise RuntimeError("SMTP_NOT_CONFIGURED")
-        body = settings.body_template.replace("{PASSWORD}", provisional_password)
+        self.validate_recovery_template(settings.body_template)
+        body = self.render_recovery_body(settings.body_template, provisional_password)
         subject = settings.subject_template or DEFAULT_RECOVERY_SUBJECT
         self.get_provider().send(
             to_email=to_email,

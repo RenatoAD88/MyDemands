@@ -3,13 +3,13 @@ from __future__ import annotations
 from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QPushButton, QVBoxLayout, QLabel, QMessageBox
 
 from mydemands.domain.password_policy import PasswordPolicy
-from mydemands.services.auth_service import AuthService, hash_password
+from mydemands.services.password_reset_service import PasswordResetService
 
 
 class ResetPasswordDialog(QDialog):
-    def __init__(self, auth_service: AuthService, email: str, parent=None):
+    def __init__(self, reset_service: PasswordResetService, email: str, parent=None):
         super().__init__(parent)
-        self.auth_service = auth_service
+        self.reset_service = reset_service
         self.email = email.strip().lower()
         self.final_password = ""
         self.setWindowTitle("Confirmar nova senha / Definir senha final")
@@ -46,17 +46,9 @@ class ResetPasswordDialog(QDialog):
 
     def _save(self):
         try:
-            user = self.auth_service.users.get_by_email(self.email)
-            if user is None:
-                raise ValueError("Usuário não encontrado")
-            ok, errors = PasswordPolicy.validate(self.password.text())
-            if not ok:
-                raise ValueError("; ".join(errors))
             if self.password.text() != self.confirm.text():
                 raise ValueError("Confirmação de senha não confere")
-            user.password_hash = hash_password(self.password.text())
-            user.must_change_password = False
-            self.auth_service.users.update(user)
+            self.reset_service.save_final_password(self.email, self.password.text())
             self.final_password = self.password.text()
             self.accept()
         except Exception as exc:

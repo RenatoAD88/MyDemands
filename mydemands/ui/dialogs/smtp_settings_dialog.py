@@ -76,10 +76,7 @@ class SmtpSettingsDialog(QDialog):
 
     def _validate_template(self) -> None:
         body = self.body.toPlainText()
-        if "{PASSWORD}" not in body:
-            raise ValueError("Body deve conter {PASSWORD}")
-        if "spam" not in body.lower():
-            raise ValueError("Body deve orientar verificação de spam")
+        self.email_service.validate_recovery_template(body)
         if not self.subject.text().strip():
             raise ValueError("Subject obrigatório")
 

@@ -58,6 +58,11 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 class AuthService:
+    EXPIRED_PROVISIONAL_MESSAGE = (
+        "Sua senha provisória expirou. Enviamos uma nova senha provisória para o seu e-mail. "
+        "Verifique também a caixa de spam."
+    )
+
     def __init__(self, users: UserRepository, sessions: SessionRepository, secrets_store: ISecretStore):
         self.users = users
         self.sessions = sessions
@@ -82,8 +87,28 @@ class AuthService:
 
     def authenticate(self, email: str, password: str) -> User:
         user = self.users.get_by_email(email)
-        if not user or not verify_password(password, user.password_hash):
+        if not user:
             raise InvalidCredentialsError("Credenciais inválidas")
+
+        if not verify_password(password, user.password_hash):
+            if user.must_change_password and user.provisional_expires_at:
+                try:
+                    if datetime.utcnow() > datetime.fromisoformat(user.provisional_expires_at):
+                        raise InvalidCredentialsError(self.EXPIRED_PROVISIONAL_MESSAGE)
+                except ValueError:
+                    pass
+            raise InvalidCredentialsError("Credenciais inválidas")
+
+        if user.must_change_password and user.provisional_expires_at:
+            try:
+                if datetime.utcnow() > datetime.fromisoformat(user.provisional_expires_at):
+                    raise InvalidCredentialsError(self.EXPIRED_PROVISIONAL_MESSAGE)
+            except ValueError:
+                pass
+            user.auth_state = "requires_password_change"
+        else:
+            user.auth_state = "authenticated"
+
         self._cached_user = user
         return user
 
