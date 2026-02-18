@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 from typing import Callable
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QCheckBox, QDialog, QFormLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout
 
 from mydemands.infra.repositories.last_login_repository import LastLoginRepository
@@ -54,6 +56,12 @@ class LoginWindow(QDialog):
         self.email = QLineEdit()
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.Password)
+        self._password_visible = False
+        self.password_toggle_action = QAction(self)
+        self.password_toggle_action.setCheckable(True)
+        self.password_toggle_action.toggled.connect(self._toggle_password_visibility)
+        self.password.addAction(self.password_toggle_action, QLineEdit.TrailingPosition)
+        self._update_password_toggle_action()
         self.remember_me = QCheckBox("Lembrar de mim")
         self.remember_me.toggled.connect(self._toggle_remember_me)
         self.always_require_password_on_start = QCheckBox("Sempre iniciar pedindo senha")
@@ -104,6 +112,10 @@ class LoginWindow(QDialog):
             self.remember_me.setChecked(True)
             self.password.setEnabled(False)
             self.password.setPlaceholderText("••••••••")
+            self.password.setEchoMode(QLineEdit.Password)
+            self._password_visible = False
+            self.password_toggle_action.setChecked(False)
+            self._update_password_toggle_action()
             self.msg.setText("Sessão lembrada ativa. Clique em Entrar para continuar.")
         else:
             self._set_normal_mode()
@@ -112,7 +124,31 @@ class LoginWindow(QDialog):
         self.remembered_user_email = None
         self.password.setEnabled(True)
         self.password.setPlaceholderText("")
+        self.password.setEchoMode(QLineEdit.Password)
+        self._password_visible = False
+        self.password_toggle_action.setChecked(False)
         self.msg.setText("")
+        self._update_password_toggle_action()
+
+    def _resolve_icon(self, file_name: str) -> QIcon:
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        icon_path = os.path.join(root, "img", file_name)
+        if os.path.exists(icon_path):
+            return QIcon(icon_path)
+        return QIcon()
+
+    def _update_password_toggle_action(self) -> None:
+        visible_icon = self._resolve_icon("eye_closed.svg")
+        hidden_icon = self._resolve_icon("eye_open.svg")
+        icon = visible_icon if self._password_visible else hidden_icon
+        self.password_toggle_action.setIcon(icon)
+        self.password_toggle_action.setText("Ocultar senha" if self._password_visible else "Mostrar senha")
+        self.password_toggle_action.setEnabled(self.password.isEnabled())
+
+    def _toggle_password_visibility(self, checked: bool) -> None:
+        self._password_visible = bool(checked)
+        self.password.setEchoMode(QLineEdit.Normal if self._password_visible else QLineEdit.Password)
+        self._update_password_toggle_action()
 
     def _toggle_remember_me(self, checked: bool) -> None:
         if not checked:

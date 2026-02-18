@@ -85,6 +85,7 @@ from ai_writing.integration import attach_ai_writing, set_text, get_text, focus_
 from ai_writing.error_log import log_ai_generation_error
 from mydemands.ui.dialogs.master_settings_dialog import MasterSettingsDialog
 from mydemands.services.secure_csv_exchange_service import SecureCsvExchangeService, CsvExchangeError
+from mydemands.services.icon_service import IconService
 from mydemands.services.theme_service import ThemeService
 from mydemands.infra.repositories.user_prefs_repository import UserPrefsRepository
 from mydemands.infra.secrets.fake_secret_store import FakeSecretStore
@@ -1324,6 +1325,7 @@ class MainWindow(QMainWindow):
         if app_instance is None:
             app_instance = QApplication([])
         self.theme_service = theme_service or ThemeService(app_instance)
+        self.icon_service = IconService()
         self.secure_csv_service = secure_csv_service or SecureCsvExchangeService(FakeSecretStore())
         self.logged_user_email = logged_user_email
         self.logged_user_role = logged_user_role
@@ -1358,6 +1360,7 @@ class MainWindow(QMainWindow):
         central_layout.setContentsMargins(8, 8, 8, 8)
         central_layout.setSpacing(8)
         central_layout.addWidget(self._build_shortcuts_section())
+        self.theme_service.add_theme_listener(self._on_theme_changed)
         central_layout.addWidget(self.tabs)
         self.setCentralWidget(central)
 
@@ -2187,14 +2190,17 @@ class MainWindow(QMainWindow):
         self._save_preferences()
         self.refresh_current()
 
-    def _build_toolbar_action_button(self, object_name: str, tooltip: str, img_name: str, fallback_icon: QStyle.StandardPixmap, on_click) -> QToolButton:
+    def _build_toolbar_action_button(self, object_name: str, tooltip: str, icon_name: str, fallback_icon: QStyle.StandardPixmap, on_click) -> QToolButton:
         btn = QToolButton()
         btn.setObjectName(object_name)
         btn.setProperty("toolbarAction", True)
         btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
         btn.setToolTip(tooltip)
-        btn.setIcon(self._icon_from_img(img_name, fallback_icon))
-        btn.setIconSize(QSize(28, 28))
+        icon = self._icon_for(icon_name)
+        if icon.isNull():
+            icon = self.style().standardIcon(fallback_icon)
+        btn.setIcon(icon)
+        btn.setIconSize(self._toolbar_icon_size())
         btn.clicked.connect(on_click)
         return btn
 
@@ -2311,39 +2317,52 @@ class MainWindow(QMainWindow):
             return QIcon(img_path)
         return self.style().standardIcon(fallback_icon)
 
+    def _icon_for(self, icon_name: str) -> QIcon:
+        if not icon_name:
+            return QIcon()
+        theme = self.theme_service.current_theme() if self.theme_service else "light"
+        icon = self.icon_service.get_icon(icon_name, theme)
+        if icon.isNull():
+            return self.style().standardIcon(self.icon_service.fallback_for(icon_name))
+        return icon
+
+    def _toolbar_icon_size(self) -> QSize:
+        theme = self.theme_service.current_theme() if self.theme_service else "light"
+        return self.icon_service.icon_size(theme)
+
     def _build_shortcuts_section(self) -> QWidget:
         section = QWidget()
         layout = QHBoxLayout(section)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        new_btn = self._build_toolbar_action_button(
+        self.new_btn = self._build_toolbar_action_button(
             object_name="primaryAction",
             tooltip="Adicionar demandas",
-            img_name="add.png",
+            icon_name="new_demand",
             fallback_icon=QStyle.SP_FileDialogNewFolder,
             on_click=self.new_demand,
         )
 
-        delete_btn = self._build_toolbar_action_button(
+        self.delete_btn = self._build_toolbar_action_button(
             object_name="dangerAction",
             tooltip="Remover demandas",
-            img_name="",
+            icon_name="delete",
             fallback_icon=QStyle.SP_TrashIcon,
             on_click=self.delete_demand,
         )
 
-        export_shortcut = self._build_toolbar_action_button(
+        self.export_shortcut = self._build_toolbar_action_button(
             object_name="exportAction",
             tooltip="Exportar demandas",
-            img_name="exp.png",
+            icon_name="export",
             fallback_icon=QStyle.SP_ArrowUp,
             on_click=self.export_demands_csv,
         )
-        import_shortcut = self._build_toolbar_action_button(
+        self.import_shortcut = self._build_toolbar_action_button(
             object_name="importAction",
             tooltip="Importar demandas",
-            img_name="exp.png",
+            icon_name="import",
             fallback_icon=QStyle.SP_ArrowDown,
             on_click=self.import_demands_csv,
         )
@@ -2351,7 +2370,7 @@ class MainWindow(QMainWindow):
         self.ai_settings_button = self._build_toolbar_action_button(
             object_name="aiSettingsAction",
             tooltip="Configurações da IA",
-            img_name="",
+            icon_name="",
             fallback_icon=QStyle.SP_DialogYesButton,
             on_click=self.open_ai_settings,
         )
@@ -2362,7 +2381,7 @@ class MainWindow(QMainWindow):
         self.notification_button = self._build_toolbar_action_button(
             object_name="notificationAction",
             tooltip="Central de notificações",
-            img_name="",
+            icon_name="",
             fallback_icon=QStyle.SP_MessageBoxInformation,
             on_click=self.open_notification_center,
         )
@@ -2372,7 +2391,7 @@ class MainWindow(QMainWindow):
         self.master_settings_button = self._build_toolbar_action_button(
             object_name="masterSettingsAction",
             tooltip="Configurações Master",
-            img_name="",
+            icon_name="",
             fallback_icon=QStyle.SP_FileDialogDetailedView,
             on_click=self.open_master_settings,
         )
@@ -2382,16 +2401,29 @@ class MainWindow(QMainWindow):
         self.master_settings_button.setVisible(self.logged_user_role == "master")
         info_btn = self._build_info_icon_button()
 
-        layout.addWidget(new_btn)
-        layout.addWidget(delete_btn)
-        layout.addWidget(export_shortcut)
-        layout.addWidget(import_shortcut)
+        layout.addWidget(self.new_btn)
+        layout.addWidget(self.delete_btn)
+        layout.addWidget(self.export_shortcut)
+        layout.addWidget(self.import_shortcut)
         layout.addStretch()
         layout.addWidget(self.master_settings_button)
         layout.addWidget(self.ai_settings_button)
         layout.addWidget(self.notification_button)
         layout.addWidget(info_btn)
         return section
+
+
+    def _on_theme_changed(self, _theme: str) -> None:
+        for btn, icon_name in (
+            (getattr(self, "new_btn", None), "new_demand"),
+            (getattr(self, "delete_btn", None), "delete"),
+            (getattr(self, "export_shortcut", None), "export"),
+            (getattr(self, "import_shortcut", None), "import"),
+        ):
+            if btn is None:
+                continue
+            btn.setIcon(self._icon_for(icon_name))
+            btn.setIconSize(self._toolbar_icon_size())
 
     def open_master_settings(self):
         if self.logged_user_role != "master" or self.email_service is None:

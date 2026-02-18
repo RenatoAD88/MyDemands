@@ -5,6 +5,7 @@ qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponív
 
 from app import MainWindow
 from csv_store import CsvStore
+from mydemands.services.theme_service import ThemeService
 
 QApplication = qtwidgets.QApplication
 QToolButton = qtwidgets.QToolButton
@@ -47,5 +48,35 @@ def test_shortcuts_section_renders_buttons_above_tabs(tmp_path):
         widget = item.widget()
         if isinstance(widget, QToolButton):
             assert widget.objectName() not in {"primaryAction", "dangerAction", "exportAction", "importAction", "infoAction"}
+
+    win.close()
+
+
+def test_shortcuts_icons_update_with_same_size_after_theme_switch(tmp_path):
+    app = _get_app()
+    store = CsvStore(str(tmp_path))
+    theme = ThemeService(app)
+    win = MainWindow(store, theme_service=theme)
+
+    export_button = win.findChild(QToolButton, "exportAction")
+    import_button = win.findChild(QToolButton, "importAction")
+
+    assert export_button is not None
+    assert import_button is not None
+
+    light_export_size = export_button.iconSize()
+    light_import_size = import_button.iconSize()
+
+    theme.apply_theme("dark")
+
+    assert export_button.iconSize() == light_export_size
+    assert import_button.iconSize() == light_import_size
+    assert export_button.icon().isNull() is False
+    assert import_button.icon().isNull() is False
+
+    theme.apply_theme("light")
+
+    assert export_button.iconSize() == light_export_size
+    assert import_button.iconSize() == light_import_size
 
     win.close()
