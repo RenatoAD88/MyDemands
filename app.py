@@ -1267,9 +1267,21 @@ class CopyTeamMembersDialog(BaseModalDialog):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, store: CsvStore, logged_user_email: str = "", logged_user_role: str = "default", email_service=None):
+    def __init__(
+        self,
+        store: CsvStore,
+        logged_user_email: str = "",
+        logged_user_role: str = "default",
+        email_service=None,
+        backup_root: str | None = None,
+        exports_root: str | None = None,
+        on_logoff=None,
+    ):
         super().__init__()
         self.store = store
+        self.backup_root = backup_root or os.path.join(self.store.base_dir, BACKUP_DIRNAME)
+        self.exports_root = exports_root or self.store.base_dir
+        self.on_logoff = on_logoff
         self.logged_user_email = logged_user_email
         self.logged_user_role = logged_user_role
         self.email_service = email_service
@@ -1340,11 +1352,14 @@ class MainWindow(QMainWindow):
         mute_action.triggered.connect(lambda: self.notification_store.mute_for_seconds(3600))
         settings_action = QAction("Configurações de Notificações", self)
         settings_action.triggered.connect(self.open_notification_settings)
+        logoff_action = QAction("Logoff", self)
+        logoff_action.triggered.connect(self._handle_logoff)
         exit_action = QAction("Sair", self)
         exit_action.triggered.connect(self.close)
         tray_menu.addAction(center_action)
         tray_menu.addAction(mute_action)
         tray_menu.addAction(settings_action)
+        tray_menu.addAction(logoff_action)
         tray_menu.addSeparator()
         tray_menu.addAction(exit_action)
         self.tray_icon.setContextMenu(tray_menu)
@@ -1435,7 +1450,13 @@ class MainWindow(QMainWindow):
         )
 
     def _backup_dir_path(self) -> str:
-        return os.path.join(self.store.base_dir, BACKUP_DIRNAME)
+        return self.backup_root
+
+    def _handle_logoff(self) -> None:
+        if callable(self.on_logoff):
+            self.on_logoff()
+        else:
+            QApplication.quit()
 
     def _backup_day_dir_path(self, ref_day: Optional[date] = None) -> str:
         token = (ref_day or date.today()).strftime("%Y%m%d")
@@ -1530,7 +1551,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "Backup diário",
-            "Não foi encontrado backup gerado para a data de hoje na pasta C:\\MyDemands\\bkp.",
+            f"Não foi encontrado backup gerado para a data de hoje na pasta {self._backup_dir_path()}.",
         )
 
     def _restore_backup_experience(self):
@@ -3250,7 +3271,7 @@ class MainWindow(QMainWindow):
         export_path, _ = QFileDialog.getSaveFileName(
             self,
             "Salvar relatório de controle de time",
-            os.path.join(self.store.base_dir, default_name),
+            os.path.join(self.exports_root, default_name),
             "CSV (*.csv)",
         )
         if not export_path:
@@ -3267,7 +3288,7 @@ class MainWindow(QMainWindow):
 
     def export_demands_csv(self):
         default_name = "demandas_export.csv"
-        default_path = os.path.join(self.store.base_dir, default_name)
+        default_path = os.path.join(self.exports_root, default_name)
         export_path, _ = QFileDialog.getSaveFileName(
             self,
             "Exportar demandas",
@@ -3292,7 +3313,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Exportação concluída", f"CSV exportado com sucesso.\nTotal de demandas: {total}")
 
     def import_demands_csv(self):
-        default_path = self.store.base_dir
+        default_path = self.exports_root
         import_path, _ = QFileDialog.getOpenFileName(
             self,
             "Importar demandas",
