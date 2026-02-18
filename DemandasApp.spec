@@ -1,12 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_all
+
+crypt = collect_all('cryptography')
+
 
 a = Analysis(
     ['app.py'],
     pathex=[],
-    binaries=[],
-    datas=[],
-    hiddenimports=[],
+    binaries=crypt[1],
+    datas=crypt[0],
+    hiddenimports=["huggingface_hub", "bcrypt", *crypt[2], "cryptography.hazmat.bindings._rust", "cryptography.hazmat.primitives.ciphers.aead"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

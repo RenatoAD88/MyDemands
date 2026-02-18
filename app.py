@@ -9,6 +9,34 @@ import traceback
 from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
+if "--self-test" in sys.argv:
+    from mydemands.infra.secrets.fake_secret_store import FakeSecretStore
+    from mydemands.services.secure_csv_exchange_service import (
+        CRYPTO_AVAILABLE,
+        CsvExchangeError,
+        SecureCsvExchangeService,
+    )
+
+    if not CRYPTO_AVAILABLE:
+        print("[SELF-TEST] cryptography indisponível; build inválida para distribuição zero-setup.")
+        raise SystemExit(2)
+
+    svc = SecureCsvExchangeService(FakeSecretStore())
+    csv_text = "ID,Projeto\n1,Smoke Test\n"
+    try:
+        payload = svc.export_payload(csv_text, passphrase="smoke123", is_master=False)
+        result = svc.import_payload(payload, passphrase="smoke123", is_master=False)
+    except CsvExchangeError as exc:
+        print(f"[SELF-TEST] Falha no SecureCsvExchangeService: {exc}")
+        raise SystemExit(1)
+
+    if result.csv_text != csv_text:
+        print("[SELF-TEST] Roundtrip inválido de criptografia CSV.")
+        raise SystemExit(1)
+
+    print("[SELF-TEST] OK")
+    raise SystemExit(0)
+
 from PySide6.QtCore import Qt, QDate, QSize, QTimer, QUrl
 from PySide6.QtGui import QColor, QIcon, QKeyEvent, QDesktopServices, QPixmap, QPainter, QFont
 from PySide6.QtWidgets import (
@@ -288,7 +316,7 @@ def build_version_code(previous_version_number: Optional[int] = None, base_year:
             ).strip()
             version_number = max(1, int(count))
         except Exception:
-            version_number = 81
+            version_number = 185
     return f"RAD_{base_year}_{version_number}"
 
 
@@ -3572,4 +3600,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

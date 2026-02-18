@@ -12,6 +12,21 @@ pip install -r requirements.txt
 
 > O `requirements.txt` fixa versões compatíveis, incluindo `transformers==4.57.6` e `huggingface_hub==0.34.4`.
 
+## Build do executável (PyInstaller, zero setup para usuário final)
+O executável inclui todas as dependências necessárias (inclusive `cryptography` e bindings nativos), então o usuário final **não precisa** instalar `pip` nem bibliotecas manualmente.
+
+Fluxo recomendado no Windows:
+
+```powershell
+build_windows.bat
+```
+
+Esse script:
+
+- instala/atualiza dependências de build na `.venv`;
+- gera o `dist\DemandasApp.exe` com `DemandasApp.spec`;
+- executa `dist\DemandasApp.exe --self-test` para validar import/export criptografado básico.
+
 ## Onde fica o arquivo de configuração
 As preferências de IA são persistidas em:
 
