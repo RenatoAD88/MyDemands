@@ -137,9 +137,14 @@ class LoginWindow(QDialog):
                 if not user:
                     raise Exception("Sessão lembrada inválida. Digite sua senha.")
             else:
-                user = self.auth_service.authenticate(self.email.text(), self.password.text())
-                if user.must_change_password:
-                    dialog = ResetPasswordDialog(self.auth_service, user.email, self)
+                try:
+                    user = self.auth_service.authenticate(self.email.text(), self.password.text())
+                except Exception as exc:
+                    if str(exc) == self.auth_service.EXPIRED_PROVISIONAL_MESSAGE:
+                        self.reset_service.auto_resend_expired_provisional(self.email.text())
+                    raise
+                if user.auth_state == "requires_password_change":
+                    dialog = ResetPasswordDialog(self.reset_service, user.email, self)
                     if dialog.exec() != QDialog.Accepted:
                         return
                     user = self.auth_service.authenticate(self.email.text(), dialog.final_password)

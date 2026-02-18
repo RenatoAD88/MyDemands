@@ -12,13 +12,13 @@ def _configure(env):
             from_email="noreply@test.com",
             reply_to=None,
             subject_template="Recuperação",
-            body_template="Senha provisória: {PASSWORD}. Verifique spam.",
+            body_template="Senha provisória: {PASSWORD}. Expira em {MINUTOS} minutos. Verifique spam.",
         )
     )
     env["secrets"].set(SMTP_PASSWORD_KEY, b"secret")
 
 
-def test_save_final_password_clears_must_change_password(env, monkeypatch):
+def test_save_final_password_clears_flags(env, monkeypatch):
     env["auth"].register("user@test.com", "Abcdef1!")
     _configure(env)
     monkeypatch.setattr(env["reset"], "_generate_provisional_password", lambda: "Prov_1234567890")
@@ -32,4 +32,6 @@ def test_save_final_password_clears_must_change_password(env, monkeypatch):
     updated = env["users"].get_by_email("user@test.com")
     assert updated is not None
     assert updated.must_change_password is False
+    assert updated.provisional_expires_at is None
+    assert updated.provisional_issued_at is None
     assert env["auth"].authenticate("user@test.com", "Xyzabc1!")

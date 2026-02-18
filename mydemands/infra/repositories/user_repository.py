@@ -18,7 +18,7 @@ class UserRepository:
         normalized = self._normalize_email(email)
         with self.db.connect() as conn:
             row = conn.execute(
-                "SELECT email,password_hash,role,must_change_password FROM users WHERE email = ?",
+                "SELECT email,password_hash,role,must_change_password,provisional_expires_at,provisional_issued_at FROM users WHERE email = ?",
                 (normalized,),
             ).fetchone()
         if not row:
@@ -28,17 +28,21 @@ class UserRepository:
             password_hash=row["password_hash"],
             role=row["role"],
             must_change_password=bool(row["must_change_password"]),
+            provisional_expires_at=row["provisional_expires_at"],
+            provisional_issued_at=row["provisional_issued_at"],
         )
 
     def add(self, user: User) -> None:
         with self.db.connect() as conn:
             conn.execute(
-                "INSERT INTO users(email,password_hash,role,must_change_password) VALUES (?,?,?,?)",
+                "INSERT INTO users(email,password_hash,role,must_change_password,provisional_expires_at,provisional_issued_at) VALUES (?,?,?,?,?,?)",
                 (
                     self._normalize_email(user.email),
                     user.password_hash,
                     user.role,
                     int(user.must_change_password),
+                    user.provisional_expires_at,
+                    user.provisional_issued_at,
                 ),
             )
             conn.commit()
@@ -46,8 +50,15 @@ class UserRepository:
     def update(self, user: User) -> None:
         with self.db.connect() as conn:
             conn.execute(
-                "UPDATE users SET password_hash=?, role=?, must_change_password=? WHERE email=?",
-                (user.password_hash, user.role, int(user.must_change_password), self._normalize_email(user.email)),
+                "UPDATE users SET password_hash=?, role=?, must_change_password=?, provisional_expires_at=?, provisional_issued_at=? WHERE email=?",
+                (
+                    user.password_hash,
+                    user.role,
+                    int(user.must_change_password),
+                    user.provisional_expires_at,
+                    user.provisional_issued_at,
+                    self._normalize_email(user.email),
+                ),
             )
             conn.commit()
 

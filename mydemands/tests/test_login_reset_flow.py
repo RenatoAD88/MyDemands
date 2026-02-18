@@ -1,4 +1,4 @@
-from pathlib import Path
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -7,6 +7,7 @@ qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponív
 from mydemands.domain.models import EmailSettings
 from mydemands.infra.repositories.last_login_repository import LastLoginRepository
 from mydemands.infra.repositories.user_prefs_repository import UserPrefsRepository
+from mydemands.services.auth_service import InvalidCredentialsError
 from mydemands.services.email_service import SMTP_PASSWORD_KEY
 from mydemands.ui.login_window import LoginWindow
 
@@ -31,18 +32,21 @@ def _configure(env):
             from_email="noreply@test.com",
             reply_to=None,
             subject_template="Recuperação",
-            body_template="Senha provisória: {PASSWORD}. Verifique spam.",
+            body_template="Senha provisória: {PASSWORD}. Expira em {MINUTOS} minutos. Verifique spam.",
         )
     )
     env["secrets"].set(SMTP_PASSWORD_KEY, b"secret")
 
 
-def test_login_with_provisional_password_requires_reset_modal(env, monkeypatch):
+def test_login_with_provisional_within_time_forces_reset_dialog(env, monkeypatch):
     _get_app()
     env["auth"].register("user@test.com", "Abcdef1!")
     _configure(env)
     monkeypatch.setattr(env["reset"], "_generate_provisional_password", lambda: "Prov_1234567890")
     env["reset"].request_password_reset("user@test.com")
+
+    user = env["auth"].authenticate("user@test.com", "Prov_1234567890")
+    assert user.auth_state == "requires_password_change"
 
     paths = env["paths"]
     prefs_repo = UserPrefsRepository(paths)
@@ -51,7 +55,7 @@ def test_login_with_provisional_password_requires_reset_modal(env, monkeypatch):
     opened = {"reset_modal": False, "email": None}
 
     class _FakeResetDialog:
-        def __init__(self, auth_service, email, parent=None):
+        def __init__(self, reset_service, email, parent=None):
             opened["reset_modal"] = True
             self.final_password = "Xyzabc1!"
 
@@ -67,6 +71,27 @@ def test_login_with_provisional_password_requires_reset_modal(env, monkeypatch):
 
     assert opened["reset_modal"] is True
     assert opened["email"] == "user@test.com"
+
+
+def test_login_with_expired_provisional_triggers_resend_and_blocks_login(env, monkeypatch):
+    env["auth"].register("user@test.com", "Abcdef1!")
+    _configure(env)
+    monkeypatch.setattr(env["reset"], "_generate_provisional_password", lambda: "Prov_1234567890")
+    env["reset"].request_password_reset("user@test.com")
+
+    user = env["users"].get_by_email("user@test.com")
+    assert user is not None
+    user.provisional_expires_at = (datetime.utcnow() - timedelta(minutes=1)).isoformat()
+    env["users"].update(user)
+
+    with pytest.raises(InvalidCredentialsError, match="senha provisória expirou"):
+        env["auth"].authenticate("user@test.com", "Prov_1234567890")
+
+    assert env["reset"].auto_resend_expired_provisional("user@test.com") is True
+    first_len = len(env["provider"].calls)
+    assert first_len == 2
+    assert env["reset"].auto_resend_expired_provisional("user@test.com") is False
+    assert len(env["provider"].calls) == first_len
 
 
 def test_loginwindow_clickable_label_opens_forgot_password(env, monkeypatch):

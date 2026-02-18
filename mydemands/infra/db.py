@@ -24,10 +24,18 @@ class Database:
                     email TEXT PRIMARY KEY,
                     password_hash TEXT NOT NULL,
                     role TEXT NOT NULL CHECK (role in ('master','default')),
-                    must_change_password INTEGER NOT NULL DEFAULT 0
+                    must_change_password INTEGER NOT NULL DEFAULT 0,
+                    provisional_expires_at TEXT NULL,
+                    provisional_issued_at TEXT NULL
                 )
                 """
             )
+
+            cols = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+            if "provisional_expires_at" not in cols:
+                conn.execute("ALTER TABLE users ADD COLUMN provisional_expires_at TEXT NULL")
+            if "provisional_issued_at" not in cols:
+                conn.execute("ALTER TABLE users ADD COLUMN provisional_issued_at TEXT NULL")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS reset_tokens (

@@ -11,6 +11,9 @@ class User:
     password_hash: str
     role: str = "default"
     must_change_password: bool = False
+    provisional_expires_at: Optional[str] = None
+    provisional_issued_at: Optional[str] = None
+    auth_state: str = "authenticated"
 
 
 @dataclass(slots=True)
