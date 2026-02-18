@@ -1273,6 +1273,8 @@ class MainWindow(QMainWindow):
         logged_user_email: str = "",
         logged_user_role: str = "default",
         email_service=None,
+        password_reset_service=None,
+        master_password_admin_service=None,
         backup_root: str | None = None,
         exports_root: str | None = None,
         on_logoff=None,
@@ -1285,6 +1287,8 @@ class MainWindow(QMainWindow):
         self.logged_user_email = logged_user_email
         self.logged_user_role = logged_user_role
         self.email_service = email_service
+        self.password_reset_service = password_reset_service
+        self.master_password_admin_service = master_password_admin_service
         self._ui_ready = False
         self.setWindowTitle("DemandasApp")
         icon_path = _app_icon_path()
@@ -2182,6 +2186,24 @@ class MainWindow(QMainWindow):
 
         return QIcon(pixmap)
 
+
+    def _build_master_settings_icon(self, size: int = 28) -> QIcon:
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        font = QFont()
+        font.setBold(True)
+        font.setPixelSize(int(size * 0.8))
+        painter.setFont(font)
+        painter.setPen(QColor("#374151"))
+        painter.drawText(pixmap.rect().adjusted(0, -1, 0, 0), Qt.AlignCenter, "⚙️")
+        painter.end()
+
+        return QIcon(pixmap)
+
     def _build_notification_icon(self, unread_count: int = 0, size: int = 28) -> QIcon:
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.transparent)
@@ -2315,6 +2337,7 @@ class MainWindow(QMainWindow):
         )
         self.master_settings_button.setProperty("infoIconAction", True)
         self.master_settings_button.setAutoRaise(True)
+        self.master_settings_button.setIcon(self._build_master_settings_icon())
         self.master_settings_button.setVisible(self.logged_user_role == "master")
         info_btn = self._build_info_icon_button()
 
@@ -2332,7 +2355,15 @@ class MainWindow(QMainWindow):
     def open_master_settings(self):
         if self.logged_user_role != "master" or self.email_service is None:
             return
-        dialog = MasterSettingsDialog(self.email_service, self.logged_user_email, self)
+        if self.password_reset_service is None or self.master_password_admin_service is None:
+            return
+        dialog = MasterSettingsDialog(
+            self.email_service,
+            self.logged_user_email,
+            self.password_reset_service,
+            self.master_password_admin_service,
+            self,
+        )
         dialog.exec()
 
     def open_ai_settings(self):

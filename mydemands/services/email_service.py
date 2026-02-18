@@ -6,7 +6,8 @@ from mydemands.infra.email.smtp_provider import SmtpEmailProvider
 from mydemands.infra.repositories.settings_repository import SettingsRepository
 from mydemands.infra.secrets.secret_store import ISecretStore
 
-SMTP_PASSWORD_KEY = "smtp_password"
+SMTP_PASSWORD_KEY = "smtp_app_password"
+LEGACY_SMTP_PASSWORD_KEY = "smtp_password"
 DEFAULT_RECOVERY_SUBJECT = "MyDemands - Recuperação de senha"
 PROVISIONAL_MINUTES = 15
 
@@ -25,6 +26,31 @@ class EmailService:
     def load_settings(self) -> EmailSettings | None:
         return self.settings_repository.load_email_settings()
 
+    def save_smtp_password(self, smtp_password: str) -> None:
+        self.secret_store.set(SMTP_PASSWORD_KEY, smtp_password.encode("utf-8"))
+
+    def get_smtp_password(self) -> str | None:
+        secret = self.secret_store.get(SMTP_PASSWORD_KEY)
+        if not secret:
+            legacy = self.secret_store.get(LEGACY_SMTP_PASSWORD_KEY)
+            if legacy:
+                self.secret_store.set(SMTP_PASSWORD_KEY, legacy)
+                secret = legacy
+        if not secret:
+            return None
+        return secret.decode("utf-8")
+
+    def get_smtp_password_for_send(self) -> str:
+        password = self.get_smtp_password()
+        if not password:
+            raise RuntimeError("SMTP App Password não configurada")
+        return password
+
+
+    def save_smtp_settings(self, settings: EmailSettings, smtp_password: str | None = None) -> None:
+        self.settings_repository.save_email_settings(settings)
+        if smtp_password and smtp_password.strip():
+            self.save_smtp_password(smtp_password.strip())
 
     @staticmethod
     def validate_recovery_template(body_template: str) -> None:
@@ -42,21 +68,19 @@ class EmailService:
             raise ValueError("Template de recuperação inválido")
         return rendered
 
-    def get_provider(self) -> IEmailProvider:
+    def get_provider(self, settings: EmailSettings | None = None, smtp_password: str | None = None) -> IEmailProvider:
         if self._provider:
             return self._provider
-        settings = self.settings_repository.load_email_settings()
-        if not settings:
+        effective_settings = settings or self.settings_repository.load_email_settings()
+        if not effective_settings:
             raise RuntimeError("SMTP_NOT_CONFIGURED")
-        secret = self.secret_store.get(SMTP_PASSWORD_KEY)
-        if not secret:
-            raise RuntimeError("SMTP_NOT_CONFIGURED")
+        password = smtp_password or self.get_smtp_password_for_send()
         return SmtpEmailProvider(
-            host=settings.smtp_host,
-            port=settings.smtp_port,
-            username=settings.smtp_username,
-            password=secret.decode("utf-8"),
-            use_tls=settings.use_tls,
+            host=effective_settings.smtp_host,
+            port=effective_settings.smtp_port,
+            username=effective_settings.smtp_username,
+            password=password,
+            use_tls=effective_settings.use_tls,
         )
 
     def send_recovery_email(self, to_email: str, provisional_password: str) -> None:
@@ -74,12 +98,18 @@ class EmailService:
             reply_to=settings.reply_to,
         )
 
-    def send_test_email(self, to_email: str) -> None:
-        settings = self.settings_repository.load_email_settings()
+    def send_test_email(
+        self,
+        to_email: str,
+        settings_override: EmailSettings | None = None,
+        smtp_password_override: str | None = None,
+    ) -> None:
+        settings = settings_override or self.settings_repository.load_email_settings()
         if not settings:
             raise RuntimeError("SMTP_NOT_CONFIGURED")
         body = "Teste de envio MyDemands. Verifique também a caixa de spam."
-        self.get_provider().send(
+        smtp_password = smtp_password_override or self.get_smtp_password_for_send()
+        self.get_provider(settings=settings, smtp_password=smtp_password).send(
             to_email=to_email,
             from_email=settings.from_email,
             subject="Teste SMTP MyDemands",
