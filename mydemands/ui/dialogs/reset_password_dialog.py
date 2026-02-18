@@ -1,55 +1,63 @@
 from __future__ import annotations
 
-import re
-
 from PySide6.QtWidgets import QDialog, QFormLayout, QLineEdit, QPushButton, QVBoxLayout, QLabel, QMessageBox
 
 from mydemands.domain.password_policy import PasswordPolicy
-from mydemands.services.password_reset_service import PasswordResetService
+from mydemands.services.auth_service import AuthService, hash_password
 
 
 class ResetPasswordDialog(QDialog):
-    def __init__(self, reset_service: PasswordResetService, parent=None):
+    def __init__(self, auth_service: AuthService, email: str, parent=None):
         super().__init__(parent)
-        self.reset_service = reset_service
-        self.setWindowTitle("Redefinir senha")
-        self.email = QLineEdit()
-        self.token = QLineEdit()
+        self.auth_service = auth_service
+        self.email = email.strip().lower()
+        self.final_password = ""
+        self.setWindowTitle("Confirmar nova senha / Definir senha final")
+
         self.password = QLineEdit()
         self.confirm = QLineEdit()
         self.password.setEchoMode(QLineEdit.Password)
         self.confirm.setEchoMode(QLineEdit.Password)
         self.feedback = QLabel()
+
         form = QFormLayout()
-        form.addRow("E-mail", self.email)
-        form.addRow("Código", self.token)
         form.addRow("Nova senha", self.password)
-        form.addRow("Confirmar", self.confirm)
-        save = QPushButton("Salvar")
-        save.clicked.connect(self._save)
-        self.token.textChanged.connect(self._validate)
+        form.addRow("Confirmar nova senha", self.confirm)
+
+        self.save_btn = QPushButton("Salvar")
+        self.save_btn.clicked.connect(self._save)
+
         self.password.textChanged.connect(self._validate)
         self.confirm.textChanged.connect(self._validate)
+
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(self.feedback)
-        layout.addWidget(save)
+        layout.addWidget(self.save_btn)
+        self._validate()
 
     def _validate(self):
-        errors = []
-        if self.token.text() and not re.match(r"^Prov_\d{10}$", self.token.text()):
-            errors.append("Código inválido. Use formato Prov_##########")
         ok, pwd_errors = PasswordPolicy.validate(self.password.text())
-        if not ok:
-            errors.extend(pwd_errors)
+        errors = list(pwd_errors if not ok else [])
         if self.password.text() != self.confirm.text():
             errors.append("Confirmação de senha não confere")
         self.feedback.setText("\n".join(errors) if errors else "OK")
+        self.save_btn.setEnabled(not errors)
 
     def _save(self):
         try:
-            self.reset_service.confirm_reset(self.email.text(), self.token.text(), self.password.text())
-            QMessageBox.information(self, "Sucesso", "Senha redefinida com sucesso")
+            user = self.auth_service.users.get_by_email(self.email)
+            if user is None:
+                raise ValueError("Usuário não encontrado")
+            ok, errors = PasswordPolicy.validate(self.password.text())
+            if not ok:
+                raise ValueError("; ".join(errors))
+            if self.password.text() != self.confirm.text():
+                raise ValueError("Confirmação de senha não confere")
+            user.password_hash = hash_password(self.password.text())
+            user.must_change_password = False
+            self.auth_service.users.update(user)
+            self.final_password = self.password.text()
             self.accept()
         except Exception as exc:
             QMessageBox.warning(self, "Erro", str(exc))

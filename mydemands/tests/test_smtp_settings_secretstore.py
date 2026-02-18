@@ -12,7 +12,7 @@ def test_save_settings_and_secret_separated(env):
             from_email="noreply@test.com",
             reply_to="reply@test.com",
             subject_template="Recuperação",
-            body_template="Use {TOKEN}. Verifique spam.",
+            body_template="Use {PASSWORD}. Verifique spam.",
         )
     )
     env["secrets"].set(SMTP_PASSWORD_KEY, b"app-secret")

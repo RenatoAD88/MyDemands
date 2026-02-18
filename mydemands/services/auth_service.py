@@ -93,6 +93,10 @@ class AuthService:
         self.secrets_store.set(REMEMBER_KEY, token.encode("utf-8"))
         self.sessions.save_session(user_email, protected, datetime.utcnow() + timedelta(days=ttl_days))
 
+    def clear_remember_session(self) -> None:
+        self.sessions.clear_session()
+        self.secrets_store.delete(REMEMBER_KEY)
+
     def try_auto_login(self) -> User | None:
         session = self.sessions.load_session()
         if not session:
@@ -116,5 +120,4 @@ class AuthService:
 
     def logout(self) -> None:
         self._cached_user = None
-        self.sessions.clear_session()
-        self.secrets_store.delete(REMEMBER_KEY)
+        self.clear_remember_session()

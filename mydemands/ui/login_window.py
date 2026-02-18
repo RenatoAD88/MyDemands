@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QCheckBox, QDialog, QFormLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout
 
 from mydemands.infra.repositories.last_login_repository import LastLoginRepository
@@ -10,6 +11,24 @@ from mydemands.services.auth_service import AuthService
 from mydemands.services.password_reset_service import PasswordResetService
 from mydemands.ui.dialogs.forgot_password_dialog import ForgotPasswordDialog
 from mydemands.ui.dialogs.register_dialog import RegisterDialog
+from mydemands.ui.dialogs.reset_password_dialog import ResetPasswordDialog
+
+
+class ClickableLabel(QLabel):
+    clicked = Signal()
+
+    def __init__(self, text: str, parent=None):
+        super().__init__(text, parent)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet(
+            "QLabel { color: #1a73e8; }"
+            "QLabel:hover { text-decoration: underline; }"
+        )
+
+    def mouseReleaseEvent(self, event):  # type: ignore[override]
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
 
 
 class LoginWindow(QDialog):
@@ -36,6 +55,7 @@ class LoginWindow(QDialog):
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.Password)
         self.remember_me = QCheckBox("Lembrar de mim")
+        self.remember_me.toggled.connect(self._toggle_remember_me)
         self.always_require_password_on_start = QCheckBox("Sempre iniciar pedindo senha")
         self.always_require_password_on_start.setToolTip(
             "Mesmo com ‘Lembrar de mim’ ativo, eu quero digitar a senha ao abrir o aplicativo."
@@ -47,8 +67,8 @@ class LoginWindow(QDialog):
         enter_btn.clicked.connect(self._login)
         register_btn = QPushButton("Criar sua conta")
         register_btn.clicked.connect(self._register)
-        forgot_btn = QPushButton("Digitar senha / Esquecer")
-        forgot_btn.clicked.connect(self._forgot_and_forget)
+        self.forgot_label = ClickableLabel("Esqueci a senha")
+        self.forgot_label.clicked.connect(self._open_forgot_password)
 
         form = QFormLayout()
         form.addRow("E-mail", self.email)
@@ -60,7 +80,7 @@ class LoginWindow(QDialog):
         layout.addWidget(self.always_require_password_on_start)
         layout.addWidget(enter_btn)
         layout.addWidget(register_btn)
-        layout.addWidget(forgot_btn)
+        layout.addWidget(self.forgot_label)
         layout.addWidget(self.msg)
 
         self._initialize_start_mode()
@@ -94,6 +114,11 @@ class LoginWindow(QDialog):
         self.password.setPlaceholderText("")
         self.msg.setText("")
 
+    def _toggle_remember_me(self, checked: bool) -> None:
+        if not checked:
+            self.auth_service.clear_remember_session()
+            self._set_normal_mode()
+
     def _toggle_always_require_password(self, checked: bool) -> None:
         email = self.email.text().strip().lower() or self._known_email
         if not email:
@@ -101,6 +126,8 @@ class LoginWindow(QDialog):
         self._known_email = email
         self.user_prefs.save(email, {"always_require_password_on_start": checked})
         if checked:
+            self.auth_service.clear_remember_session()
+            self.remember_me.setChecked(False)
             self._set_normal_mode()
 
     def _login(self):
@@ -111,10 +138,15 @@ class LoginWindow(QDialog):
                     raise Exception("Sessão lembrada inválida. Digite sua senha.")
             else:
                 user = self.auth_service.authenticate(self.email.text(), self.password.text())
+                if user.must_change_password:
+                    dialog = ResetPasswordDialog(self.auth_service, user.email, self)
+                    if dialog.exec() != QDialog.Accepted:
+                        return
+                    user = self.auth_service.authenticate(self.email.text(), dialog.final_password)
                 if self.remember_me.isChecked():
                     self.auth_service.create_remember_session(user.email)
                 else:
-                    self.auth_service.logout()
+                    self.auth_service.clear_remember_session()
                 self._known_email = user.email
             self.last_login.save_last_email(user.email)
             self.on_login(user.email)
@@ -126,8 +158,6 @@ class LoginWindow(QDialog):
         dialog = RegisterDialog(self.auth_service, self)
         dialog.exec()
 
-    def _forgot_and_forget(self):
-        self.auth_service.logout()
-        self._set_normal_mode()
+    def _open_forgot_password(self):
         dialog = ForgotPasswordDialog(self.reset_service, self)
         dialog.exec()

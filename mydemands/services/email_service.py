@@ -7,6 +7,7 @@ from mydemands.infra.repositories.settings_repository import SettingsRepository
 from mydemands.infra.secrets.secret_store import ISecretStore
 
 SMTP_PASSWORD_KEY = "smtp_password"
+DEFAULT_RECOVERY_SUBJECT = "MyDemands - Recuperação de senha"
 
 
 class EmailService:
@@ -40,12 +41,12 @@ class EmailService:
             use_tls=settings.use_tls,
         )
 
-    def send_recovery_email(self, to_email: str, token: str, minutes: int = 15) -> None:
+    def send_recovery_email(self, to_email: str, provisional_password: str) -> None:
         settings = self.settings_repository.load_email_settings()
         if not settings:
             raise RuntimeError("SMTP_NOT_CONFIGURED")
-        body = settings.body_template.replace("{TOKEN}", token).replace("{MINUTOS}", str(minutes))
-        subject = settings.subject_template
+        body = settings.body_template.replace("{PASSWORD}", provisional_password)
+        subject = settings.subject_template or DEFAULT_RECOVERY_SUBJECT
         self.get_provider().send(
             to_email=to_email,
             from_email=settings.from_email,
