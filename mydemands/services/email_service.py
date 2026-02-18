@@ -10,6 +10,16 @@ SMTP_PASSWORD_KEY = "smtp_app_password"
 LEGACY_SMTP_PASSWORD_KEY = "smtp_password"
 DEFAULT_RECOVERY_SUBJECT = "MyDemands - Recuperação de senha"
 PROVISIONAL_MINUTES = 15
+TEST_PROVISIONAL_PASSWORD = "Prov_1234567890"
+
+DEFAULT_RECOVERY_BODY = (
+    "Olá!\n\n"
+    "Aqui está sua senha provisória para acesso.\n"
+    "Se não encontrar este e-mail, verifique também a caixa de spam.\n\n"
+    "Senha provisória: {PASSWORD}\n\n"
+    "Esta senha expira em {MINUTOS} minutos.\n"
+    "Ao entrar na aplicação, você deverá definir sua senha final."
+)
 
 
 class EmailService:
@@ -46,14 +56,28 @@ class EmailService:
             raise RuntimeError("SMTP App Password não configurada")
         return password
 
-
     def save_smtp_settings(self, settings: EmailSettings, smtp_password: str | None = None) -> None:
         self.settings_repository.save_email_settings(settings)
         if smtp_password and smtp_password.strip():
             self.save_smtp_password(smtp_password.strip())
 
     @staticmethod
+    def migrate_legacy_recovery_template(body_template: str) -> str:
+        migrated = body_template or ""
+        if not migrated.strip():
+            return DEFAULT_RECOVERY_BODY
+        if "{TOKEN}" in migrated and "{PASSWORD}" not in migrated:
+            migrated = migrated.replace("{TOKEN}", "{PASSWORD}")
+            migrated = migrated.replace("Código provisório", "Senha provisória")
+            migrated = migrated.replace("código provisório", "senha provisória")
+        if "{MINUTOS}" not in migrated:
+            migrated = f"{migrated.rstrip()}\n\nEsta senha expira em {{MINUTOS}} minutos."
+        return migrated
+
+    @staticmethod
     def validate_recovery_template(body_template: str) -> None:
+        if "{TOKEN}" in body_template:
+            raise ValueError("TOKEN_LEGACY_PLACEHOLDER")
         if "{PASSWORD}" not in body_template:
             raise ValueError("Body deve conter {PASSWORD}")
         if "{MINUTOS}" not in body_template:
@@ -107,12 +131,14 @@ class EmailService:
         settings = settings_override or self.settings_repository.load_email_settings()
         if not settings:
             raise RuntimeError("SMTP_NOT_CONFIGURED")
-        body = "Teste de envio MyDemands. Verifique também a caixa de spam."
+        self.validate_recovery_template(settings.body_template)
+        body = self.render_recovery_body(settings.body_template, TEST_PROVISIONAL_PASSWORD)
+        subject = settings.subject_template or DEFAULT_RECOVERY_SUBJECT
         smtp_password = smtp_password_override or self.get_smtp_password_for_send()
         self.get_provider(settings=settings, smtp_password=smtp_password).send(
             to_email=to_email,
             from_email=settings.from_email,
-            subject="Teste SMTP MyDemands",
+            subject=subject,
             body=body,
             reply_to=settings.reply_to,
         )

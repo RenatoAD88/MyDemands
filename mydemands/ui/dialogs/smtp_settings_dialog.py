@@ -15,15 +15,14 @@ from PySide6.QtWidgets import (
 )
 
 from mydemands.domain.models import EmailSettings
-from mydemands.services.email_service import EmailService
-
-
-DEFAULT_SUBJECT = "MyDemands - Recuperação de senha"
-DEFAULT_BODY = (
-    "Sua nova senha provisória é: {PASSWORD}. "
-    "Ela expira em {MINUTOS} minutos. "
-    "Verifique também a caixa de spam."
+from mydemands.services.email_service import (
+    DEFAULT_RECOVERY_BODY,
+    DEFAULT_RECOVERY_SUBJECT,
+    EmailService,
 )
+
+DEFAULT_SUBJECT = DEFAULT_RECOVERY_SUBJECT
+DEFAULT_BODY = DEFAULT_RECOVERY_BODY
 
 
 class SmtpSettingsDialog(QDialog):
@@ -52,6 +51,19 @@ class SmtpSettingsDialog(QDialog):
         password_row.addWidget(self.smtp_password)
         password_row.addWidget(self.smtp_password_status)
 
+        placeholders_row = QHBoxLayout()
+        insert_password = QPushButton("Inserir {PASSWORD}")
+        insert_password.clicked.connect(lambda: self._insert_placeholder("{PASSWORD}"))
+        insert_minutes = QPushButton("Inserir {MINUTOS}")
+        insert_minutes.clicked.connect(lambda: self._insert_placeholder("{MINUTOS}"))
+        placeholders_row.addWidget(insert_password)
+        placeholders_row.addWidget(insert_minutes)
+        placeholders_row.addStretch(1)
+
+        body_layout = QVBoxLayout()
+        body_layout.addWidget(self.body)
+        body_layout.addLayout(placeholders_row)
+
         form = QFormLayout()
         form.addRow("SMTP Host", self.smtp_host)
         form.addRow("SMTP Port", self.smtp_port)
@@ -61,7 +73,7 @@ class SmtpSettingsDialog(QDialog):
         form.addRow("From Email", self.from_email)
         form.addRow("Reply-To", self.reply_to)
         form.addRow("Subject", self.subject)
-        form.addRow("Body", self.body)
+        form.addRow("Body", body_layout)
 
         save = QPushButton("Salvar")
         save.clicked.connect(self._save)
@@ -75,6 +87,10 @@ class SmtpSettingsDialog(QDialog):
 
         self._load()
 
+    def _insert_placeholder(self, placeholder: str) -> None:
+        cursor = self.body.textCursor()
+        cursor.insertText(placeholder)
+
     def _load(self) -> None:
         settings = self.email_service.load_settings()
         if settings:
@@ -84,17 +100,49 @@ class SmtpSettingsDialog(QDialog):
             self.smtp_username.setText(settings.smtp_username)
             self.from_email.setText(settings.from_email)
             self.reply_to.setText(settings.reply_to or "")
-            self.subject.setText(settings.subject_template)
-            self.body.setPlainText(settings.body_template)
+            self.subject.setText(settings.subject_template or DEFAULT_SUBJECT)
+            migrated_body = self.email_service.migrate_legacy_recovery_template(settings.body_template)
+            self.body.setPlainText(migrated_body)
         else:
             self.subject.setText(DEFAULT_SUBJECT)
             self.body.setPlainText(DEFAULT_BODY)
         self.smtp_password.clear()
         self.smtp_password_status.setText("Senha configurada" if self.email_service.get_smtp_password() else "")
 
+    def _prompt_legacy_template_migration(self) -> bool:
+        message = (
+            "Seu template está usando {TOKEN} (modelo antigo). "
+            "Vamos atualizar para {PASSWORD}. Deseja corrigir automaticamente?"
+        )
+        response = QMessageBox.question(
+            self,
+            "Template legado detectado",
+            message,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if response == QMessageBox.Yes:
+            self.body.setPlainText(self.email_service.migrate_legacy_recovery_template(self.body.toPlainText()))
+            return True
+        return False
+
     def _validate_template(self) -> None:
         body = self.body.toPlainText()
-        self.email_service.validate_recovery_template(body)
+        if "{TOKEN}" in body and "{PASSWORD}" not in body:
+            if not self._prompt_legacy_template_migration():
+                raise ValueError("Salvamento cancelado para manter o template atual.")
+            body = self.body.toPlainText()
+        try:
+            self.email_service.validate_recovery_template(body)
+        except ValueError as exc:
+            if str(exc) == "TOKEN_LEGACY_PLACEHOLDER":
+                if not self._prompt_legacy_template_migration():
+                    raise ValueError("Salvamento cancelado para manter o template atual.") from exc
+                self.email_service.validate_recovery_template(self.body.toPlainText())
+            elif str(exc) == "Body deve conter {PASSWORD}":
+                raise ValueError("Body precisa conter {PASSWORD}. Clique em ‘Inserir placeholder’ para adicionar automaticamente.") from exc
+            else:
+                raise
         if not self.subject.text().strip():
             raise ValueError("Subject obrigatório")
 

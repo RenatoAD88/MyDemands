@@ -3,7 +3,7 @@ import pytest
 from mydemands.services.email_service import EmailService
 
 
-def test_template_validation_requires_password_minutes_and_spam():
+def test_validation_requires_password_minutes_and_spam():
     with pytest.raises(ValueError, match="\\{PASSWORD\\}"):
         EmailService.validate_recovery_template("Expira em {MINUTOS} minutos. Verifique spam.")
 
