@@ -28,3 +28,7 @@ def current_user() -> Optional[UserContext]:
 def current_user_dir() -> Path | None:
     user = current_user()
     return user.user_dir if user else None
+
+
+def clear() -> None:
+    set_current_user(None)

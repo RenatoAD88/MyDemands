@@ -11,13 +11,13 @@ from mydemands.infra.db import Database
 from mydemands.infra.paths import Paths
 from mydemands.infra.repositories.session_repository import SessionRepository
 from mydemands.infra.repositories.settings_repository import SettingsRepository
-from mydemands.infra.repositories.token_repository import ResetTokenRepository
 from mydemands.infra.repositories.user_repository import UserRepository
 from mydemands.infra.secrets.dpapi_secret_store import WindowsDpapiSecretStore
 from mydemands.services.auth_service import AuthService
 from mydemands.services.email_service import EmailService
 from mydemands.services.password_reset_service import PasswordResetService
 from mydemands.services.user_context import UserContext, set_current_user
+from mydemands.app_controller import AppController
 from mydemands.ui.login_window import LoginWindow
 from mydemands.infra.repositories.last_login_repository import LastLoginRepository
 from mydemands.infra.repositories.user_prefs_repository import UserPrefsRepository
@@ -40,8 +40,9 @@ def main() -> int:
     auth.seed_master()
 
     email_service = EmailService(settings, secrets_store)
-    token_repo = ResetTokenRepository(db)
-    reset_service = PasswordResetService(users, token_repo, email_service)
+    reset_service = PasswordResetService(users, email_service)
+
+    app_controller = AppController(auth, qt_app)
 
     def _open_main(email: str):
         user = users.get_by_email(email)
@@ -59,7 +60,7 @@ def main() -> int:
             email_service=email_service,
             backup_root=str(user_dir / "backups"),
             exports_root=str(user_dir / "exports"),
-            on_logoff=lambda: (auth.logout(), set_current_user(None), qt_app.quit()),
+            on_logoff=app_controller.logoff_and_exit,
         )
         win.resize(1280, 720)
         win.show()

@@ -28,6 +28,7 @@ def test_general_info_modal_has_no_close_button(tmp_path, monkeypatch):
         if dialog.windowTitle() == "Informações gerais":
             buttons = [btn.text().strip() for btn in dialog.findChildren(QPushButton)]
             assert "Fechar" not in buttons
+            assert "Logoff" in buttons
             seen["checked"] = True
         return 0
 

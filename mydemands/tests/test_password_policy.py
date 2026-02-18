@@ -1,21 +1,15 @@
 from mydemands.domain.password_policy import PasswordPolicy
 
 
-def test_rejeita_menor_que_6():
-    ok, errors = PasswordPolicy.validate("Aa1!")
-    assert not ok
+def test_reset_password_dialog_validates_policy_realtime_unit():
+    ok, errors = PasswordPolicy.validate("abc")
+    assert ok is False
     assert any("6" in e for e in errors)
-
-
-def test_rejeita_sem_classes_obrigatorias():
-    ok, errors = PasswordPolicy.validate("abcdef")
-    assert not ok
+    assert any("minúscula" in e for e in errors) is False
     assert any("maiúscula" in e for e in errors)
     assert any("número" in e for e in errors)
     assert any("especial" in e for e in errors)
 
-
-def test_aceita_senha_valida():
-    ok, errors = PasswordPolicy.validate("Abcdef1!")
-    assert ok
-    assert errors == []
+    ok2, errors2 = PasswordPolicy.validate("Abcdef1!")
+    assert ok2 is True
+    assert errors2 == []

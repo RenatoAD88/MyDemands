@@ -2464,6 +2464,9 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout(dialog)
         layout.addWidget(content)
+        logoff_btn = QPushButton("Logoff")
+        logoff_btn.clicked.connect(lambda: (dialog.accept(), self._handle_logoff()))
+        layout.addWidget(logoff_btn)
         dialog.setLayout(layout)
         dialog.exec()
 

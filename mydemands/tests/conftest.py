@@ -5,15 +5,12 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from pathlib import Path
-
 import pytest
 
 from mydemands.infra.db import Database
 from mydemands.infra.paths import Paths
 from mydemands.infra.repositories.session_repository import SessionRepository
 from mydemands.infra.repositories.settings_repository import SettingsRepository
-from mydemands.infra.repositories.token_repository import ResetTokenRepository
 from mydemands.infra.repositories.user_repository import UserRepository
 from mydemands.infra.secrets.fake_secret_store import FakeSecretStore
 from mydemands.services.auth_service import AuthService
@@ -43,8 +40,7 @@ def env(tmp_path: Path):
     provider = MockEmailProvider()
     email = EmailService(settings, secrets, provider=provider)
     auth = AuthService(users, sessions, secrets)
-    tokens = ResetTokenRepository(db)
-    reset = PasswordResetService(users, tokens, email)
+    reset = PasswordResetService(users, email)
     return {
         "paths": paths,
         "db": db,
@@ -55,6 +51,5 @@ def env(tmp_path: Path):
         "provider": provider,
         "email": email,
         "auth": auth,
-        "tokens": tokens,
         "reset": reset,
     }
