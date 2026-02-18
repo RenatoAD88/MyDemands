@@ -55,6 +55,7 @@ from ai_writing.service import AIWritingService
 from ai_writing.audit import AIAuditLogger
 from ai_writing.integration import attach_ai_writing, set_text, get_text, focus_widget_end
 from ai_writing.error_log import log_ai_generation_error
+from mydemands.ui.dialogs.master_settings_dialog import MasterSettingsDialog
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
@@ -1266,9 +1267,12 @@ class CopyTeamMembersDialog(BaseModalDialog):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, store: CsvStore):
+    def __init__(self, store: CsvStore, logged_user_email: str = "", logged_user_role: str = "default", email_service=None):
         super().__init__()
         self.store = store
+        self.logged_user_email = logged_user_email
+        self.logged_user_role = logged_user_role
+        self.email_service = email_service
         self._ui_ready = False
         self.setWindowTitle("DemandasApp")
         icon_path = _app_icon_path()
@@ -2281,6 +2285,16 @@ class MainWindow(QMainWindow):
         self.notification_button.setProperty("infoIconAction", True)
         self.notification_button.setAutoRaise(True)
         self.notification_button.setIcon(self._build_notification_icon())
+        self.master_settings_button = self._build_toolbar_action_button(
+            object_name="masterSettingsAction",
+            tooltip="Configurações Master",
+            img_name="",
+            fallback_icon=QStyle.SP_FileDialogDetailedView,
+            on_click=self.open_master_settings,
+        )
+        self.master_settings_button.setProperty("infoIconAction", True)
+        self.master_settings_button.setAutoRaise(True)
+        self.master_settings_button.setVisible(self.logged_user_role == "master")
         info_btn = self._build_info_icon_button()
 
         layout.addWidget(new_btn)
@@ -2288,10 +2302,17 @@ class MainWindow(QMainWindow):
         layout.addWidget(export_shortcut)
         layout.addWidget(import_shortcut)
         layout.addStretch()
+        layout.addWidget(self.master_settings_button)
         layout.addWidget(self.ai_settings_button)
         layout.addWidget(self.notification_button)
         layout.addWidget(info_btn)
         return section
+
+    def open_master_settings(self):
+        if self.logged_user_role != "master" or self.email_service is None:
+            return
+        dialog = MasterSettingsDialog(self.email_service, self.logged_user_email, self)
+        dialog.exec()
 
     def open_ai_settings(self):
         dialog = AISettingsDialog(self.ai_settings_store, self)
@@ -3401,29 +3422,9 @@ class MainWindow(QMainWindow):
 
 
 def main():
-    app = QApplication(sys.argv)
-    app.setStyleSheet(APP_STYLESHEET)
-    icon_path = _app_icon_path()
-    if os.path.exists(icon_path):
-        app.setWindowIcon(QIcon(icon_path))
-    storage_root = resolve_storage_root(sys.argv[0])
-    base_dir = ensure_storage_root(storage_root)
-    if not base_dir:
-        QMessageBox.critical(
-            None,
-            "Primeira instalação",
-            (
-                f"Não foi possível criar a pasta obrigatória em '{storage_root}'.\n\n"
-                "Crie essa pasta manualmente e abra o software novamente."
-            ),
-        )
-        sys.exit(1)
+    from mydemands.app import main as auth_main
 
-    store = CsvStore(base_dir)
-    win = MainWindow(store)
-    win.resize(1280, 720)
-    win.show()
-    sys.exit(app.exec())
+    sys.exit(auth_main())
 
 
 if __name__ == "__main__":
