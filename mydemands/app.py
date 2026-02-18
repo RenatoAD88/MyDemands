@@ -17,6 +17,9 @@ from mydemands.infra.secrets.dpapi_secret_store import WindowsDpapiSecretStore
 from mydemands.services.auth_service import AuthService
 from mydemands.services.email_service import EmailService
 from mydemands.services.password_reset_service import PasswordResetService
+from mydemands.services.bootstrap_flow import resolve_startup_decision
+from mydemands.services.user_context import UserContext, set_current_user
+from mydemands.ui.dialogs.confirm_remember_dialog import ConfirmRememberDialog
 from mydemands.ui.login_window import LoginWindow
 
 
@@ -40,17 +43,41 @@ def main() -> int:
     token_repo = ResetTokenRepository(db)
     reset_service = PasswordResetService(users, token_repo, email_service)
 
-    user = auth.try_auto_login()
-
     def _open_main(email: str):
-        store = CsvStore(str(paths.base_dir))
-        win = MainWindow(store, logged_user_email=email, logged_user_role=users.get_by_email(email).role if users.get_by_email(email) else "default", email_service=email_service)
+        user = users.get_by_email(email)
+        if user is None:
+            return
+        paths.migrate_legacy_data_for_user(email)
+        user_dir = paths.ensure_user_dirs(email)
+        context = UserContext(email=user.email, role=user.role, user_id=paths.user_id_from_email(user.email), user_dir=user_dir)
+        set_current_user(context)
+        store = CsvStore(str(paths.user_data_dir(email)))
+        win = MainWindow(
+            store,
+            logged_user_email=email,
+            logged_user_role=user.role,
+            email_service=email_service,
+            backup_root=str(user_dir / "backups"),
+            exports_root=str(user_dir / "exports"),
+            on_logoff=lambda: (auth.logout(), set_current_user(None), qt_app.quit()),
+        )
         win.resize(1280, 720)
         win.show()
         qt_app._main_win = win  # type: ignore[attr-defined]
 
-    if user:
-        _open_main(user.email)
+    startup = resolve_startup_decision(auth)
+    if startup.state == "confirm_remember" and startup.user_email:
+        confirm = ConfirmRememberDialog(startup.user_email)
+        result = confirm.exec()
+        if result == ConfirmRememberDialog.Accepted and confirm.choice == "continue":
+            _open_main(startup.user_email)
+        elif confirm.choice == "switch":
+            auth.logout()
+            login = LoginWindow(auth, reset_service, _open_main)
+            if login.exec() != LoginWindow.Accepted:
+                return 0
+        else:
+            return 0
     else:
         login = LoginWindow(auth, reset_service, _open_main)
         if login.exec() != LoginWindow.Accepted:

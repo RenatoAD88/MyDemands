@@ -62,6 +62,7 @@ class AuthService:
         self.users = users
         self.sessions = sessions
         self.secrets_store = secrets_store
+        self._cached_user: User | None = None
 
     def seed_master(self) -> None:
         if self.users.exists(MASTER_EMAIL):
@@ -83,6 +84,7 @@ class AuthService:
         user = self.users.get_by_email(email)
         if not user or not verify_password(password, user.password_hash):
             raise InvalidCredentialsError("Credenciais inválidas")
+        self._cached_user = user
         return user
 
     def create_remember_session(self, user_email: str, ttl_days: int = 7) -> None:
@@ -109,8 +111,10 @@ class AuthService:
         if not hashlib.sha256(presented_token.encode()).digest() == hashlib.sha256(expected_token).digest():
             self.logout()
             return None
-        return self.users.get_by_email(email)
+        self._cached_user = self.users.get_by_email(email)
+        return self._cached_user
 
     def logout(self) -> None:
+        self._cached_user = None
         self.sessions.clear_session()
         self.secrets_store.delete(REMEMBER_KEY)

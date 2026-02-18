@@ -13,8 +13,9 @@ except Exception:  # pragma: no cover - platform fallback
 
 
 class WindowsDpapiSecretStore(ISecretStore):
-    def __init__(self, storage_file: Path):
+    def __init__(self, storage_file: Path, entropy: bytes | None = None):
         self.storage_file = storage_file
+        self.entropy = entropy
 
     def _load(self) -> dict:
         if not self.storage_file.exists():
@@ -27,12 +28,12 @@ class WindowsDpapiSecretStore(ISecretStore):
     def _protect(self, value: bytes) -> bytes:
         if win32crypt is None:
             return value
-        return win32crypt.CryptProtectData(value, "MyDemands", None, None, None, 0)
+        return win32crypt.CryptProtectData(value, "MyDemands", self.entropy, None, None, 0)
 
     def _unprotect(self, value: bytes) -> bytes:
         if win32crypt is None:
             return value
-        return win32crypt.CryptUnprotectData(value, None, None, None, 0)[1]
+        return win32crypt.CryptUnprotectData(value, None, self.entropy, None, 0)[1]
 
     def set(self, key: str, value: bytes) -> None:
         payload = self._load()
