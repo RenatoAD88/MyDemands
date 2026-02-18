@@ -17,10 +17,10 @@ from mydemands.infra.secrets.dpapi_secret_store import WindowsDpapiSecretStore
 from mydemands.services.auth_service import AuthService
 from mydemands.services.email_service import EmailService
 from mydemands.services.password_reset_service import PasswordResetService
-from mydemands.services.bootstrap_flow import resolve_startup_decision
 from mydemands.services.user_context import UserContext, set_current_user
-from mydemands.ui.dialogs.confirm_remember_dialog import ConfirmRememberDialog
 from mydemands.ui.login_window import LoginWindow
+from mydemands.infra.repositories.last_login_repository import LastLoginRepository
+from mydemands.infra.repositories.user_prefs_repository import UserPrefsRepository
 
 
 def main() -> int:
@@ -65,23 +65,12 @@ def main() -> int:
         win.show()
         qt_app._main_win = win  # type: ignore[attr-defined]
 
-    startup = resolve_startup_decision(auth)
-    if startup.state == "confirm_remember" and startup.user_email:
-        confirm = ConfirmRememberDialog(startup.user_email)
-        result = confirm.exec()
-        if result == ConfirmRememberDialog.Accepted and confirm.choice == "continue":
-            _open_main(startup.user_email)
-        elif confirm.choice == "switch":
-            auth.logout()
-            login = LoginWindow(auth, reset_service, _open_main)
-            if login.exec() != LoginWindow.Accepted:
-                return 0
-        else:
-            return 0
-    else:
-        login = LoginWindow(auth, reset_service, _open_main)
-        if login.exec() != LoginWindow.Accepted:
-            return 0
+    user_prefs = UserPrefsRepository(paths)
+    last_login = LastLoginRepository(paths.base_dir / "last_login.json")
+
+    login = LoginWindow(auth, reset_service, _open_main, user_prefs, last_login)
+    if login.exec() != LoginWindow.Accepted:
+        return 0
 
     return qt_app.exec()
 
