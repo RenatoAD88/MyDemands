@@ -1,4 +1,4 @@
-from ui_theme import APP_STYLESHEET, status_color, timing_color
+from ui_theme import APP_STYLESHEET, build_app_stylesheet, status_color, timing_color
 
 
 def test_status_color_maps_known_states():
@@ -19,7 +19,7 @@ def test_stylesheet_has_ergonomic_header_palette():
     assert "QTabBar::tab {" in APP_STYLESHEET
     assert "background: #e8eef9;" in APP_STYLESHEET
     assert "QTabBar::tab:selected {" in APP_STYLESHEET
-    assert "border: 1px solid #7aa2e3;" in APP_STYLESHEET
+    assert "border-color: #7aa2e3;" in APP_STYLESHEET
 
 
 def test_stylesheet_has_readable_inputs_and_table():
@@ -43,3 +43,19 @@ def test_stylesheet_checkbox_indicator_has_explicit_high_contrast_checkmark():
     assert "background: #1d4ed8;" in APP_STYLESHEET
     assert "stroke='%23ffffff'" in APP_STYLESHEET
     assert "QCheckBox::indicator:disabled {" in APP_STYLESHEET
+
+
+def test_dark_theme_uses_same_sizing_tokens_as_light():
+    light = build_app_stylesheet("light")
+    dark = build_app_stylesheet("dark")
+    shared_tokens = [
+        "font-size: 13px;",
+        "padding: 8px 14px;",
+        "padding: 6px 12px;",
+        "min-height: 26px;",
+        "width: 16px;",
+        "height: 16px;",
+    ]
+    for token in shared_tokens:
+        assert token in light
+        assert token in dark
