@@ -149,3 +149,11 @@ def test_master_import_can_require_passphrase_when_master_key_disabled():
 
     result = svc.import_payload(payload, passphrase="abc12345", is_master=True, allow_master_key=False)
     assert result.csv_text == csv_text
+
+
+def test_generate_passphrase_has_minimum_entropy():
+    value = SecureCsvExchangeService.generate_passphrase(12)
+
+    assert len(value) >= 8
+    assert any(ch.isalpha() for ch in value)
+    assert any(ch.isdigit() for ch in value)

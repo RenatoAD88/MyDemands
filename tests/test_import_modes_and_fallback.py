@@ -33,7 +33,7 @@ def _row(id_value: str, projeto: str):
     return row
 
 
-def test_import_merge_behavior_no_duplicates(tmp_path):
+def test_import_merge_behavior_rewrites_ids_and_appends_data(tmp_path):
     store = CsvStore(str(tmp_path))
     base = store.parse_exported_csv_text("\n".join([
         ",".join(DISPLAY_COLUMNS),
@@ -43,17 +43,16 @@ def test_import_merge_behavior_no_duplicates(tmp_path):
 
     incoming_text = "\n".join([
         ",".join(DISPLAY_COLUMNS),
-        ",".join([_row("1", "Importado sobrescreve").get(c, "") for c in DISPLAY_COLUMNS]),
-        ",".join([_row("2", "Novo").get(c, "") for c in DISPLAY_COLUMNS]),
+        ",".join([_row("1", "Importado 1").get(c, "") for c in DISPLAY_COLUMNS]),
+        ",".join([_row("2", "Importado 2").get(c, "") for c in DISPLAY_COLUMNS]),
     ])
     imported = store.parse_exported_csv_text(incoming_text)
     store.merge_with_rows(imported)
 
     rows = store.build_view()
-    assert len(rows) == 2
-    by_id = {r["ID"]: r for r in rows}
-    assert by_id["1"]["Projeto"] == "Importado sobrescreve"
-    assert by_id["2"]["Projeto"] == "Novo"
+    assert len(rows) == 3
+    assert [r["ID"] for r in rows] == ["1", "2", "3"]
+    assert [r["Projeto"] for r in rows] == ["Local", "Importado 1", "Importado 2"]
 
 
 def test_import_replace_clears_existing(tmp_path):

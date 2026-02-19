@@ -706,19 +706,24 @@ class CsvStore:
         return len(imported_rows)
 
     def merge_with_rows(self, imported_rows: List[DemandRow]) -> int:
-        existing_by_id: Dict[str, DemandRow] = {
-            str(row.data.get("ID") or "").strip(): row
-            for row in self.rows
-            if str(row.data.get("ID") or "").strip()
-        }
-        for imported in imported_rows:
-            key = str(imported.data.get("ID") or "").strip()
-            if key:
-                existing_by_id[key] = imported
-            else:
-                existing_by_id[str(uuid.uuid4())] = imported
+        merged: List[DemandRow] = []
 
-        self.rows = sorted(existing_by_id.values(), key=lambda row: int(row.data.get("ID") or "0"))
+        for existing in self.rows:
+            data = {c: "" for c in CSV_COLUMNS}
+            data.update(existing.data)
+            data["_id"] = str(uuid.uuid4())
+            merged.append(DemandRow(_id=data["_id"], data=data))
+
+        for imported in imported_rows:
+            data = {c: "" for c in CSV_COLUMNS}
+            data.update(imported.data)
+            data["_id"] = str(uuid.uuid4())
+            merged.append(DemandRow(_id=data["_id"], data=data))
+
+        for idx, row in enumerate(merged, start=1):
+            row.data["ID"] = str(idx)
+
+        self.rows = merged
         self.save()
         return len(imported_rows)
 

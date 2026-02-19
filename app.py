@@ -3442,34 +3442,29 @@ class MainWindow(QMainWindow):
 
         selected_rows = self._selected_rows_from_current_tab()
         rows_to_export = selected_rows if selected_rows else self.store.build_view()
-        is_master = (self.logged_user_role or "") == "master"
 
         if not self.secure_csv_service.crypto_available():
             QMessageBox.warning(self, "Falha na exportação", self.secure_csv_service.crypto_unavailable_message())
             return
 
-        passphrase = _ask_passphrase(
-            self,
-            "Palavra-passe",
-            "Crie a palavra-passe para criptografar o arquivo de exportação:",
-        )
-        if passphrase is None:
-            return
+        passphrase = self.secure_csv_service.generate_passphrase()
 
         try:
             csv_text = self.secure_csv_service.render_csv_text(rows_to_export)
-            payload = self.secure_csv_service.export_payload(csv_text, passphrase=passphrase, is_master=is_master)
+            payload = self.secure_csv_service.export_payload(csv_text, passphrase=passphrase, is_master=False)
             with open(export_path, "w", encoding="utf-8") as f:
                 f.write(payload)
         except Exception as e:
             QMessageBox.warning(self, "Falha na exportação", f"Não foi possível exportar o CSV.\n\n{e}")
             return
 
-        suffix = "" if is_master else "\nUse a mesma palavra-passe no momento da importação."
         QMessageBox.information(
             self,
             "Exportação concluída",
-            f"CSV exportado com sucesso.\nTotal de demandas: {len(rows_to_export)}{suffix}",
+            f"CSV exportado com sucesso.\n"
+            f"Total de demandas: {len(rows_to_export)}\n\n"
+            f"Palavra-passe gerada: {passphrase}\n"
+            "Guarde essa senha: ela será obrigatória para importar este arquivo.",
         )
 
     def import_demands_csv(self):
@@ -3483,43 +3478,40 @@ class MainWindow(QMainWindow):
         if not import_path:
             return
 
-        mode_box = QMessageBox(self)
-        mode_box.setWindowTitle("Importar dados")
-        mode_box.setText("Escolha o modo de importação:")
-        replace_btn = mode_box.addButton("Substituir dados existentes", QMessageBox.AcceptRole)
-        merge_btn = mode_box.addButton("Mesclar com dados existentes", QMessageBox.AcceptRole)
-        mode_box.addButton("Cancelar", QMessageBox.RejectRole)
-        mode_box.exec()
-        clicked = mode_box.clickedButton()
-        if clicked not in {replace_btn, merge_btn}:
-            return
-        merge_mode = clicked is merge_btn
-
-        is_master = (self.logged_user_role or "") == "master"
-
+        raw_text = ""
+        import_result = None
         try:
             with open(import_path, "r", encoding="utf-8") as f:
                 raw_text = f.read()
 
-            passphrase = ""
-            if raw_text.startswith(ENC_HEADER):
-                passphrase_prompt = "Informe a palavra-passe para descriptografar o arquivo:"
-                if is_master:
-                    passphrase_prompt += "\n(Usuário master também precisa informar a palavra-passe.)"
-                passphrase = _ask_passphrase(self, "Palavra-passe", passphrase_prompt)
-                if passphrase is None:
-                    return
+            if not raw_text.startswith(ENC_HEADER):
+                self._offer_save_plain_copy(import_path, incompatible=True)
+                QMessageBox.warning(
+                    self,
+                    "Falha na importação",
+                    "Arquivo incompatível: apenas CSV exportado pelo sistema e protegido por palavra-passe pode ser importado.",
+                )
+                return
+
+            passphrase = _ask_passphrase(
+                self,
+                "Palavra-passe obrigatória",
+                "Digite a palavra-passe recebida na exportação para liberar a importação:",
+            )
+            if passphrase is None:
+                return
 
             import_result = self.secure_csv_service.import_payload(
                 raw_text,
                 passphrase=passphrase,
-                is_master=is_master,
+                is_master=False,
                 allow_master_key=False,
             )
+
             imported_rows = self.store.parse_exported_csv_text(import_result.csv_text)
-            total = self.store.merge_with_rows(imported_rows) if merge_mode else self.store.replace_with_rows(imported_rows)
         except ValidationError as e:
-            self._offer_save_decrypted_copy(raw_text, import_path)
+            plain_text = import_result.csv_text if import_result is not None else raw_text
+            self._offer_save_decrypted_copy(plain_text, import_path)
             QMessageBox.warning(self, "Falha na importação", str(e))
             return
         except CsvExchangeError as e:
@@ -3529,6 +3521,20 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, "Falha na importação", f"Não foi possível importar o CSV.\n\n{e}")
             return
+
+        mode_box = QMessageBox(self)
+        mode_box.setWindowTitle("Importar dados")
+        mode_box.setText("Campos compatíveis. Escolha o modo de importação:")
+        replace_btn = mode_box.addButton("Substituir todos os dados", QMessageBox.AcceptRole)
+        merge_btn = mode_box.addButton("Mesclar dados (reescrever IDs e somar com existentes)", QMessageBox.AcceptRole)
+        mode_box.addButton("Cancelar", QMessageBox.RejectRole)
+        mode_box.exec()
+        clicked = mode_box.clickedButton()
+        if clicked not in {replace_btn, merge_btn}:
+            return
+        merge_mode = clicked is merge_btn
+
+        total = self.store.merge_with_rows(imported_rows) if merge_mode else self.store.replace_with_rows(imported_rows)
 
         self.refresh_all()
         action = "mesclado" if merge_mode else "substituído"
@@ -3552,18 +3558,22 @@ class MainWindow(QMainWindow):
             f.write(csv_text)
         return True
 
-    def _offer_save_plain_copy(self, source_path: str) -> bool:
+    def _offer_save_plain_copy(self, source_path: str, incompatible: bool = False) -> bool:
         choice = QMessageBox.question(
             self,
             "Arquivo incompatível",
-            "Arquivo incompatível / não foi possível descriptografar.\n"
-            "Deseja salvar uma cópia do CSV sem descriptografia para análise?",
+            (
+                "Arquivo incompatível: os campos não conferem com o layout esperado.\n"
+                "Deseja salvar um CVC com os dados nítidos para análise?"
+                if incompatible
+                else "Arquivo incompatível / não foi possível descriptografar.\nDeseja salvar uma cópia do CSV sem descriptografia para análise?"
+            ),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
         if choice != QMessageBox.Yes:
             return False
-        target_path, _ = QFileDialog.getSaveFileName(self, "Salvar cópia do arquivo", source_path, "CSV (*.csv);;Texto (*.txt)")
+        target_path, _ = QFileDialog.getSaveFileName(self, "Salvar CVC/CVS nítido", source_path, "CSV (*.csv);;Texto (*.txt)")
         if not target_path:
             return False
         shutil.copyfile(source_path, target_path)
