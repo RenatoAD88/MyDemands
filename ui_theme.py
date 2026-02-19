@@ -7,18 +7,30 @@ from PySide6.QtCore import QDir, QFile, QIODevice, QTextStream
 import mydemands.resources_rc  # noqa: F401
 
 
+def _normalize_resource_path(resource_path: str) -> str:
+    normalized = (resource_path or "").strip()
+    if not normalized:
+        return normalized
+    while normalized.startswith("::"):
+        normalized = normalized[1:]
+    if normalized.startswith("/") and not normalized.startswith(":/"):
+        normalized = f":{normalized}"
+    return normalized
+
+
 def _read_qss(resource_path: str) -> str:
-    file = QFile(resource_path)
+    normalized_path = _normalize_resource_path(resource_path)
+    file = QFile(normalized_path)
     if not file.exists():
         available = ", ".join(list_styles_resources()) or "<vazio>"
         raise RuntimeError(
-            f"Resource não existe: {resource_path}. "
+            f"Resource não existe: {normalized_path}. "
             f"Resources em :/styles => [{available}]"
         )
     if not file.open(QIODevice.ReadOnly | QIODevice.Text):
         available = ", ".join(list_styles_resources()) or "<vazio>"
         raise RuntimeError(
-            f"Falha ao abrir resource: {resource_path}. "
+            f"Falha ao abrir resource: {normalized_path}. "
             f"Resources em :/styles => [{available}]"
         )
     stream = QTextStream(file)
