@@ -6,7 +6,7 @@ pytest.importorskip("PySide6.QtCore", reason="PySide6 indisponível no ambiente 
 qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
 
 from app import MainWindow, VISIBLE_COLUMNS
-from ui_theme import APP_STYLESHEET
+from ui_theme import build_app_stylesheet
 from csv_store import CsvStore
 
 QApplication = qtwidgets.QApplication
@@ -70,8 +70,9 @@ def test_checkboxes_use_white_background_with_visible_border_when_checked(tmp_pa
     store = CsvStore(str(tmp_path))
     win = MainWindow(store)
 
-    assert "QCheckBox::indicator:checked" in APP_STYLESHEET
-    assert "background: #ffffff;" in APP_STYLESHEET
-    assert "border: 1px solid #111827;" in APP_STYLESHEET
+    stylesheet = build_app_stylesheet("light")
+    assert "QCheckBox::indicator:checked" in stylesheet
+    assert "background: #ffffff;" in stylesheet
+    assert "border: 1px solid #111827;" in stylesheet
 
     win.close()

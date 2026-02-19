@@ -25,10 +25,12 @@ from mydemands.infra.repositories.last_login_repository import LastLoginReposito
 from mydemands.infra.repositories.user_prefs_repository import UserPrefsRepository
 from mydemands.services.theme_service import ThemeService
 from mydemands.services.secure_csv_exchange_service import SecureCsvExchangeService
+from ui_theme import build_app_stylesheet
 
 
 def main() -> int:
     qt_app = QApplication(sys.argv)
+    qt_app.setStyleSheet(build_app_stylesheet("light"))
 
     paths = Paths()
     paths.ensure_base_dir()

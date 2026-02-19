@@ -1,7 +1,10 @@
-from PySide6.QtWidgets import QApplication
+import pytest
+
+qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
+QApplication = qtwidgets.QApplication
 
 from mydemands.services.theme_service import ThemeService
-from ui_theme import APP_STYLESHEET, build_app_stylesheet, status_color, timing_color
+from ui_theme import build_app_stylesheet, status_color, timing_color
 
 
 def test_status_color_maps_known_states():
@@ -18,37 +21,56 @@ def test_timing_color_maps_delay_and_default():
 
 
 def test_stylesheet_has_ergonomic_header_palette():
-    assert "QMainWindow { background: #f3f6fb; }" in APP_STYLESHEET
-    assert "QTabBar::tab {" in APP_STYLESHEET
-    assert "background: #e8eef9;" in APP_STYLESHEET
-    assert "QTabBar::tab:selected {" in APP_STYLESHEET
-    assert "border-color: #7aa2e3;" in APP_STYLESHEET
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    stylesheet = build_app_stylesheet("light")
+    assert "QMainWindow { background: #f3f6fb; }" in stylesheet
+    assert "QTabBar::tab {" in stylesheet
+    assert "background: #e8eef9;" in stylesheet
+    assert "QTabBar::tab:selected {" in stylesheet
+    assert "border-color: #7aa2e3;" in stylesheet
 
 
 def test_stylesheet_has_readable_inputs_and_table():
-    assert "QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget {" in APP_STYLESHEET
-    assert "color: #111827;" in APP_STYLESHEET
-    assert "QComboBox QAbstractItemView {" in APP_STYLESHEET
-    assert "selection-background-color: #dbeafe;" in APP_STYLESHEET
-    assert "selection-color: #0f172a;" in APP_STYLESHEET
-    assert "QHeaderView::section {" in APP_STYLESHEET
-    assert "background: #dde7f8;" in APP_STYLESHEET
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    stylesheet = build_app_stylesheet("light")
+    assert "QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget {" in stylesheet
+    assert "color: #111827;" in stylesheet
+    assert "QComboBox QAbstractItemView {" in stylesheet
+    assert "selection-background-color: #dbeafe;" in stylesheet
+    assert "selection-color: #0f172a;" in stylesheet
+    assert "QHeaderView::section {" in stylesheet
+    assert "background: #dde7f8;" in stylesheet
 
 
 def test_stylesheet_keeps_native_dropdown_arrows_visible():
-    assert "QComboBox::down-arrow, QDateEdit::down-arrow {" in APP_STYLESHEET
-    block = APP_STYLESHEET.split("QComboBox::down-arrow, QDateEdit::down-arrow {", 1)[1].split("}", 1)[0]
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    stylesheet = build_app_stylesheet("light")
+    assert "QComboBox::down-arrow, QDateEdit::down-arrow {" in stylesheet
+    block = stylesheet.split("QComboBox::down-arrow, QDateEdit::down-arrow {", 1)[1].split("}", 1)[0]
     assert "image: none;" not in block
 
 
 def test_stylesheet_checkbox_indicator_has_explicit_high_contrast_checkmark():
-    assert "QCheckBox::indicator:checked {" in APP_STYLESHEET
-    assert "background: #1d4ed8;" in APP_STYLESHEET
-    assert "stroke='%23ffffff'" in APP_STYLESHEET
-    assert "QCheckBox::indicator:disabled {" in APP_STYLESHEET
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    stylesheet = build_app_stylesheet("light")
+    assert "QCheckBox::indicator:checked {" in stylesheet
+    assert "background: #1d4ed8;" in stylesheet
+    assert "stroke='%23ffffff'" in stylesheet
+    assert "QCheckBox::indicator:disabled {" in stylesheet
 
 
 def test_dark_theme_uses_same_sizing_tokens_as_light():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
     light = build_app_stylesheet("light")
     dark = build_app_stylesheet("dark")
     shared_tokens = [
@@ -65,6 +87,9 @@ def test_dark_theme_uses_same_sizing_tokens_as_light():
 
 
 def test_build_stylesheet_returns_string():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
     css_light = build_app_stylesheet("light")
     css_dark = build_app_stylesheet("dark")
     assert isinstance(css_light, str)
@@ -82,3 +107,12 @@ def test_theme_service_applies_stylesheet_without_exception():
     service.apply_theme("dark")
     assert isinstance(app.styleSheet(), str)
     assert len(app.styleSheet()) > 0
+
+
+def test_build_stylesheet_after_qapplication_does_not_raise():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    stylesheet = build_app_stylesheet("light")
+    assert isinstance(stylesheet, str)
+    assert stylesheet
