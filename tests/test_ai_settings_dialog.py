@@ -223,3 +223,39 @@ def test_hf_help_dialog_opens_and_has_text(monkeypatch):
     assert captured["body"].strip()
     assert captured["parent"] is dlg
     assert captured.get("executed") is True
+
+
+class _VisibleWidget:
+    def __init__(self):
+        self.visible = None
+
+    def setVisible(self, value: bool):
+        self.visible = value
+
+
+def test_help_button_visibility_openai():
+    dlg = AISettingsDialog.__new__(AISettingsDialog)
+    dlg.btn_help_openai = _VisibleWidget()
+    dlg.btn_help_hf = _VisibleWidget()
+
+    dlg._update_help_visibility("OpenAI")
+
+    assert dlg.btn_help_openai.visible is True
+    assert dlg.btn_help_hf.visible is False
+
+
+def test_help_button_visibility_huggingface():
+    dlg = AISettingsDialog.__new__(AISettingsDialog)
+    dlg.btn_help_openai = _VisibleWidget()
+    dlg.btn_help_hf = _VisibleWidget()
+
+    dlg._update_help_visibility("Hugging Face")
+
+    assert dlg.btn_help_openai.visible is False
+    assert dlg.btn_help_hf.visible is True
+
+
+def test_help_label_removed():
+    settings_source = open("ai_writing/settings.py", "r", encoding="utf-8").read()
+
+    assert 'form.addRow("Ajuda",' not in settings_source

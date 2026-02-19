@@ -177,6 +177,7 @@ class AISettingsDialog(QDialog):
         self.provider_combo.addItem("OpenAI", OPENAI_PROVIDER)
         self.provider_combo.addItem("Hugging Face", HUGGINGFACE_PROVIDER)
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        self.provider_combo.currentTextChanged.connect(self._update_help_visibility)
 
         self.openai_key = QLineEdit()
         self.openai_model = QLineEdit()
@@ -221,9 +222,10 @@ class AISettingsDialog(QDialog):
         help_buttons = QHBoxLayout()
         help_buttons.addWidget(self.btn_help_openai)
         help_buttons.addWidget(self.btn_help_hf)
+        help_buttons.addStretch()
         help_container = QWidget()
         help_container.setLayout(help_buttons)
-        form.addRow("Ajuda", help_container)
+        form.addRow("", help_container)
 
         buttons = QHBoxLayout()
         buttons.addStretch(); buttons.addWidget(consumo_btn); buttons.addWidget(test_btn); buttons.addWidget(save_btn); buttons.addWidget(cancel_btn)
@@ -234,6 +236,7 @@ class AISettingsDialog(QDialog):
         layout.addLayout(buttons)
 
         self._sync_fields()
+        self._update_help_visibility(self.provider_combo.currentText())
 
     def open_openai_help_dialog(self):
         dialog = InfoTextDialog("Como configurar OpenAI", OPENAI_HELP_TEXT, self)
@@ -278,6 +281,10 @@ class AISettingsDialog(QDialog):
     def _on_provider_changed(self):
         self._toggle_provider_fields()
         self._ensure_hf_default_model()
+
+    def _update_help_visibility(self, provider: str):
+        self.btn_help_openai.setVisible(provider == "OpenAI")
+        self.btn_help_hf.setVisible(provider == "Hugging Face")
 
     def _sync_fields(self):
         cfg = self.config_store.load_config()
