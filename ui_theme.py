@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Tuple
 
 from PySide6.QtCore import QDir, QFile, QIODevice, QStringConverter, QTextStream
+from PySide6.QtWidgets import QApplication
 
 import mydemands.resources_rc  # noqa: F401
 
@@ -19,6 +20,9 @@ def _normalize_resource_path(resource_path: str) -> str:
 
 
 def _read_qss(resource_path: str) -> str:
+    if QApplication.instance() is None:
+        raise RuntimeError("QApplication não inicializado antes de carregar QSS.")
+
     normalized_path = _normalize_resource_path(resource_path)
     file = QFile(normalized_path)
     if not file.exists():
@@ -53,9 +57,6 @@ def build_app_stylesheet(theme: str = "light") -> str:
     normalized = (theme or "light").strip().lower()
     color_resource = ":/styles/dark_colors.qss" if normalized == "dark" else ":/styles/light_colors.qss"
     return f"{_read_qss(':/styles/base.qss')}\n\n{_read_qss(color_resource)}\n"
-
-
-APP_STYLESHEET = build_app_stylesheet("light")
 
 
 def status_color(status: str) -> Tuple[int, int, int]:
