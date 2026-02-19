@@ -54,7 +54,7 @@ def run_crypto_self_test() -> int:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     except Exception as exc:
         print(f"[SELF-TEST-CRYPTO] Falha ao importar AESGCM: {exc}")
-        return 2
+        return 1
 
     key = AESGCM.generate_key(bit_length=128)
     aesgcm = AESGCM(key)

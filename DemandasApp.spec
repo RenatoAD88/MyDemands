@@ -3,19 +3,32 @@
 from PyInstaller.utils.hooks import collect_all
 
 crypt = collect_all('cryptography')
+crypt_datas = crypt.datas if hasattr(crypt, 'datas') else crypt[0]
+crypt_binaries = crypt.binaries if hasattr(crypt, 'binaries') else crypt[1]
+crypt_hiddenimports = crypt.hiddenimports if hasattr(crypt, 'hiddenimports') else crypt[2]
+
+datas = []
+binaries = []
+hiddenimports = [
+    'huggingface_hub',
+    'bcrypt',
+    'mydemands.resources_rc',
+]
+
+datas += crypt_datas
+binaries += crypt_binaries
+hiddenimports += crypt_hiddenimports
+hiddenimports += [
+    'cryptography.hazmat.primitives.ciphers.aead',
+    'cryptography.hazmat.bindings._rust',
+]
+
 a = Analysis(
     ['app.py'],
     pathex=[],
-    binaries=crypt[1],
-    datas=crypt[0],
-    hiddenimports=[
-        'huggingface_hub',
-        'bcrypt',
-        'mydemands.resources_rc',
-        *crypt[2],
-        'cryptography.hazmat.bindings._rust',
-        'cryptography.hazmat.primitives.ciphers.aead',
-    ],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
