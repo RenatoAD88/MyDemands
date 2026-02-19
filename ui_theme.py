@@ -1,7 +1,24 @@
 from __future__ import annotations
 
+import importlib
+import logging
+import os
+import pkgutil
 from importlib import resources
 from typing import Tuple
+
+
+logger = logging.getLogger(__name__)
+
+
+if os.getenv("MYDEMANDS_DEBUG_THEME") == "1":
+    try:
+        styles_pkg = importlib.import_module("mydemands.ui.styles")
+
+        available_qss = [name for _, name, _ in pkgutil.iter_modules(styles_pkg.__path__)]
+        logger.debug("Styles package loaded from %s (children=%s)", getattr(styles_pkg, "__file__", "<namespace>"), available_qss)
+    except Exception:
+        logger.exception("Failed to import styles package 'mydemands.ui.styles'")
 
 
 def _read_qss(filename: str) -> str:
