@@ -5,6 +5,8 @@ import csv
 import io
 import logging
 import os
+import secrets
+import string
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Dict, List
@@ -141,6 +143,17 @@ class SecureCsvExchangeService:
             payload = {k: row.get(k, "") for k in DISPLAY_COLUMNS}
             writer.writerow(payload)
         return buf.getvalue()
+
+    @staticmethod
+    def generate_passphrase(length: int = 12) -> str:
+        size = max(8, length)
+        letters = string.ascii_letters
+        digits = string.digits
+        alphabet = letters + digits
+        token = [secrets.choice(letters), secrets.choice(digits)]
+        token.extend(secrets.choice(alphabet) for _ in range(size - 2))
+        secrets.SystemRandom().shuffle(token)
+        return "".join(token)
 
     def export_payload(self, csv_text: str, passphrase: str, is_master: bool) -> str:
         if not self.crypto_ready():
