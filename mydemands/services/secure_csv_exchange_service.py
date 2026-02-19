@@ -5,18 +5,22 @@ import csv
 import io
 import os
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
+CRYPTO_IMPORT_ERROR: Exception | None = None
 
 try:
+    from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    from cryptography.hazmat.primitives import hashes
+
     CRYPTO_AVAILABLE = True
-except Exception:  # pragma: no cover - exercised by simulated fallback tests
+except Exception as exc:  # pragma: no cover - exercised by simulated fallback tests
     AESGCM = None  # type: ignore[assignment]
     PBKDF2HMAC = None  # type: ignore[assignment]
     hashes = None  # type: ignore[assignment]
     CRYPTO_AVAILABLE = False
+    CRYPTO_IMPORT_ERROR = exc
 
 try:
     import win32crypt  # type: ignore
@@ -45,6 +49,23 @@ class SecureCsvExchangeService:
     def __init__(self, secret_store: ISecretStore):
         self.secret_store = secret_store
 
+    @staticmethod
+    def crypto_unavailable_message() -> str:
+        return "Este instalador foi gerado sem suporte a criptografia. Contate o administrador para atualizar a build."
+
+    @classmethod
+    def self_check(cls) -> bool:
+        if not CRYPTO_AVAILABLE or AESGCM is None:
+            return False
+        try:
+            key = b"0" * 32
+            nonce = b"1" * 12
+            plain = b"mydemands-crypto-check"
+            cipher = AESGCM(key).encrypt(nonce, plain, None)
+            return AESGCM(key).decrypt(nonce, cipher, None) == plain
+        except Exception:
+            return False
+
     def _get_or_create_master_key(self) -> bytes:
         key = self.secret_store.get(MASTER_KEY_SECRET)
         if key and len(key) >= 32:
@@ -54,18 +75,18 @@ class SecureCsvExchangeService:
         return key
 
     def _derive_key(self, passphrase: str, salt: bytes) -> bytes:
-        if not CRYPTO_AVAILABLE:
-            raise CsvExchangeError("Recurso de exportação/importação segura indisponível nesta build. Contate o administrador.")
+        if not self.self_check():
+            raise CsvExchangeError(self.crypto_unavailable_message())
         if not passphrase:
-            raise CsvExchangeError("Palavra-passe obrigatória.")
+            raise CsvExchangeError("Informe uma palavra-passe válida para exportar.")
         kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=390000)
         return kdf.derive(passphrase.encode("utf-8"))
 
     def _export_dpapi_payload(self, csv_text: str, passphrase: str, is_master: bool) -> str:
         if passphrase:
-            raise CsvExchangeError("Recurso de exportação/importação segura indisponível nesta build. Contate o administrador.")
+            raise CsvExchangeError(self.crypto_unavailable_message())
         if not is_master:
-            raise CsvExchangeError("Recurso de exportação/importação segura indisponível nesta build. Contate o administrador.")
+            raise CsvExchangeError(self.crypto_unavailable_message())
         if win32crypt is None:
             raise CsvExchangeError("Criptografia indisponível nesta build. Contate o administrador.")
         cipher = win32crypt.CryptProtectData(csv_text.encode("utf-8-sig"), "MyDemandsCSV", None, None, None, 0)
@@ -84,7 +105,7 @@ class SecureCsvExchangeService:
         if not cipher:
             raise CsvExchangeError("Arquivo criptografado inválido ou corrompido.")
         if not is_master:
-            raise CsvExchangeError("Recurso de exportação/importação segura indisponível nesta build. Contate o administrador.")
+            raise CsvExchangeError(self.crypto_unavailable_message())
         plain = win32crypt.CryptUnprotectData(cipher, None, None, None, 0)[1]
         return ImportResult(csv_text=plain.decode("utf-8-sig"), encrypted=True)
 
@@ -98,7 +119,7 @@ class SecureCsvExchangeService:
         return buf.getvalue()
 
     def export_payload(self, csv_text: str, passphrase: str, is_master: bool) -> str:
-        if not CRYPTO_AVAILABLE:
+        if not self.self_check():
             return self._export_dpapi_payload(csv_text, passphrase=passphrase, is_master=is_master)
 
         data_key = os.urandom(32)
@@ -118,7 +139,7 @@ class SecureCsvExchangeService:
             wrap_nonce_user = os.urandom(12)
             wrapped_key_user = AESGCM(user_key).encrypt(wrap_nonce_user, data_key, None)
         elif not is_master:
-            raise CsvExchangeError("Usuário padrão precisa informar palavra-passe para exportação.")
+            raise CsvExchangeError("Informe uma palavra-passe válida para exportar.")
 
         lines = [
             ENC_HEADER,
@@ -136,8 +157,8 @@ class SecureCsvExchangeService:
         if raw_text.startswith(DPAPI_HEADER):
             return self._import_dpapi_payload(raw_text, is_master=is_master)
 
-        if not CRYPTO_AVAILABLE and raw_text.startswith(ENC_HEADER):
-            raise CsvExchangeError("Recurso de exportação/importação segura indisponível nesta build. Contate o administrador.")
+        if not self.self_check() and raw_text.startswith(ENC_HEADER):
+            raise CsvExchangeError(self.crypto_unavailable_message())
 
         if not raw_text.startswith(ENC_HEADER):
             return ImportResult(csv_text=raw_text, encrypted=False)

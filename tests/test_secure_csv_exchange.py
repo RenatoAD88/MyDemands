@@ -15,7 +15,7 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
 @pytest.mark.skipif(not CRYPTO_AVAILABLE, reason="cryptography não disponível no ambiente")
-def test_encrypt_decrypt_with_passphrase_roundtrip():
+def test_secure_export_roundtrip():
     svc = SecureCsvExchangeService(FakeSecretStore())
     csv_text = "ID,Projeto\n1,Projeto X\n"
 
@@ -47,7 +47,7 @@ def test_user_cannot_decrypt_with_wrong_passphrase():
 
 
 @pytest.mark.skipif(not CRYPTO_AVAILABLE, reason="cryptography não disponível no ambiente")
-def test_master_import_export_all_without_passphrase():
+def test_master_can_export_without_passphrase():
     svc = SecureCsvExchangeService(FakeSecretStore())
     csv_text = "ID,Projeto\n1,A\n2,B\n"
 
@@ -57,12 +57,31 @@ def test_master_import_export_all_without_passphrase():
     assert result.csv_text == csv_text
 
 
+def test_export_requires_passphrase_for_standard_user():
+    svc = SecureCsvExchangeService(FakeSecretStore())
+
+    with pytest.raises(CsvExchangeError, match="palavra-passe válida"):
+        svc.export_payload("ID,Projeto\n1,Teste\n", passphrase="", is_master=False)
+
+
+def test_export_error_message_not_crypto_unavailable_when_passphrase_provided():
+    svc = SecureCsvExchangeService(FakeSecretStore())
+
+    if CRYPTO_AVAILABLE:
+        payload = svc.export_payload("ID,Projeto\n1,Teste\n", passphrase="senha123", is_master=False)
+        assert payload.startswith(ENC_HEADER)
+    else:
+        with pytest.raises(CsvExchangeError) as exc:
+            svc.export_payload("ID,Projeto\n1,Teste\n", passphrase="senha123", is_master=False)
+        assert "sem suporte a criptografia" in str(exc.value)
+
+
 def test_import_encrypted_payload_without_cryptography_returns_controlled_error(monkeypatch):
     svc = SecureCsvExchangeService(FakeSecretStore())
 
     monkeypatch.setattr(secure_csv_module, "CRYPTO_AVAILABLE", False)
 
-    with pytest.raises(CsvExchangeError, match="indisponível"):
+    with pytest.raises(CsvExchangeError, match="sem suporte a criptografia"):
         svc.import_payload(f"{ENC_HEADER}\ndata:AA==", passphrase="", is_master=True)
 
 
@@ -93,5 +112,5 @@ def test_dpapi_fallback_blocks_user_passphrase_mode(monkeypatch):
 
     monkeypatch.setattr(secure_csv_module, "CRYPTO_AVAILABLE", False)
 
-    with pytest.raises(CsvExchangeError, match="indisponível"):
+    with pytest.raises(CsvExchangeError, match="sem suporte a criptografia"):
         svc.export_payload("ID,Projeto\n1,Teste\n", passphrase="senha123", is_master=False)

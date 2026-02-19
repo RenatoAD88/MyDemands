@@ -1,0 +1,106 @@
+QWidget {
+    color: #1f2937;
+    background: #f3f6fb;
+}
+QMainWindow { background: #f3f6fb; }
+QDialog { background: #f3f6fb; }
+
+QLabel { color: #1f2937; }
+
+QTabWidget::pane {
+    border: 1px solid #c7d4ea;
+    background: #ffffff;
+}
+QTabBar::tab {
+    background: #e8eef9;
+    color: #334155;
+    border-color: #c7d4ea;
+}
+QTabBar::tab:selected {
+    background: #ffffff;
+    color: #0f172a;
+    border-color: #7aa2e3;
+}
+
+QPushButton {
+    background: #eef2fa;
+    color: #1f2937;
+    border-color: #bccae3;
+}
+QToolButton[toolbarAction="true"] {
+    background: #eef2fa;
+    border-color: #bccae3;
+}
+QToolButton[toolbarAction="true"]:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+}
+QToolButton[infoIconAction="true"] {
+    background: transparent;
+}
+QToolButton[infoIconAction="true"]:hover {
+    background: rgba(30, 136, 229, 0.08);
+}
+
+QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget {
+    background: #ffffff;
+    color: #111827;
+    border-color: #bccae3;
+}
+QComboBox::drop-down, QDateEdit::drop-down {
+    border-left-color: #bccae3;
+}
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDateEdit:focus, QListWidget:focus {
+    border-color: #2f6fe4;
+}
+QComboBox QAbstractItemView {
+    background: #ffffff;
+    color: #111827;
+    border-color: #bccae3;
+    selection-background-color: #dbeafe;
+    selection-color: #0f172a;
+}
+
+QTableWidget {
+    background: #ffffff;
+    color: #111827;
+    gridline-color: #d7e0ef;
+    alternate-background-color: #f8fbff;
+    border-color: #c7d4ea;
+}
+QHeaderView::section {
+    background: #dde7f8;
+    color: #1e293b;
+    border-bottom-color: #c7d4ea;
+}
+
+QGroupBox {
+    color: #1e293b;
+    border-color: #c7d4ea;
+}
+
+QCheckBox::indicator {
+    background: #ffffff;
+    border-color: #374151;
+}
+QCheckBox::indicator:unchecked:hover {
+    border-color: #1d4ed8;
+}
+QCheckBox::indicator:checked {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+}
+QCheckBox::indicator:disabled {
+    background: #e5e7eb;
+    border-color: #9ca3af;
+}
+QCheckBox::indicator:checked:disabled {
+    background: #6b7280;
+    border-color: #6b7280;
+}
+
+QLabel#errorText { color: #b42318; }
+
+QCalendarWidget QToolButton {
+    color: #0f172a;
+}

@@ -1,0 +1,137 @@
+QWidget {
+    font-size: 13px;
+}
+
+QTabBar::tab {
+    border: 1px solid;
+    padding: 8px 14px;
+    margin-right: 2px;
+}
+QTabBar::tab:selected {
+    border: 1px solid;
+    font-weight: 600;
+}
+
+QPushButton {
+    border: 1px solid;
+    border-radius: 6px;
+    padding: 6px 12px;
+}
+QToolButton[toolbarAction="true"] {
+    border: 1px solid;
+    border-radius: 8px;
+    padding: 6px;
+    min-height: 28px;
+    min-width: 28px;
+}
+QToolButton[toolbarAction="true"]:hover {
+    border: 1px solid;
+}
+QToolButton[toolbarAction="true"]::menu-indicator {
+    image: none;
+}
+QToolButton[infoIconAction="true"] {
+    border: none;
+    padding: 0;
+    min-width: 28px;
+    min-height: 28px;
+}
+QToolButton[infoIconAction="true"]:hover {
+    border-radius: 14px;
+}
+
+QLineEdit, QTextEdit, QComboBox, QDateEdit, QListWidget {
+    border: 1px solid;
+    border-radius: 6px;
+    padding: 4px;
+}
+QComboBox, QDateEdit {
+    min-height: 26px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+QDateEdit {
+    min-width: 130px;
+}
+QComboBox::drop-down, QDateEdit::drop-down {
+    width: 22px;
+    border-left: 1px solid;
+}
+QComboBox::down-arrow, QDateEdit::down-arrow {
+    margin-right: 6px;
+}
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDateEdit:focus, QListWidget:focus {
+    border: 1px solid;
+}
+QComboBox QAbstractItemView {
+    border: 1px solid;
+    outline: 0;
+}
+QComboBox QAbstractItemView::item {
+    min-height: 24px;
+    padding: 4px 8px;
+}
+
+QTableWidget {
+    border: 1px solid;
+}
+QHeaderView::section {
+    border: none;
+    border-bottom: 1px solid;
+    padding: 6px;
+    font-weight: 600;
+}
+
+QGroupBox {
+    border: 1px solid;
+    border-radius: 8px;
+    margin-top: 8px;
+    padding-top: 10px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 8px;
+    padding: 0 4px 0 4px;
+}
+
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid;
+    border-radius: 3px;
+}
+QCheckBox::indicator:unchecked:hover {
+    border: 1px solid;
+}
+QCheckBox::indicator:checked {
+    border: 1px solid;
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M3.2 8.4 6.6 11.8 12.8 4.8' fill='none' stroke='%23ffffff' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
+QCheckBox::indicator:disabled {
+    border: 1px solid;
+}
+QCheckBox::indicator:checked:disabled {
+    border: 1px solid;
+}
+
+/* Ajustes do cabeçalho do calendário do QDateEdit */
+QCalendarWidget QWidget#qt_calendar_navigationbar {
+    min-height: 32px;
+}
+QCalendarWidget QToolButton {
+    min-width: 34px;
+    padding: 0 6px;
+    font-weight: 600;
+}
+QCalendarWidget QToolButton#qt_calendar_monthbutton {
+    min-width: 120px;
+    qproperty-autoRaise: true;
+}
+QCalendarWidget QToolButton#qt_calendar_yearbutton {
+    min-width: 56px;
+    qproperty-autoRaise: true;
+}
+QCalendarWidget QToolButton::menu-indicator {
+    image: none;
+    width: 0px;
+}

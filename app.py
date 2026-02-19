@@ -9,7 +9,7 @@ import traceback
 from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
-if "--self-test" in sys.argv:
+if "--self-test" in sys.argv or "--self-test-crypto" in sys.argv:
     from mydemands.infra.secrets.fake_secret_store import FakeSecretStore
     from mydemands.services.secure_csv_exchange_service import (
         CRYPTO_AVAILABLE,
@@ -3440,7 +3440,7 @@ class MainWindow(QMainWindow):
                 return
             passphrase = (passphrase or "").strip()
             if len(passphrase) < 6:
-                QMessageBox.warning(self, "Validação", "A palavra-passe deve ter ao menos 6 caracteres.")
+                QMessageBox.warning(self, "Validação", "Informe uma palavra-passe válida para exportar.")
                 return
 
         try:

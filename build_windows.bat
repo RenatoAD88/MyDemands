@@ -19,7 +19,7 @@ if not exist dist\DemandasApp.exe (
   exit /b 1
 )
 
-dist\DemandasApp.exe --self-test
+dist\DemandasApp.exe --self-test-crypto
 if errorlevel 1 (
   echo [ERRO] Self-test falhou.
   exit /b 1
