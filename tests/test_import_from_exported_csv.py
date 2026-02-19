@@ -2,7 +2,7 @@ import csv
 
 import pytest
 
-from csv_store import CsvStore, DISPLAY_COLUMNS
+from csv_store import CsvStore, DISPLAY_COLUMNS, EXPORT_VERSION_PREFIX, EXPORT_TEMPLATE_VERSION
 from validation import ValidationError
 
 
@@ -31,6 +31,7 @@ def test_import_from_exported_csv_replaces_existing_rows(tmp_path):
 
     export_path = tmp_path / "export.csv"
     with export_path.open("w", encoding="utf-8-sig", newline="") as f:
+        f.write(f"{EXPORT_VERSION_PREFIX}{EXPORT_TEMPLATE_VERSION}\n")
         writer = csv.DictWriter(f, fieldnames=DISPLAY_COLUMNS)
         writer.writeheader()
         writer.writerow(
@@ -68,6 +69,7 @@ def test_import_from_exported_csv_rejects_invalid_header(tmp_path):
     import_path = tmp_path / "invalid_header.csv"
 
     with import_path.open("w", encoding="utf-8-sig", newline="") as f:
+        f.write(f"{EXPORT_VERSION_PREFIX}{EXPORT_TEMPLATE_VERSION}\n")
         writer = csv.writer(f)
         writer.writerow(["coluna", "invalida"])
         writer.writerow(["x", "y"])
@@ -83,6 +85,7 @@ def test_import_from_exported_csv_rejects_invalid_row_and_keeps_existing_data(tm
 
     import_path = tmp_path / "invalid_row.csv"
     with import_path.open("w", encoding="utf-8-sig", newline="") as f:
+        f.write(f"{EXPORT_VERSION_PREFIX}{EXPORT_TEMPLATE_VERSION}\n")
         writer = csv.DictWriter(f, fieldnames=DISPLAY_COLUMNS)
         writer.writeheader()
         row = {
@@ -111,3 +114,16 @@ def test_import_from_exported_csv_rejects_invalid_row_and_keeps_existing_data(tm
     rows = store.build_view()
     assert len(rows) == 1
     assert rows[0]["Projeto"] == original_project
+
+
+def test_import_from_exported_csv_rejects_template_version_mismatch(tmp_path):
+    store = CsvStore(str(tmp_path))
+    import_path = tmp_path / "invalid_version.csv"
+
+    with import_path.open("w", encoding="utf-8-sig", newline="") as f:
+        f.write(f"{EXPORT_VERSION_PREFIX}999\n")
+        writer = csv.DictWriter(f, fieldnames=DISPLAY_COLUMNS)
+        writer.writeheader()
+
+    with pytest.raises(ValidationError, match="Versão de template incompatível"):
+        store.import_from_exported_csv(str(import_path))
