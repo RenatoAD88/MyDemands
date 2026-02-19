@@ -44,37 +44,30 @@ class NotificationCenterDialog(QDialog):
         for nt in NotificationType:
             self.type_filter.addItem(nt.value, nt)
         self.type_filter.currentIndexChanged.connect(self.refresh)
+
         self.read_filter = QComboBox()
         self.read_filter.addItem("Todas", None)
         self.read_filter.addItem("Não lidas", False)
         self.read_filter.addItem("Lidas", True)
         self.read_filter.currentIndexChanged.connect(self._apply_read_filter)
 
-        self.title_filter = QLineEdit()
-        self.title_filter.setPlaceholderText("Filtrar título")
-        self.body_filter = QLineEdit()
-        self.body_filter.setPlaceholderText("Filtrar mensagem")
         self.id_filter = QLineEdit()
         self.id_filter.setPlaceholderText("ID exato")
-        self.description_filter = QLineEdit()
-        self.description_filter.setPlaceholderText("Filtrar descrição")
-        self.type_text_filter = QLineEdit()
-        self.type_text_filter.setPlaceholderText("Filtrar tipo")
+        self.keyword_filter = QLineEdit()
+        self.keyword_filter.setPlaceholderText("Buscar palavra-chave")
 
         self.date_start = QDateEdit()
         self.date_start.setCalendarPopup(True)
         self.date_start.setDisplayFormat("dd/MM/yyyy")
-        self.date_start.setSpecialValueText("De")
-        self.date_start.setMinimumDate(self.date_start.minimumDate())
-        self.date_start.setDate(self.date_start.minimumDate())
+        current_date = datetime.now().date()
+        start_current_month = current_date.replace(day=1)
+        self.date_start.setDate(start_current_month)
         self.date_start.dateChanged.connect(self._apply_date_filters)
 
         self.date_end = QDateEdit()
         self.date_end.setCalendarPopup(True)
         self.date_end.setDisplayFormat("dd/MM/yyyy")
-        self.date_end.setSpecialValueText("Até")
-        self.date_end.setMinimumDate(self.date_end.minimumDate())
-        self.date_end.setDate(self.date_end.minimumDate())
+        self.date_end.setDate(current_date)
         self.date_end.dateChanged.connect(self._apply_date_filters)
 
         self.table_model = NotificationTableModel(self)
@@ -93,29 +86,34 @@ class NotificationCenterDialog(QDialog):
         self._filter_timer.setSingleShot(True)
         self._filter_timer.setInterval(250)
         self._filter_timer.timeout.connect(self._apply_text_filters)
-        for widget in [self.title_filter, self.body_filter, self.id_filter, self.description_filter, self.type_text_filter]:
+        for widget in [self.id_filter, self.keyword_filter]:
             widget.textChanged.connect(self._schedule_filter_update)
 
+        self._auto_refresh_timer = QTimer(self)
+        self._auto_refresh_timer.setInterval(30000)
+        self._auto_refresh_timer.timeout.connect(self.refresh_pending_notifications)
+        self._auto_refresh_timer.start()
+
         filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("Tipo"))
         filter_row.addWidget(self.type_filter)
+        filter_row.addWidget(QLabel("Status"))
         filter_row.addWidget(self.read_filter)
-        filter_row.addWidget(self.type_text_filter)
-        filter_row.addWidget(self.title_filter)
-        filter_row.addWidget(self.body_filter)
+        filter_row.addWidget(QLabel("ID"))
         filter_row.addWidget(self.id_filter)
-        filter_row.addWidget(self.description_filter)
+        filter_row.addWidget(QLabel("Buscar palavra-chave"))
+        filter_row.addWidget(self.keyword_filter)
+        filter_row.addWidget(QLabel("Início"))
         filter_row.addWidget(self.date_start)
+        filter_row.addWidget(QLabel("Fim"))
         filter_row.addWidget(self.date_end)
         clear_btn = QPushButton("Limpar filtros")
         clear_btn.clicked.connect(self.clear_filters)
-        update_pending_btn = QPushButton("Atualizar")
-        update_pending_btn.clicked.connect(self.refresh_pending_notifications)
         self.mark_toggle_btn = QPushButton("Marcar como lida")
         self.mark_toggle_btn.clicked.connect(self.toggle_selected_read_status)
         delete_btn = QPushButton("Excluir")
         delete_btn.clicked.connect(self.delete_selected_notifications)
         filter_row.addWidget(clear_btn)
-        filter_row.addWidget(update_pending_btn)
         filter_row.addWidget(self.mark_toggle_btn)
         filter_row.addWidget(delete_btn)
 
@@ -227,11 +225,8 @@ class NotificationCenterDialog(QDialog):
         self._filter_timer.start()
 
     def _apply_text_filters(self) -> None:
-        self.proxy.set_filter_value("type", self.type_text_filter.text())
-        self.proxy.set_filter_value("title", self.title_filter.text())
-        self.proxy.set_filter_value("body", self.body_filter.text())
         self.proxy.set_filter_value("demand_id", self.id_filter.text())
-        self.proxy.set_filter_value("demand_description", self.description_filter.text())
+        self.proxy.set_filter_value("keyword", self.keyword_filter.text())
         self._update_summary()
 
     def _apply_read_filter(self) -> None:
@@ -239,12 +234,8 @@ class NotificationCenterDialog(QDialog):
         self._update_summary()
 
     def _apply_date_filters(self) -> None:
-        start_dt = None
-        end_dt = None
-        if self.date_start.date() != self.date_start.minimumDate():
-            start_dt = datetime.combine(self.date_start.date().toPython(), time.min)
-        if self.date_end.date() != self.date_end.minimumDate():
-            end_dt = datetime.combine(self.date_end.date().toPython(), time.max)
+        start_dt = datetime.combine(self.date_start.date().toPython(), time.min)
+        end_dt = datetime.combine(self.date_end.date().toPython(), time.max)
         self.proxy.set_filter_value("timestamp_start", start_dt)
         self.proxy.set_filter_value("timestamp_end", end_dt)
         self._update_summary()
@@ -252,14 +243,13 @@ class NotificationCenterDialog(QDialog):
     def clear_filters(self) -> None:
         self.type_filter.setCurrentIndex(0)
         self.read_filter.setCurrentIndex(0)
-        self.type_text_filter.clear()
-        self.title_filter.clear()
-        self.body_filter.clear()
         self.id_filter.clear()
-        self.description_filter.clear()
-        self.date_start.setDate(self.date_start.minimumDate())
-        self.date_end.setDate(self.date_end.minimumDate())
+        self.keyword_filter.clear()
+        current_date = datetime.now().date()
+        self.date_start.setDate(current_date.replace(day=1))
+        self.date_end.setDate(current_date)
         self.proxy.clear_filters()
+        self._apply_date_filters()
         self._update_summary()
 
     def _update_summary(self) -> None:
