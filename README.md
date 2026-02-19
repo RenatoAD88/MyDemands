@@ -24,9 +24,9 @@ build_windows.bat
 Esse script:
 
 - instala/atualiza dependências de build na `.venv`;
-- gera o `dist\DemandasApp.exe` com `DemandasApp.spec`;
-- executa `dist\DemandasApp.exe --self-test-qss` para validar a presença dos temas QSS no bundle.
-- executa `dist\DemandasApp.exe --self-test-crypto` para validar import/export criptografado básico.
+- gera o `dist\DemandasApp.exe` com `app.spec`;
+- executa `dist\DemandasApp.exe --self-test-ui` para validar aplicação de tema light/dark e métricas críticas de UI.
+- executa `dist\DemandasApp.exe --self-test-crypto` para validar roundtrip AESGCM (cryptography) no bundle.
 
 ## Onde fica o arquivo de configuração
 As preferências de IA são persistidas em:

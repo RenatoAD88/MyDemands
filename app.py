@@ -11,38 +11,15 @@ import traceback
 from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
-if "--self-test-qss" in sys.argv:
-    from ui_theme import qss_self_test
+if "--self-test-ui" in sys.argv:
+    from mydemands.self_tests import run_ui_self_test
 
-    raise SystemExit(qss_self_test(verbose=True))
+    raise SystemExit(run_ui_self_test())
 
 if "--self-test" in sys.argv or "--self-test-crypto" in sys.argv:
-    from mydemands.infra.secrets.fake_secret_store import FakeSecretStore
-    from mydemands.services.secure_csv_exchange_service import (
-        CRYPTO_AVAILABLE,
-        CsvExchangeError,
-        SecureCsvExchangeService,
-    )
+    from mydemands.self_tests import run_crypto_self_test
 
-    if not CRYPTO_AVAILABLE:
-        print("[SELF-TEST] cryptography indisponível; build inválida para distribuição zero-setup.")
-        raise SystemExit(2)
-
-    svc = SecureCsvExchangeService(FakeSecretStore())
-    csv_text = "ID,Projeto\n1,Smoke Test\n"
-    try:
-        payload = svc.export_payload(csv_text, passphrase="smoke123", is_master=False)
-        result = svc.import_payload(payload, passphrase="smoke123", is_master=False)
-    except CsvExchangeError as exc:
-        print(f"[SELF-TEST] Falha no SecureCsvExchangeService: {exc}")
-        raise SystemExit(1)
-
-    if result.csv_text != csv_text:
-        print("[SELF-TEST] Roundtrip inválido de criptografia CSV.")
-        raise SystemExit(1)
-
-    print("[SELF-TEST] OK")
-    raise SystemExit(0)
+    raise SystemExit(run_crypto_self_test())
 
 from PySide6.QtCore import Qt, QDate, QSize, QTimer, QUrl
 from PySide6.QtGui import QColor, QIcon, QKeyEvent, QDesktopServices, QPixmap, QPainter, QFont

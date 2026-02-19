@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 from PySide6.QtWidgets import QApplication
 
-from ui_theme import build_app_stylesheet
+from mydemands.ui.stylesheets import BASE_QSS, DARK_COLORS_QSS, LIGHT_COLORS_QSS
 
 
 class ThemeService:
@@ -20,7 +20,7 @@ class ThemeService:
         theme = (theme_name or "light").strip().lower()
         if theme not in {"light", "dark"}:
             theme = "light"
-        stylesheet = build_app_stylesheet(theme)
+        stylesheet = BASE_QSS + "\n" + (DARK_COLORS_QSS if theme == "dark" else LIGHT_COLORS_QSS)
         app = QApplication.instance() or self.app
         app.setStyleSheet(stylesheet)
         self._current = theme
