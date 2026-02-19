@@ -147,13 +147,20 @@ class NotificationFilterProxy(QSortFilterProxyModel):
 
         text_filters = {
             "type": model._display_value(notification, "type"),
-            "title": model._display_value(notification, "title"),
-            "demand_description": model._display_value(notification, "demand_description"),
-            "body": model._display_value(notification, "body"),
         }
         for key, text in text_filters.items():
             needle = str(self._filters.get(key) or "").strip().lower()
             if needle and needle not in str(text or "").lower():
+                return False
+
+        keyword = str(self._filters.get("keyword") or "").strip().lower()
+        if keyword:
+            searchable_fields = [
+                model._display_value(notification, "demand_description"),
+                model._display_value(notification, "body"),
+            ]
+            haystack = " ".join(str(field or "").lower() for field in searchable_fields)
+            if keyword not in haystack:
                 return False
 
         demand_id_filter = self._filters.get("demand_id")
