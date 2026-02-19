@@ -26,3 +26,12 @@ def test_icon_size_is_consistent_across_themes():
 
     assert service.icon_size("light") == QSize(24, 24)
     assert service.icon_size("dark") == QSize(24, 24)
+
+
+def test_import_export_icon_paths_follow_semantic_direction():
+    service = IconService()
+
+    assert service._ICON_FILES["export"]["light"].endswith("export_light.svg")
+    assert service._ICON_FILES["export"]["dark"].endswith("export_dark.svg")
+    assert service._ICON_FILES["import"]["light"].endswith("import_light.svg")
+    assert service._ICON_FILES["import"]["dark"].endswith("import_dark.svg")
