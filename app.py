@@ -22,7 +22,7 @@ if "--self-test" in sys.argv or "--self-test-crypto" in sys.argv:
     raise SystemExit(run_crypto_self_test())
 
 from PySide6.QtCore import Qt, QDate, QSize, QTimer, QUrl
-from PySide6.QtGui import QColor, QIcon, QKeyEvent, QDesktopServices, QPixmap, QPainter, QFont
+from PySide6.QtGui import QColor, QIcon, QKeyEvent, QDesktopServices, QPixmap, QPainter, QFont, QPalette
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QVBoxLayout, QHBoxLayout, QTabWidget,
@@ -88,6 +88,11 @@ def debug_msg(title: str, text: str):
 
 def qdate_to_date(qd: QDate) -> date:
     return date(qd.year(), qd.month(), qd.day())
+
+
+def get_dynamic_text_color() -> QColor:
+    palette = QApplication.palette()
+    return palette.color(QPalette.Text)
 
 
 def prazo_contains_today(prazo_text: str, today: Optional[date] = None) -> bool:
@@ -1745,6 +1750,8 @@ class MainWindow(QMainWindow):
         if colname == "Status":
             rr, gg, bb = status_color(text)
             it.setBackground(QColor(rr, gg, bb))
+        if colname in {"Status", "Timing", "Prazo"}:
+            it.setForeground(get_dynamic_text_color())
         if colname == "Prioridade":
             color = PRIORIDADE_TEXT_COLORS.get((text or "").strip().lower())
             if color:
@@ -2705,7 +2712,7 @@ class MainWindow(QMainWindow):
                 curr_is_today = curr_date == today
                 if curr_is_today:
                     item.setBackground(QColor(220, 38, 38))
-                    item.setForeground(QColor(0, 0, 0))
+                    item.setForeground(get_dynamic_text_color())
                 elif curr_date and curr_date.weekday() >= 5:
                     item.setBackground(QColor(229, 231, 235))
 
@@ -2741,7 +2748,7 @@ class MainWindow(QMainWindow):
                 month_total.setTextAlignment(Qt.AlignCenter)
                 month_total.setFlags(month_total.flags() & ~Qt.ItemIsEditable)
                 month_total.setBackground(month_participation_bg)
-                month_total.setForeground(QColor(0, 0, 0))
+                month_total.setForeground(get_dynamic_text_color())
                 table.setItem(r, month_part_col, month_total)
 
             footer_row = table.rowCount()
@@ -2768,7 +2775,7 @@ class MainWindow(QMainWindow):
             footer_month.setTextAlignment(Qt.AlignCenter)
             footer_month.setFlags(footer_month.flags() & ~Qt.ItemIsEditable)
             footer_month.setBackground(month_participation_bg)
-            footer_month.setForeground(QColor(0, 0, 0))
+            footer_month.setForeground(get_dynamic_text_color())
             table.setItem(footer_row, month_part_col, footer_month)
 
             table.fit_height_to_rows()

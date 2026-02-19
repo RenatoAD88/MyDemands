@@ -116,3 +116,18 @@ def test_build_stylesheet_after_qapplication_does_not_raise():
     stylesheet = build_app_stylesheet("light")
     assert isinstance(stylesheet, str)
     assert stylesheet
+
+
+def test_dark_stylesheet_has_high_contrast_table_and_header_colors():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    stylesheet = build_app_stylesheet("dark")
+    assert "QTableView {" in stylesheet
+    assert "color: #EAEAEA;" in stylesheet
+    assert "background-color: #1E1E1E;" in stylesheet
+    assert "QTableView::item:selected {" in stylesheet
+    assert "background-color: #2D3E50;" in stylesheet
+    assert "color: #FFFFFF;" in stylesheet
+    assert "QHeaderView::section {" in stylesheet
+    assert "background: #2A2A2A;" in stylesheet

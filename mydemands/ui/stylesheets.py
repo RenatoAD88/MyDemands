@@ -319,9 +319,17 @@ QTableWidget {
     alternate-background-color: #172131;
     border-color: #374151;
 }
+QTableView {
+    color: #EAEAEA;
+    background-color: #1E1E1E;
+}
+QTableView::item:selected {
+    background-color: #2D3E50;
+    color: #FFFFFF;
+}
 QHeaderView::section {
-    background: #2b3b52;
-    color: #f3f4f6;
+    background: #2A2A2A;
+    color: #EAEAEA;
     border-bottom-color: #374151;
 }
 
