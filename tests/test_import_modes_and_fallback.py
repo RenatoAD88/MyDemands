@@ -86,3 +86,19 @@ def test_incompatible_csv_offers_save_plain_copy(tmp_path, monkeypatch):
 
     assert win._offer_save_plain_copy(str(source)) is True
     assert target.read_text(encoding="utf-8") == "incompativel"
+
+
+def test_incompatible_decrypted_csv_offers_save_decrypted_copy(tmp_path, monkeypatch):
+    _app()
+    store = CsvStore(str(tmp_path))
+    win = MainWindow(store)
+
+    source = tmp_path / "orig.csv"
+    source.write_text("placeholder", encoding="utf-8")
+    target = tmp_path / "decrypted.csv"
+
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *args, **kwargs: (str(target), "CSV (*.csv)"))
+
+    assert win._offer_save_decrypted_copy("ID,Projeto\n1,Teste\n", str(source)) is True
+    assert target.read_text(encoding="utf-8-sig") == "ID,Projeto\n1,Teste\n"

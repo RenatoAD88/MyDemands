@@ -162,7 +162,7 @@ class SecureCsvExchangeService:
         ]
         return "\n".join(lines)
 
-    def import_payload(self, raw_text: str, passphrase: str, is_master: bool) -> ImportResult:
+    def import_payload(self, raw_text: str, passphrase: str, is_master: bool, allow_master_key: bool = True) -> ImportResult:
         if raw_text.startswith(DPAPI_HEADER):
             return self._import_dpapi_payload(raw_text, is_master=is_master)
 
@@ -188,7 +188,7 @@ class SecureCsvExchangeService:
         wrap_nonce_master = values.get("wrap_nonce_master", b"")
 
         data_key: bytes | None = None
-        if is_master:
+        if is_master and allow_master_key:
             try:
                 data_key = AESGCM(self._get_or_create_master_key()).decrypt(wrap_nonce_master, wrapped_key_master, None)
             except Exception:

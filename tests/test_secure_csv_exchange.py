@@ -135,3 +135,17 @@ def test_export_blocks_when_crypto_missing(monkeypatch):
 
     with pytest.raises(CsvExchangeError, match="dependência ausente"):
         svc.export_payload("ID,Projeto\n1,Teste\n", passphrase="", is_master=False)
+
+
+@pytest.mark.skipif(not CRYPTO_AVAILABLE, reason="cryptography não disponível no ambiente")
+def test_master_import_can_require_passphrase_when_master_key_disabled():
+    svc = SecureCsvExchangeService(FakeSecretStore())
+    csv_text = "ID,Projeto\n1,Protegido\n"
+
+    payload = svc.export_payload(csv_text, passphrase="abc12345", is_master=False)
+
+    with pytest.raises(CsvExchangeError, match="Palavra-passe inválida ou ausente"):
+        svc.import_payload(payload, passphrase="", is_master=True, allow_master_key=False)
+
+    result = svc.import_payload(payload, passphrase="abc12345", is_master=True, allow_master_key=False)
+    assert result.csv_text == csv_text
