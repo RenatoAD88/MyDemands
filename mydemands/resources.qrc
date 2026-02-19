@@ -1,7 +1,7 @@
 <RCC>
   <qresource prefix="/styles">
-    <file>ui/styles/base.qss</file>
-    <file>ui/styles/light_colors.qss</file>
-    <file>ui/styles/dark_colors.qss</file>
+    <file alias="base.qss">ui/styles/base.qss</file>
+    <file alias="light_colors.qss">ui/styles/light_colors.qss</file>
+    <file alias="dark_colors.qss">ui/styles/dark_colors.qss</file>
   </qresource>
 </RCC>

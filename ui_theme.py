@@ -2,19 +2,36 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from PySide6.QtCore import QFile, QTextStream
+from PySide6.QtCore import QDir, QFile, QIODevice, QTextStream
 
 import mydemands.resources_rc  # noqa: F401
 
 
 def _read_qss(resource_path: str) -> str:
     file = QFile(resource_path)
-    if not file.open(QFile.ReadOnly | QFile.Text):
-        raise RuntimeError(f"Erro ao carregar QSS: {resource_path}")
+    if not file.exists():
+        available = ", ".join(list_styles_resources()) or "<vazio>"
+        raise RuntimeError(
+            f"Resource não existe: {resource_path}. "
+            f"Resources em :/styles => [{available}]"
+        )
+    if not file.open(QIODevice.ReadOnly | QIODevice.Text):
+        available = ", ".join(list_styles_resources()) or "<vazio>"
+        raise RuntimeError(
+            f"Falha ao abrir resource: {resource_path}. "
+            f"Resources em :/styles => [{available}]"
+        )
     stream = QTextStream(file)
-    content = stream.readAll().strip()
+    if hasattr(QTextStream, "Encoding"):
+        stream.setEncoding(QTextStream.Encoding.Utf8)
+    content = stream.readAll()
     file.close()
     return content
+
+
+def list_styles_resources() -> list[str]:
+    directory = QDir(":/styles")
+    return sorted(directory.entryList(QDir.Files | QDir.NoDotAndDotDot))
 
 
 def build_app_stylesheet(theme: str = "light") -> str:
