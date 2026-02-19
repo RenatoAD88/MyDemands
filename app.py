@@ -3431,6 +3431,10 @@ class MainWindow(QMainWindow):
         rows_to_export = selected_rows if selected_rows else self.store.build_view()
         is_master = (self.logged_user_role or "") == "master"
 
+        if not self.secure_csv_service.crypto_ready():
+            QMessageBox.warning(self, "Falha na exportação", self.secure_csv_service.crypto_unavailable_message())
+            return
+
         passphrase = ""
         if not is_master:
             passphrase, ok = QInputDialog.getText(

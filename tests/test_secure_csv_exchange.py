@@ -73,7 +73,7 @@ def test_export_error_message_not_crypto_unavailable_when_passphrase_provided():
     else:
         with pytest.raises(CsvExchangeError) as exc:
             svc.export_payload("ID,Projeto\n1,Teste\n", passphrase="senha123", is_master=False)
-        assert "sem suporte a criptografia" in str(exc.value)
+        assert "dependência ausente" in str(exc.value)
 
 
 def test_import_encrypted_payload_without_cryptography_returns_controlled_error(monkeypatch):
@@ -81,7 +81,7 @@ def test_import_encrypted_payload_without_cryptography_returns_controlled_error(
 
     monkeypatch.setattr(secure_csv_module, "CRYPTO_AVAILABLE", False)
 
-    with pytest.raises(CsvExchangeError, match="sem suporte a criptografia"):
+    with pytest.raises(CsvExchangeError, match="dependência ausente"):
         svc.import_payload(f"{ENC_HEADER}\ndata:AA==", passphrase="", is_master=True)
 
 
@@ -112,5 +112,26 @@ def test_dpapi_fallback_blocks_user_passphrase_mode(monkeypatch):
 
     monkeypatch.setattr(secure_csv_module, "CRYPTO_AVAILABLE", False)
 
-    with pytest.raises(CsvExchangeError, match="sem suporte a criptografia"):
+    with pytest.raises(CsvExchangeError, match="dependência ausente"):
         svc.export_payload("ID,Projeto\n1,Teste\n", passphrase="senha123", is_master=False)
+
+
+@pytest.mark.skipif(not CRYPTO_AVAILABLE, reason="cryptography não disponível no ambiente")
+def test_crypto_available_roundtrip():
+    svc = SecureCsvExchangeService(FakeSecretStore())
+    payload = svc.export_payload("ID,Projeto\n1,Seguro\n", passphrase="senha123", is_master=False)
+
+    result = svc.import_payload(payload, passphrase="senha123", is_master=False)
+
+    assert result.encrypted is True
+    assert "Seguro" in result.csv_text
+
+
+def test_export_blocks_when_crypto_missing(monkeypatch):
+    svc = SecureCsvExchangeService(FakeSecretStore())
+
+    monkeypatch.setattr(secure_csv_module, "CRYPTO_AVAILABLE", False)
+    monkeypatch.setattr(secure_csv_module, "CRYPTO_IMPORT_ERROR", "ImportError('missing cryptography')")
+
+    with pytest.raises(CsvExchangeError, match="dependência ausente"):
+        svc.export_payload("ID,Projeto\n1,Teste\n", passphrase="", is_master=False)

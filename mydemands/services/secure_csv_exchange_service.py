@@ -3,11 +3,13 @@ from __future__ import annotations
 import base64
 import csv
 import io
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-CRYPTO_IMPORT_ERROR: Exception | None = None
+logger = logging.getLogger(__name__)
+CRYPTO_IMPORT_ERROR: str | None = None
 
 try:
     from cryptography.hazmat.primitives import hashes
@@ -20,7 +22,7 @@ except Exception as exc:  # pragma: no cover - exercised by simulated fallback t
     PBKDF2HMAC = None  # type: ignore[assignment]
     hashes = None  # type: ignore[assignment]
     CRYPTO_AVAILABLE = False
-    CRYPTO_IMPORT_ERROR = exc
+    CRYPTO_IMPORT_ERROR = repr(exc)
 
 try:
     import win32crypt  # type: ignore
@@ -51,7 +53,14 @@ class SecureCsvExchangeService:
 
     @staticmethod
     def crypto_unavailable_message() -> str:
-        return "Este instalador foi gerado sem suporte a criptografia. Contate o administrador para atualizar a build."
+        return "Criptografia indisponível nesta build (dependência ausente). Contate o administrador."
+
+    @classmethod
+    def crypto_ready(cls) -> bool:
+        available = cls.self_check()
+        if not available and CRYPTO_IMPORT_ERROR:
+            logger.error("Cryptography indisponível no runtime: %s", CRYPTO_IMPORT_ERROR)
+        return available
 
     @classmethod
     def self_check(cls) -> bool:
@@ -75,7 +84,7 @@ class SecureCsvExchangeService:
         return key
 
     def _derive_key(self, passphrase: str, salt: bytes) -> bytes:
-        if not self.self_check():
+        if not self.crypto_ready():
             raise CsvExchangeError(self.crypto_unavailable_message())
         if not passphrase:
             raise CsvExchangeError("Informe uma palavra-passe válida para exportar.")
@@ -119,7 +128,7 @@ class SecureCsvExchangeService:
         return buf.getvalue()
 
     def export_payload(self, csv_text: str, passphrase: str, is_master: bool) -> str:
-        if not self.self_check():
+        if not self.crypto_ready():
             return self._export_dpapi_payload(csv_text, passphrase=passphrase, is_master=is_master)
 
         data_key = os.urandom(32)
@@ -157,7 +166,7 @@ class SecureCsvExchangeService:
         if raw_text.startswith(DPAPI_HEADER):
             return self._import_dpapi_payload(raw_text, is_master=is_master)
 
-        if not self.self_check() and raw_text.startswith(ENC_HEADER):
+        if not self.crypto_ready() and raw_text.startswith(ENC_HEADER):
             raise CsvExchangeError(self.crypto_unavailable_message())
 
         if not raw_text.startswith(ENC_HEADER):
