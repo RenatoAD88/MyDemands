@@ -25,11 +25,19 @@ from mydemands.infra.repositories.last_login_repository import LastLoginReposito
 from mydemands.infra.repositories.user_prefs_repository import UserPrefsRepository
 from mydemands.services.theme_service import ThemeService
 from mydemands.services.secure_csv_exchange_service import SecureCsvExchangeService
-from ui_theme import build_app_stylesheet
+from ui_theme import build_app_stylesheet, validate_packaged_qss
 
 
 def main() -> int:
     qt_app = QApplication(sys.argv)
+
+    debug_qss = str(getattr(sys, "frozen", False)).lower() == "true" and "debug" in (sys.executable or "").lower()
+    if "--debug-qss" in sys.argv:
+        debug_qss = True
+    missing_qss = validate_packaged_qss(debug=debug_qss)
+    if missing_qss:
+        raise RuntimeError(f"Build sem QSS: arquivos ausentes em runtime: {missing_qss}")
+
     qt_app.setStyleSheet(build_app_stylesheet("light"))
 
     paths = Paths()
