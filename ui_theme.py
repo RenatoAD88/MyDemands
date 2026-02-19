@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Tuple
+
+EXPECTED_QSS_FILES = ("base.qss", "light_colors.qss", "dark_colors.qss")
 
 
 def _runtime_root() -> Path:
@@ -15,10 +18,24 @@ def _styles_dir() -> Path:
     return _runtime_root() / "mydemands" / "ui" / "styles"
 
 
+def validate_packaged_qss(debug: bool = False) -> list[str]:
+    styles_dir = _styles_dir()
+    missing = [name for name in EXPECTED_QSS_FILES if not (styles_dir / name).exists()]
+    if debug:
+        present = sorted(p.name for p in styles_dir.glob("*.qss")) if styles_dir.exists() else []
+        print(f"[QSS-CHECK] styles_dir={styles_dir}")
+        print(f"[QSS-CHECK] arquivos presentes={present}")
+        if missing:
+            print(f"[QSS-CHECK] arquivos ausentes={missing}")
+    return missing
+
+
 def _read_qss(filename: str) -> str:
     path = _styles_dir() / filename
     if not path.exists():
-        raise RuntimeError(f"QSS não encontrado: {path}")
+        if os.environ.get("MYDEMANDS_DEBUG_QSS", "").strip().lower() in {"1", "true", "yes"}:
+            validate_packaged_qss(debug=True)
+        raise RuntimeError(f"Build sem QSS. QSS não encontrado: {path}")
     return path.read_text(encoding="utf-8").strip()
 
 
