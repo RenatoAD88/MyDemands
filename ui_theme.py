@@ -1,62 +1,19 @@
 from __future__ import annotations
 
+from importlib import resources
 from typing import Tuple
 
-from PySide6.QtCore import QDir, QFile, QIODevice, QStringConverter, QTextStream
-from PySide6.QtWidgets import QApplication
 
-import mydemands.resources_rc  # noqa: F401
-
-
-def _normalize_resource_path(resource_path: str) -> str:
-    normalized = (resource_path or "").strip()
-    if not normalized:
-        return normalized
-    while normalized.startswith("::"):
-        normalized = normalized[1:]
-    if normalized.startswith("/") and not normalized.startswith(":/"):
-        normalized = f":{normalized}"
-    return normalized
-
-
-def _read_qss(resource_path: str) -> str:
-    if QApplication.instance() is None:
-        raise RuntimeError("QApplication não inicializado antes de carregar QSS.")
-
-    normalized_path = _normalize_resource_path(resource_path)
-    file = QFile(normalized_path)
-    if not file.exists():
-        available = ", ".join(list_styles_resources()) or "<vazio>"
-        raise RuntimeError(
-            f"Resource não existe: {normalized_path}. "
-            f"Resources em :/styles => [{available}]"
-        )
-
-    if not file.open(QIODevice.ReadOnly | QIODevice.Text):
-        available = ", ".join(list_styles_resources()) or "<vazio>"
-        err = file.errorString()
-        raise RuntimeError(
-            f"Falha ao abrir resource: {normalized_path}. "
-            f"QtError={err}. "
-            f"Resources em :/styles => [{available}]"
-        )
-
-    text_stream = QTextStream(file)
-    text_stream.setEncoding(QStringConverter.Encoding.Utf8)
-    content = text_stream.readAll()
-    file.close()
-    return content
-
-
-def list_styles_resources() -> list[str]:
-    directory = QDir(":/styles")
-    return sorted(directory.entryList(QDir.Files | QDir.NoDotAndDotDot))
+def _read_qss(filename: str) -> str:
+    data = resources.files("mydemands.ui.styles").joinpath(filename).read_bytes()
+    return data.decode("utf-8").strip()
 
 
 def build_app_stylesheet(theme: str = "light") -> str:
     normalized = (theme or "light").strip().lower()
-    color_resource = ":/styles/dark_colors.qss" if normalized == "dark" else ":/styles/light_colors.qss"
-    return f"{_read_qss(':/styles/base.qss')}\n\n{_read_qss(color_resource)}\n"
+    base = _read_qss("base.qss")
+    colors = _read_qss("dark_colors.qss" if normalized == "dark" else "light_colors.qss")
+    return base + "\n" + colors
 
 
 def status_color(status: str) -> Tuple[int, int, int]:
