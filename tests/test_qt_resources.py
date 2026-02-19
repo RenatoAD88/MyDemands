@@ -1,28 +1,19 @@
-from PySide6.QtCore import QCoreApplication
-
-import mydemands.resources_rc  # noqa: F401
-from ui_theme import _read_qss
+from ui_theme import _read_qss, build_app_stylesheet
 
 
-def test_resources_accepts_legacy_double_colon_prefix():
-    content = _read_qss("::/styles/light_colors.qss")
-    assert isinstance(content, str)
-    assert content.strip()
+def test_build_stylesheet_light_not_empty():
+    stylesheet = build_app_stylesheet("light")
+    assert isinstance(stylesheet, str)
+    assert stylesheet.strip()
 
 
-
-def test_resources_loaded():
-    app = QCoreApplication.instance()
-    if app is None:
-        app = QCoreApplication([])
-    content = _read_qss(":/styles/base.qss")
-    assert isinstance(content, str)
-    assert content.strip()
+def test_build_stylesheet_dark_not_empty():
+    stylesheet = build_app_stylesheet("dark")
+    assert isinstance(stylesheet, str)
+    assert stylesheet.strip()
 
 
-def test_all_qss_resources_open():
-    import mydemands.resources_rc  # noqa: F401
-
-    assert len(_read_qss(":/styles/base.qss")) > 0
-    assert len(_read_qss(":/styles/light_colors.qss")) > 0
-    assert len(_read_qss(":/styles/dark_colors.qss")) > 0
+def test_read_qss_files_exist():
+    assert _read_qss("base.qss")
+    assert _read_qss("light_colors.qss")
+    assert _read_qss("dark_colors.qss")
