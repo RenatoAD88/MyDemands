@@ -7,6 +7,11 @@ crypt_datas = crypt.datas if hasattr(crypt, 'datas') else crypt[0]
 crypt_binaries = crypt.binaries if hasattr(crypt, 'binaries') else crypt[1]
 crypt_hiddenimports = crypt.hiddenimports if hasattr(crypt, 'hiddenimports') else crypt[2]
 
+cert = collect_all('certifi')
+cert_datas = cert.datas if hasattr(cert, 'datas') else cert[0]
+cert_binaries = cert.binaries if hasattr(cert, 'binaries') else cert[1]
+cert_hiddenimports = cert.hiddenimports if hasattr(cert, 'hiddenimports') else cert[2]
+
 datas = []
 binaries = []
 hiddenimports = [
@@ -18,6 +23,9 @@ hiddenimports = [
 datas += crypt_datas
 binaries += crypt_binaries
 hiddenimports += crypt_hiddenimports
+datas += cert_datas
+binaries += cert_binaries
+hiddenimports += cert_hiddenimports
 hiddenimports += [
     'cryptography.hazmat.primitives.ciphers.aead',
     'cryptography.hazmat.bindings._rust',
