@@ -25,7 +25,8 @@ Esse script:
 
 - instala/atualiza dependências de build na `.venv`;
 - gera o `dist\DemandasApp.exe` com `DemandasApp.spec`;
-- executa `dist\DemandasApp.exe --self-test` para validar import/export criptografado básico.
+- executa `dist\DemandasApp.exe --self-test-qss` para validar a presença dos temas QSS no bundle.
+- executa `dist\DemandasApp.exe --self-test-crypto` para validar import/export criptografado básico.
 
 ## Onde fica o arquivo de configuração
 As preferências de IA são persistidas em:

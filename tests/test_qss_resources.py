@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ui_theme import _read_qss, build_app_stylesheet
+from ui_theme import _read_qss, build_app_stylesheet, qss_self_test
 
 
 def test_read_qss_dev_paths(tmp_path, monkeypatch):
@@ -30,3 +30,25 @@ def test_build_stylesheet_light_dark_returns_text(tmp_path, monkeypatch):
     assert "font-size: 13px;" in light_css
     assert "color: #111827;" in light_css
     assert "color: #f9fafb;" in dark_css
+
+
+def test_qss_self_test_returns_non_zero_when_missing(tmp_path, monkeypatch):
+    styles_dir = tmp_path / "mydemands" / "ui" / "styles"
+    styles_dir.mkdir(parents=True)
+    (styles_dir / "base.qss").write_text("ok", encoding="utf-8")
+
+    monkeypatch.setattr("ui_theme._styles_dir", lambda: styles_dir)
+
+    assert qss_self_test(verbose=False) == 1
+
+
+def test_qss_self_test_returns_zero_when_all_present(tmp_path, monkeypatch):
+    styles_dir = tmp_path / "mydemands" / "ui" / "styles"
+    styles_dir.mkdir(parents=True)
+    (styles_dir / "base.qss").write_text("ok", encoding="utf-8")
+    (styles_dir / "light_colors.qss").write_text("ok", encoding="utf-8")
+    (styles_dir / "dark_colors.qss").write_text("ok", encoding="utf-8")
+
+    monkeypatch.setattr("ui_theme._styles_dir", lambda: styles_dir)
+
+    assert qss_self_test(verbose=False) == 0

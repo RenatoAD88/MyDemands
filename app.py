@@ -11,6 +11,11 @@ import traceback
 from datetime import date, datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 
+if "--self-test-qss" in sys.argv:
+    from ui_theme import qss_self_test
+
+    raise SystemExit(qss_self_test(verbose=True))
+
 if "--self-test" in sys.argv or "--self-test-crypto" in sys.argv:
     from mydemands.infra.secrets.fake_secret_store import FakeSecretStore
     from mydemands.services.secure_csv_exchange_service import (

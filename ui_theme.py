@@ -30,12 +30,41 @@ def validate_packaged_qss(debug: bool = False) -> list[str]:
     return missing
 
 
+def qss_self_test(verbose: bool = True) -> int:
+    styles_dir = _styles_dir()
+    missing = validate_packaged_qss(debug=False)
+    if missing:
+        if verbose:
+            print(f"[QSS-SELF-TEST] FALHA: arquivos ausentes={missing}")
+            print(f"[QSS-SELF-TEST] runtime_root={_runtime_root()}")
+            print(f"[QSS-SELF-TEST] styles_dir={styles_dir}")
+            ui_dir = _runtime_root() / "mydemands" / "ui"
+            if ui_dir.exists() and ui_dir.is_dir():
+                entries = sorted(p.name for p in ui_dir.iterdir())
+                print(f"[QSS-SELF-TEST] mydemands/ui conteúdo={entries}")
+            else:
+                print(f"[QSS-SELF-TEST] diretório ausente: {ui_dir}")
+        return 1
+
+    if verbose:
+        print(f"[QSS-SELF-TEST] OK: arquivos presentes em {styles_dir}")
+    return 0
+
+
 def _read_qss(filename: str) -> str:
     path = _styles_dir() / filename
     if not path.exists():
         if os.environ.get("MYDEMANDS_DEBUG_QSS", "").strip().lower() in {"1", "true", "yes"}:
             validate_packaged_qss(debug=True)
-        raise RuntimeError(f"Build sem QSS. QSS não encontrado: {path}")
+        details = [f"Build sem QSS. QSS não encontrado: {path}"]
+        details.append(f"runtime_root={_runtime_root()}")
+        ui_dir = _runtime_root() / "mydemands" / "ui"
+        if ui_dir.exists() and ui_dir.is_dir():
+            entries = sorted(p.name for p in ui_dir.iterdir())
+            details.append(f"mydemands/ui conteúdo={entries}")
+        else:
+            details.append(f"diretório ausente: {ui_dir}")
+        raise RuntimeError(" | ".join(details))
     return path.read_text(encoding="utf-8").strip()
 
 

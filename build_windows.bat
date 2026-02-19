@@ -19,11 +19,17 @@ if not exist dist\DemandasApp.exe (
   exit /b 1
 )
 
-dist\DemandasApp.exe --self-test-crypto
+dist\DemandasApp.exe --self-test-qss
 if errorlevel 1 (
-  echo [ERRO] Self-test falhou.
+  echo [ERRO] Self-test de QSS falhou.
   exit /b 1
 )
 
-echo [OK] Build e smoke test concluidos.
+dist\DemandasApp.exe --self-test-crypto
+if errorlevel 1 (
+  echo [ERRO] Self-test de criptografia falhou.
+  exit /b 1
+)
+
+echo [OK] Build e smoke tests concluidos.
 exit /b 0

@@ -1,14 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-from PyInstaller.utils.hooks import collect_all, collect_data_files
+from PyInstaller.utils.hooks import collect_all
 
 crypt = collect_all('cryptography')
-mydemands_datas = collect_data_files('mydemands')
 a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=crypt[1],
-    datas=crypt[0] + mydemands_datas + [
+    datas=crypt[0] + [
         ('mydemands/ui/styles/base.qss', 'mydemands/ui/styles'),
         ('mydemands/ui/styles/light_colors.qss', 'mydemands/ui/styles'),
         ('mydemands/ui/styles/dark_colors.qss', 'mydemands/ui/styles'),
