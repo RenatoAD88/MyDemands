@@ -53,20 +53,20 @@ def run_crypto_self_test() -> int:
     try:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     except Exception as exc:
-        print(f"[SELF-TEST-CRYPTO] Falha ao importar AESGCM: {exc}")
+        print(f"CRYPTO_ERROR: import_failed={exc!r}")
         return 1
 
-    key = AESGCM.generate_key(bit_length=128)
-    aesgcm = AESGCM(key)
-    nonce = b"0123456789ab"
-    plaintext = b"mydemands-self-test"
-    aad = b"v1"
-
-    ciphertext = aesgcm.encrypt(nonce, plaintext, aad)
-    restored = aesgcm.decrypt(nonce, ciphertext, aad)
-    if restored != plaintext:
-        print("[SELF-TEST-CRYPTO] Falha: roundtrip AESGCM invalido")
+    try:
+        key = os.urandom(32)
+        nonce = os.urandom(12)
+        data = b"ping"
+        aes = AESGCM(key)
+        ct = aes.encrypt(nonce, data, None)
+        pt = aes.decrypt(nonce, ct, None)
+        assert pt == data
+    except Exception as exc:
+        print(f"CRYPTO_ERROR: roundtrip_failed={exc!r}")
         return 1
 
-    print("[SELF-TEST-CRYPTO] OK")
+    print("CRYPTO_OK")
     return 0

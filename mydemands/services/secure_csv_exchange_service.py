@@ -5,6 +5,7 @@ import csv
 import io
 import logging
 import os
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
@@ -35,6 +36,15 @@ from mydemands.infra.secrets.secret_store import ISecretStore
 ENC_HEADER = "MYDEMANDS_ENCRYPTED_V1"
 DPAPI_HEADER = "MYDEMANDS_DPAPI_V1"
 MASTER_KEY_SECRET = "csv_exchange_master_key"
+CRYPTO_LOG_FILE = "mydemands_crypto.log"
+
+
+def _log_crypto_import_error(detail: str) -> None:
+    try:
+        with Path(CRYPTO_LOG_FILE).open("a", encoding="utf-8") as fp:
+            fp.write(f"CRYPTO_IMPORT_ERROR: {detail}\n")
+    except Exception:
+        pass
 
 
 class CsvExchangeError(Exception):
@@ -60,7 +70,12 @@ class SecureCsvExchangeService:
         available = cls.self_check()
         if not available and CRYPTO_IMPORT_ERROR:
             logger.error("Cryptography indisponível no runtime: %s", CRYPTO_IMPORT_ERROR)
+            _log_crypto_import_error(CRYPTO_IMPORT_ERROR)
         return available
+
+    @classmethod
+    def crypto_available(cls) -> bool:
+        return cls.crypto_ready()
 
     @classmethod
     def self_check(cls) -> bool:
