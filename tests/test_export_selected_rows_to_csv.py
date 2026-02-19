@@ -1,6 +1,6 @@
 import csv
 
-from csv_store import CsvStore
+from csv_store import CsvStore, EXPORT_VERSION_PREFIX, EXPORT_TEMPLATE_VERSION
 
 
 def test_export_rows_to_csv_exports_only_selected_rows(tmp_path):
@@ -43,7 +43,9 @@ def test_export_rows_to_csv_exports_only_selected_rows(tmp_path):
     assert total == 2
 
     with export_path.open("r", encoding="utf-8-sig", newline="") as f:
-        rows = list(csv.DictReader(f, delimiter=","))
+        raw_lines = f.read().splitlines()
+        assert raw_lines[0] == f"{EXPORT_VERSION_PREFIX}{EXPORT_TEMPLATE_VERSION}"
+        rows = list(csv.DictReader(raw_lines[1:], delimiter=","))
 
     assert [row["ID"] for row in rows] == ["1", "3"]
     assert [row["Projeto"] for row in rows] == ["Projeto 1", "Projeto 3"]

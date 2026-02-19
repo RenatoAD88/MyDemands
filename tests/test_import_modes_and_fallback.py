@@ -1,22 +1,9 @@
-import csv
-
 import pytest
 
 qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
 
-from app import MainWindow
-from csv_store import CsvStore, DISPLAY_COLUMNS
-
-QApplication = qtwidgets.QApplication
-QFileDialog = qtwidgets.QFileDialog
-QMessageBox = qtwidgets.QMessageBox
-
-
-def _app():
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    return app
+from csv_store import CsvStore, DISPLAY_COLUMNS, EXPORT_TEMPLATE_VERSION, EXPORT_VERSION_PREFIX
+from validation import ValidationError
 
 
 def _row(id_value: str, projeto: str):
@@ -33,19 +20,19 @@ def _row(id_value: str, projeto: str):
     return row
 
 
+def _csv_text_with_version(version: str, *rows: dict) -> str:
+    body = [",".join(DISPLAY_COLUMNS)]
+    for row in rows:
+        body.append(",".join([row.get(c, "") for c in DISPLAY_COLUMNS]))
+    return f"{EXPORT_VERSION_PREFIX}{version}\n" + "\n".join(body)
+
+
 def test_import_merge_behavior_rewrites_ids_and_appends_data(tmp_path):
     store = CsvStore(str(tmp_path))
-    base = store.parse_exported_csv_text("\n".join([
-        ",".join(DISPLAY_COLUMNS),
-        ",".join([_row("1", "Local").get(c, "") for c in DISPLAY_COLUMNS]),
-    ]))
+    base = store.parse_exported_csv_text(_csv_text_with_version(EXPORT_TEMPLATE_VERSION, _row("1", "Local")))
     store.replace_with_rows(base)
 
-    incoming_text = "\n".join([
-        ",".join(DISPLAY_COLUMNS),
-        ",".join([_row("1", "Importado 1").get(c, "") for c in DISPLAY_COLUMNS]),
-        ",".join([_row("2", "Importado 2").get(c, "") for c in DISPLAY_COLUMNS]),
-    ])
+    incoming_text = _csv_text_with_version(EXPORT_TEMPLATE_VERSION, _row("1", "Importado 1"), _row("2", "Importado 2"))
     imported = store.parse_exported_csv_text(incoming_text)
     store.merge_with_rows(imported)
 
@@ -59,10 +46,7 @@ def test_import_replace_clears_existing(tmp_path):
     store = CsvStore(str(tmp_path))
     store.add({"Projeto": "Antigo", "Descrição": "A", "Status": "Não iniciada", "Data de Registro": "01/01/2025", "Prazo": "02/01/2025"})
 
-    incoming_text = "\n".join([
-        ",".join(DISPLAY_COLUMNS),
-        ",".join([_row("9", "Novo Só").get(c, "") for c in DISPLAY_COLUMNS]),
-    ])
+    incoming_text = _csv_text_with_version(EXPORT_TEMPLATE_VERSION, _row("9", "Novo Só"))
     imported = store.parse_exported_csv_text(incoming_text)
     store.replace_with_rows(imported)
 
@@ -71,33 +55,9 @@ def test_import_replace_clears_existing(tmp_path):
     assert rows[0]["Projeto"] == "Novo Só"
 
 
-def test_incompatible_csv_offers_save_plain_copy(tmp_path, monkeypatch):
-    _app()
+def test_import_rejects_template_version_mismatch(tmp_path):
     store = CsvStore(str(tmp_path))
-    win = MainWindow(store)
+    incoming_text = _csv_text_with_version("999", _row("1", "Incompatível"))
 
-    source = tmp_path / "bad.csv"
-    source.write_text("incompativel", encoding="utf-8")
-    target = tmp_path / "copy.csv"
-
-    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
-    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *args, **kwargs: (str(target), "CSV (*.csv)"))
-
-    assert win._offer_save_plain_copy(str(source)) is True
-    assert target.read_text(encoding="utf-8") == "incompativel"
-
-
-def test_incompatible_decrypted_csv_offers_save_decrypted_copy(tmp_path, monkeypatch):
-    _app()
-    store = CsvStore(str(tmp_path))
-    win = MainWindow(store)
-
-    source = tmp_path / "orig.csv"
-    source.write_text("placeholder", encoding="utf-8")
-    target = tmp_path / "decrypted.csv"
-
-    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
-    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *args, **kwargs: (str(target), "CSV (*.csv)"))
-
-    assert win._offer_save_decrypted_copy("ID,Projeto\n1,Teste\n", str(source)) is True
-    assert target.read_text(encoding="utf-8-sig") == "ID,Projeto\n1,Teste\n"
+    with pytest.raises(ValidationError, match="Versão de template incompatível"):
+        store.parse_exported_csv_text(incoming_text)

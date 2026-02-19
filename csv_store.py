@@ -16,6 +16,8 @@ from validation import validate_payload, normalize_prazo_text, ValidationError
 
 CSV_NAME = "data.csv"
 DELIMITER = ";"
+EXPORT_TEMPLATE_VERSION = "1"
+EXPORT_VERSION_PREFIX = "# MYDEMANDS_EXPORT_TEMPLATE_VERSION="
 ENC_MAGIC = b"MYDEMANDS_ENC_V1"
 KEY_FILE_NAME = ".demandas.key"
 
@@ -611,6 +613,7 @@ class CsvStore:
         # utf-8-sig adiciona BOM para melhorar compatibilidade com Excel,
         # evitando caracteres acentuados corrompidos ao abrir o CSV.
         with open(export_path, "w", newline="", encoding="utf-8-sig") as f:
+            f.write(f"{EXPORT_VERSION_PREFIX}{EXPORT_TEMPLATE_VERSION}\n")
             writer = csv.DictWriter(f, fieldnames=DISPLAY_COLUMNS, delimiter=delimiter)
             writer.writeheader()
             for row in rows:
@@ -637,7 +640,22 @@ class CsvStore:
         return self.replace_with_rows(imported_rows)
 
     def parse_exported_csv_text(self, csv_text: str, delimiter: str = ",") -> List[DemandRow]:
-        reader = csv.DictReader(io.StringIO(csv_text), delimiter=delimiter)
+        normalized_text = csv_text.lstrip("\ufeff")
+        version_line = None
+        csv_payload_text = normalized_text
+        if normalized_text.startswith(EXPORT_VERSION_PREFIX):
+            first_break = normalized_text.find("\n")
+            if first_break == -1:
+                raise ValidationError("CSV exportado inválido: cabeçalho de versão ausente.")
+            version_line = normalized_text[:first_break].strip()
+            csv_payload_text = normalized_text[first_break + 1 :]
+            exported_version = version_line.replace(EXPORT_VERSION_PREFIX, "", 1).strip()
+            if exported_version != EXPORT_TEMPLATE_VERSION:
+                raise ValidationError(
+                    "Versão de template incompatível para importação. Exporte novamente pela versão atual do sistema."
+                )
+
+        reader = csv.DictReader(io.StringIO(csv_payload_text), delimiter=delimiter)
         incoming_columns = reader.fieldnames or []
         if incoming_columns != DISPLAY_COLUMNS:
             raise ValidationError(

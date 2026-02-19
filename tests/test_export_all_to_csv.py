@@ -1,6 +1,6 @@
 import csv
 
-from csv_store import CsvStore
+from csv_store import CsvStore, EXPORT_TEMPLATE_VERSION, EXPORT_VERSION_PREFIX
 
 
 def test_export_all_to_csv_exports_existing_demands(tmp_path):
@@ -32,7 +32,9 @@ def test_export_all_to_csv_exports_existing_demands(tmp_path):
     assert export_path.exists()
 
     with export_path.open("r", encoding="utf-8-sig", newline="") as f:
-        rows = list(csv.DictReader(f, delimiter=","))
+        raw_lines = f.read().splitlines()
+        assert raw_lines[0] == f"{EXPORT_VERSION_PREFIX}{EXPORT_TEMPLATE_VERSION}"
+        rows = list(csv.DictReader(raw_lines[1:], delimiter=","))
 
     assert len(rows) == 2
     exported_ids = [row["ID"] for row in rows]
@@ -60,7 +62,9 @@ def test_export_all_to_csv_flattens_multiline_prazo(tmp_path):
     store.export_all_to_csv(str(export_path))
 
     with export_path.open("r", encoding="utf-8-sig", newline="") as f:
-        rows = list(csv.DictReader(f, delimiter=","))
+        raw_lines = f.read().splitlines()
+        assert raw_lines[0] == f"{EXPORT_VERSION_PREFIX}{EXPORT_TEMPLATE_VERSION}"
+        rows = list(csv.DictReader(raw_lines[1:], delimiter=","))
 
     assert rows[0]["Prazo"] == "05/02/2026,06/02/2026"
 
@@ -84,6 +88,8 @@ def test_export_all_to_csv_writes_utf8_bom_for_excel_compatibility(tmp_path):
     assert raw.startswith(b"\xef\xbb\xbf")
 
     with export_path.open("r", encoding="utf-8-sig", newline="") as f:
-        rows = list(csv.DictReader(f, delimiter=","))
+        raw_lines = f.read().splitlines()
+        assert raw_lines[0] == f"{EXPORT_VERSION_PREFIX}{EXPORT_TEMPLATE_VERSION}"
+        rows = list(csv.DictReader(raw_lines[1:], delimiter=","))
 
     assert rows[0]["Descrição"] == "Ação com acentuação"
