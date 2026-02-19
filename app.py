@@ -68,7 +68,7 @@ from ai_writing.audit import AIAuditLogger
 from ai_writing.integration import attach_ai_writing, set_text, get_text, focus_widget_end
 from ai_writing.error_log import log_ai_generation_error
 from mydemands.ui.dialogs.master_settings_dialog import MasterSettingsDialog
-from mydemands.services.secure_csv_exchange_service import SecureCsvExchangeService, CsvExchangeError
+from mydemands.services.secure_csv_exchange_service import ENC_HEADER, SecureCsvExchangeService, CsvExchangeError
 from mydemands.services.icon_service import IconService
 from mydemands.services.theme_service import ThemeService
 from mydemands.infra.repositories.user_prefs_repository import UserPrefsRepository
@@ -101,6 +101,19 @@ def get_deadline_text_color(theme_name: str, is_due_today: bool) -> QColor:
     if (theme_name or "light").strip().lower() == "dark":
         return QColor(255, 255, 255)
     return QColor(0, 0, 0)
+
+
+def _ask_passphrase(parent: QWidget, title: str, prompt: str, min_length: int = 6, *, allow_blank: bool = False) -> Optional[str]:
+    while True:
+        value, ok = QInputDialog.getText(parent, title, prompt, QLineEdit.Password)
+        if not ok:
+            return None
+        value = (value or "").strip()
+        if allow_blank and not value:
+            return ""
+        if len(value) >= min_length:
+            return value
+        QMessageBox.warning(parent, "Validação", "Informe uma palavra-passe válida.")
 
 
 def prazo_contains_today(prazo_text: str, today: Optional[date] = None) -> bool:
@@ -3435,20 +3448,13 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Falha na exportação", self.secure_csv_service.crypto_unavailable_message())
             return
 
-        passphrase = ""
-        if not is_master:
-            passphrase, ok = QInputDialog.getText(
-                self,
-                "Palavra-passe",
-                "Informe a palavra-passe para criptografar:",
-                QLineEdit.Password,
-            )
-            if not ok:
-                return
-            passphrase = (passphrase or "").strip()
-            if len(passphrase) < 6:
-                QMessageBox.warning(self, "Validação", "Informe uma palavra-passe válida para exportar.")
-                return
+        passphrase = _ask_passphrase(
+            self,
+            "Palavra-passe",
+            "Crie a palavra-passe para criptografar o arquivo de exportação:",
+        )
+        if passphrase is None:
+            return
 
         try:
             csv_text = self.secure_csv_service.render_csv_text(rows_to_export)
@@ -3489,26 +3495,34 @@ class MainWindow(QMainWindow):
             return
         merge_mode = clicked is merge_btn
 
-        passphrase = ""
         is_master = (self.logged_user_role or "") == "master"
-        if not is_master:
-            passphrase, ok = QInputDialog.getText(
-                self,
-                "Palavra-passe",
-                "Informe a palavra-passe do arquivo (se houver):",
-                QLineEdit.Password,
-            )
-            if not ok:
-                return
-            passphrase = (passphrase or "").strip()
 
         try:
             with open(import_path, "r", encoding="utf-8") as f:
                 raw_text = f.read()
-            import_result = self.secure_csv_service.import_payload(raw_text, passphrase=passphrase, is_master=is_master)
+
+            passphrase = ""
+            if raw_text.startswith(ENC_HEADER):
+                passphrase_prompt = "Informe a palavra-passe para descriptografar o arquivo:"
+                if is_master:
+                    passphrase_prompt += "\n(Usuário master também precisa informar a palavra-passe.)"
+                passphrase = _ask_passphrase(self, "Palavra-passe", passphrase_prompt)
+                if passphrase is None:
+                    return
+
+            import_result = self.secure_csv_service.import_payload(
+                raw_text,
+                passphrase=passphrase,
+                is_master=is_master,
+                allow_master_key=False,
+            )
             imported_rows = self.store.parse_exported_csv_text(import_result.csv_text)
             total = self.store.merge_with_rows(imported_rows) if merge_mode else self.store.replace_with_rows(imported_rows)
-        except (ValidationError, CsvExchangeError) as e:
+        except ValidationError as e:
+            self._offer_save_decrypted_copy(raw_text, import_path)
+            QMessageBox.warning(self, "Falha na importação", str(e))
+            return
+        except CsvExchangeError as e:
             self._offer_save_plain_copy(import_path)
             QMessageBox.warning(self, "Falha na importação", str(e))
             return
@@ -3519,6 +3533,24 @@ class MainWindow(QMainWindow):
         self.refresh_all()
         action = "mesclado" if merge_mode else "substituído"
         QMessageBox.information(self, "Importação concluída", f"CSV {action} com sucesso.\nTotal importado: {total}")
+
+    def _offer_save_decrypted_copy(self, csv_text: str, source_path: str) -> bool:
+        choice = QMessageBox.question(
+            self,
+            "Formato incompatível",
+            "O arquivo foi descriptografado, mas não está no formato exigido.\n"
+            "Deseja baixar uma cópia descriptografada para análise?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if choice != QMessageBox.Yes:
+            return False
+        target_path, _ = QFileDialog.getSaveFileName(self, "Salvar CSV descriptografado", source_path, "CSV (*.csv);;Texto (*.txt)")
+        if not target_path:
+            return False
+        with open(target_path, "w", encoding="utf-8-sig") as f:
+            f.write(csv_text)
+        return True
 
     def _offer_save_plain_copy(self, source_path: str) -> bool:
         choice = QMessageBox.question(

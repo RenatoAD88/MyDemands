@@ -44,3 +44,31 @@ def test_dark_theme_status_timing_prazo_foreground_uses_dynamic_palette(tmp_path
     for table_key in ("t3", "t4", "t4_cancelled"):
         for column_name in ("Status", "Timing", "Prazo"):
             _assert_column_foreground_not_black(win, table_key, column_name)
+
+
+def test_dark_theme_prazo_non_today_is_white_and_today_is_black(tmp_path):
+    app = _app()
+    theme = ThemeService(app)
+    store = CsvStore(str(tmp_path))
+    win = MainWindow(store, theme_service=theme)
+
+    theme.apply_theme("dark")
+
+    table = win._make_table("t3")
+    col = VISIBLE_COLUMNS.index("Prazo")
+
+    row_non_today = table.rowCount()
+    table.insertRow(row_non_today)
+    win._set_item(table, row_non_today, col, "01/01/2099", "1")
+    non_today_item = table.item(row_non_today, col)
+    assert non_today_item is not None
+    assert non_today_item.foreground().color() == QColor(255, 255, 255)
+
+    from datetime import date
+    today_str = date.today().strftime("%d/%m/%Y")
+    row_today = table.rowCount()
+    table.insertRow(row_today)
+    win._set_item(table, row_today, col, today_str, "2")
+    today_item = table.item(row_today, col)
+    assert today_item is not None
+    assert today_item.foreground().color() == QColor(0, 0, 0)
