@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 
+import mydemands.resources_rc  # noqa: F401
+
 from PySide6.QtWidgets import QApplication
 
 from app import MainWindow
