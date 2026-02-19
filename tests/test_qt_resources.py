@@ -18,3 +18,11 @@ def test_resources_loaded():
     content = _read_qss(":/styles/base.qss")
     assert isinstance(content, str)
     assert content.strip()
+
+
+def test_all_qss_resources_open():
+    import mydemands.resources_rc  # noqa: F401
+
+    assert len(_read_qss(":/styles/base.qss")) > 0
+    assert len(_read_qss(":/styles/light_colors.qss")) > 0
+    assert len(_read_qss(":/styles/dark_colors.qss")) > 0

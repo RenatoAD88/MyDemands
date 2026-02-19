@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from PySide6.QtCore import QDir, QFile, QIODevice
+from PySide6.QtCore import QDir, QFile, QIODevice, QStringConverter, QTextStream
 
 import mydemands.resources_rc  # noqa: F401
 
@@ -27,13 +27,19 @@ def _read_qss(resource_path: str) -> str:
             f"Resource não existe: {normalized_path}. "
             f"Resources em :/styles => [{available}]"
         )
-    if not file.open(QIODevice.ReadOnly):
+
+    if not file.open(QIODevice.ReadOnly | QIODevice.Text):
         available = ", ".join(list_styles_resources()) or "<vazio>"
+        err = file.errorString()
         raise RuntimeError(
             f"Falha ao abrir resource: {normalized_path}. "
+            f"QtError={err}. "
             f"Resources em :/styles => [{available}]"
         )
-    content = bytes(file.readAll()).decode("utf-8")
+
+    text_stream = QTextStream(file)
+    text_stream.setEncoding(QStringConverter.Encoding.Utf8)
+    content = text_stream.readAll()
     file.close()
     return content
 
