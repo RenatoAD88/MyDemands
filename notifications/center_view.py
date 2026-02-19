@@ -1,20 +1,25 @@
 from __future__ import annotations
 
+from datetime import datetime, time
 from typing import Callable, Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import (
     QComboBox,
+    QDateEdit,
     QDialog,
     QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
+    QTableView,
     QVBoxLayout,
 )
 
 from .models import Notification, NotificationType
 from .store import NotificationStore
+from .center_table import NotificationFilterProxy, NotificationTableModel
 
 
 class NotificationCenterDialog(QDialog):
@@ -38,35 +43,87 @@ class NotificationCenterDialog(QDialog):
         self.type_filter.addItem("Todos", None)
         for nt in NotificationType:
             self.type_filter.addItem(nt.value, nt)
+        self.type_filter.currentIndexChanged.connect(self.refresh)
         self.read_filter = QComboBox()
         self.read_filter.addItem("Todas", None)
         self.read_filter.addItem("Não lidas", False)
         self.read_filter.addItem("Lidas", True)
+        self.read_filter.currentIndexChanged.connect(self._apply_read_filter)
 
-        self.table = QTableWidget(0, 7)
-        self.table.setHorizontalHeaderLabels(["Data", "Tipo", "Título", "ID", "Descrição", "Mensagem", "Status"])
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.itemSelectionChanged.connect(self._update_mark_button_label)
-        self.table.itemDoubleClicked.connect(self._open_selected)
+        self.title_filter = QLineEdit()
+        self.title_filter.setPlaceholderText("Filtrar título")
+        self.body_filter = QLineEdit()
+        self.body_filter.setPlaceholderText("Filtrar mensagem")
+        self.id_filter = QLineEdit()
+        self.id_filter.setPlaceholderText("ID exato")
+        self.description_filter = QLineEdit()
+        self.description_filter.setPlaceholderText("Filtrar descrição")
+        self.type_text_filter = QLineEdit()
+        self.type_text_filter.setPlaceholderText("Filtrar tipo")
+
+        self.date_start = QDateEdit()
+        self.date_start.setCalendarPopup(True)
+        self.date_start.setDisplayFormat("dd/MM/yyyy")
+        self.date_start.setSpecialValueText("De")
+        self.date_start.setMinimumDate(self.date_start.minimumDate())
+        self.date_start.setDate(self.date_start.minimumDate())
+        self.date_start.dateChanged.connect(self._apply_date_filters)
+
+        self.date_end = QDateEdit()
+        self.date_end.setCalendarPopup(True)
+        self.date_end.setDisplayFormat("dd/MM/yyyy")
+        self.date_end.setSpecialValueText("Até")
+        self.date_end.setMinimumDate(self.date_end.minimumDate())
+        self.date_end.setDate(self.date_end.minimumDate())
+        self.date_end.dateChanged.connect(self._apply_date_filters)
+
+        self.table_model = NotificationTableModel(self)
+        self.proxy = NotificationFilterProxy(self)
+        self.proxy.setSourceModel(self.table_model)
+
+        self.table = QTableView()
+        self.table.setModel(self.proxy)
+        self.table.setSelectionBehavior(QTableView.SelectRows)
+        self.table.setSortingEnabled(True)
+        self.table.horizontalHeader().setSortIndicatorShown(True)
+        self.table.selectionModel().selectionChanged.connect(self._update_mark_button_label)
+        self.table.doubleClicked.connect(self._open_selected)
+
+        self._filter_timer = QTimer(self)
+        self._filter_timer.setSingleShot(True)
+        self._filter_timer.setInterval(250)
+        self._filter_timer.timeout.connect(self._apply_text_filters)
+        for widget in [self.title_filter, self.body_filter, self.id_filter, self.description_filter, self.type_text_filter]:
+            widget.textChanged.connect(self._schedule_filter_update)
 
         filter_row = QHBoxLayout()
         filter_row.addWidget(self.type_filter)
         filter_row.addWidget(self.read_filter)
-        refresh_btn = QPushButton("Filtrar")
-        refresh_btn.clicked.connect(self.refresh)
+        filter_row.addWidget(self.type_text_filter)
+        filter_row.addWidget(self.title_filter)
+        filter_row.addWidget(self.body_filter)
+        filter_row.addWidget(self.id_filter)
+        filter_row.addWidget(self.description_filter)
+        filter_row.addWidget(self.date_start)
+        filter_row.addWidget(self.date_end)
+        clear_btn = QPushButton("Limpar filtros")
+        clear_btn.clicked.connect(self.clear_filters)
         update_pending_btn = QPushButton("Atualizar")
         update_pending_btn.clicked.connect(self.refresh_pending_notifications)
         self.mark_toggle_btn = QPushButton("Marcar como lida")
         self.mark_toggle_btn.clicked.connect(self.toggle_selected_read_status)
         delete_btn = QPushButton("Excluir")
         delete_btn.clicked.connect(self.delete_selected_notifications)
-        filter_row.addWidget(refresh_btn)
+        filter_row.addWidget(clear_btn)
         filter_row.addWidget(update_pending_btn)
         filter_row.addWidget(self.mark_toggle_btn)
         filter_row.addWidget(delete_btn)
 
+        self.summary_label = QLabel()
+
         root = QVBoxLayout(self)
         root.addLayout(filter_row)
+        root.addWidget(self.summary_label)
         root.addWidget(self.table)
         self.setLayout(root)
         self.refresh()
@@ -75,10 +132,12 @@ class NotificationCenterDialog(QDialog):
         type_filter = self.type_filter.currentData()
         read_filter = self.read_filter.currentData()
         rows = self.store.list_notifications(type_filter=type_filter, read_filter=read_filter)
-        self.table.setRowCount(len(rows))
-        for i, n in enumerate(rows):
-            self._set_row(i, n)
+        self.table_model.set_notifications(rows)
+        self.proxy.sort(0, Qt.DescendingOrder)
+        self._apply_text_filters()
+        self._apply_date_filters()
         self._update_mark_button_label()
+        self._update_summary()
 
     def _display_demand_id(self, n: Notification) -> str:
         raw_id = n.demand_id
@@ -94,54 +153,24 @@ class NotificationCenterDialog(QDialog):
         text = str(raw_description or "").strip()
         return text or "—"
 
-    def _set_row(self, row: int, n: Notification) -> None:
-        description_text = self._display_demand_description(n)
-        values = [
-            n.timestamp.strftime("%d/%m/%Y %H:%M"),
-            n.type.value,
-            n.title,
-            self._display_demand_id(n),
-            description_text,
-            n.body,
-            "Lida" if n.read else "Não lida",
-        ]
-        for col, value in enumerate(values):
-            item = QTableWidgetItem(value)
-            if col == 4:
-                item.setToolTip(description_text)
-                item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            item.setData(Qt.UserRole, n.id)
-            self.table.setItem(row, col, item)
-
-        desc_item = self.table.item(row, 4)
-        if desc_item:
-            metrics = self.table.fontMetrics()
-            col_width = max(self.table.columnWidth(4) - 12, 10)
-            desc_item.setText(metrics.elidedText(description_text, Qt.ElideRight, col_width))
-
     def _selected_notification_ids(self) -> list[int]:
         selected_ids: list[int] = []
         for idx in self.table.selectionModel().selectedRows():
-            item = self.table.item(idx.row(), 0)
-            if not item:
-                continue
-            notif_id = item.data(Qt.UserRole)
-            if notif_id:
-                selected_ids.append(int(notif_id))
+            source_idx = self.proxy.mapToSource(idx)
+            notification = self.table_model.notification_at(source_idx.row())
+            if notification and notification.id:
+                selected_ids.append(int(notification.id))
         return selected_ids
 
     def _selected_notification(self) -> Notification | None:
         idxs = self.table.selectionModel().selectedRows()
         if not idxs:
             return None
-        row = idxs[0].row()
-        item = self.table.item(row, 0)
-        if not item:
+        source_idx = self.proxy.mapToSource(idxs[0])
+        notification = self.table_model.notification_at(source_idx.row())
+        if not notification or not notification.id:
             return None
-        notif_id = item.data(Qt.UserRole)
-        if not notif_id:
-            return None
-        return self.store.get_notification_by_id(int(notif_id))
+        return self.store.get_notification_by_id(int(notification.id))
 
     def _update_mark_button_label(self) -> None:
         notification = self._selected_notification()
@@ -171,9 +200,13 @@ class NotificationCenterDialog(QDialog):
         self.refresh()
         self._notify_change()
 
-    def _open_selected(self):
+    def _open_selected(self, *_args):
         notification = self._selected_notification()
         if not notification:
+            return
+        demand_id = self._display_demand_id(notification)
+        if demand_id == "—" and str(notification.payload.get("route") or "") != "atrasadas":
+            QMessageBox.information(self, "Central de Notificações", "Notificação sem demanda vinculada")
             return
         self.store.mark_as_read(int(notification.id))
         self.on_open(notification)
@@ -189,3 +222,47 @@ class NotificationCenterDialog(QDialog):
     def _notify_change(self) -> None:
         if self.on_change:
             self.on_change()
+
+    def _schedule_filter_update(self) -> None:
+        self._filter_timer.start()
+
+    def _apply_text_filters(self) -> None:
+        self.proxy.set_filter_value("type", self.type_text_filter.text())
+        self.proxy.set_filter_value("title", self.title_filter.text())
+        self.proxy.set_filter_value("body", self.body_filter.text())
+        self.proxy.set_filter_value("demand_id", self.id_filter.text())
+        self.proxy.set_filter_value("demand_description", self.description_filter.text())
+        self._update_summary()
+
+    def _apply_read_filter(self) -> None:
+        self.proxy.set_filter_value("read", self.read_filter.currentData())
+        self._update_summary()
+
+    def _apply_date_filters(self) -> None:
+        start_dt = None
+        end_dt = None
+        if self.date_start.date() != self.date_start.minimumDate():
+            start_dt = datetime.combine(self.date_start.date().toPython(), time.min)
+        if self.date_end.date() != self.date_end.minimumDate():
+            end_dt = datetime.combine(self.date_end.date().toPython(), time.max)
+        self.proxy.set_filter_value("timestamp_start", start_dt)
+        self.proxy.set_filter_value("timestamp_end", end_dt)
+        self._update_summary()
+
+    def clear_filters(self) -> None:
+        self.type_filter.setCurrentIndex(0)
+        self.read_filter.setCurrentIndex(0)
+        self.type_text_filter.clear()
+        self.title_filter.clear()
+        self.body_filter.clear()
+        self.id_filter.clear()
+        self.description_filter.clear()
+        self.date_start.setDate(self.date_start.minimumDate())
+        self.date_end.setDate(self.date_end.minimumDate())
+        self.proxy.clear_filters()
+        self._update_summary()
+
+    def _update_summary(self) -> None:
+        total = self.table_model.rowCount()
+        filtered = self.proxy.rowCount()
+        self.summary_label.setText(f"{total} notificações ({filtered} filtradas)")

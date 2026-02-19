@@ -55,14 +55,18 @@ def test_notification_center_renders_id_and_description(tmp_path):
     dialog = NotificationCenterDialog(store, lambda _n: None)
     dialog.refresh()
 
-    headers = [dialog.table.horizontalHeaderItem(i).text() for i in range(dialog.table.columnCount())]
+    qtcore = __import__("PySide6.QtCore", fromlist=["Qt"])
+    Qt = qtcore.Qt
+    headers = [dialog.proxy.headerData(i, Qt.Horizontal, Qt.DisplayRole) for i in range(dialog.proxy.columnCount())]
     assert "ID" in headers
     assert "Descrição" in headers
 
-    assert dialog.table.item(0, 3).text() == "D-10"
-    rendered_desc = dialog.table.item(0, 4).text()
+    id_text = dialog.proxy.data(dialog.proxy.index(0, 3))
+    rendered_desc = dialog.proxy.data(dialog.proxy.index(0, 4))
+    tooltip_desc = dialog.proxy.data(dialog.proxy.index(0, 4), role=Qt.ToolTipRole)
+    assert id_text == "D-10"
     assert rendered_desc
-    assert dialog.table.item(0, 4).toolTip().startswith("Uma descrição")
+    assert str(tooltip_desc).startswith("Uma descrição")
 
     dialog.close()
     app.quit()
@@ -91,8 +95,8 @@ def test_legacy_notification_without_fields_does_not_crash(tmp_path):
     dialog = NotificationCenterDialog(store, lambda _n: None)
     dialog.refresh()
 
-    assert dialog.table.item(0, 3).text() == "—"
-    assert dialog.table.item(0, 4).text() == "—"
+    assert dialog.proxy.data(dialog.proxy.index(0, 3)) == "—"
+    assert dialog.proxy.data(dialog.proxy.index(0, 4)) == "—"
 
     dialog.close()
     app.quit()
