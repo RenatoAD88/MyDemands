@@ -95,6 +95,14 @@ def get_dynamic_text_color() -> QColor:
     return palette.color(QPalette.Text)
 
 
+def get_deadline_text_color(theme_name: str, is_due_today: bool) -> QColor:
+    if is_due_today:
+        return QColor(0, 0, 0)
+    if (theme_name or "light").strip().lower() == "dark":
+        return QColor(255, 255, 255)
+    return QColor(0, 0, 0)
+
+
 def prazo_contains_today(prazo_text: str, today: Optional[date] = None) -> bool:
     if not prazo_text:
         return False
@@ -1726,6 +1734,8 @@ class MainWindow(QMainWindow):
     def _set_item(self, table: QTableWidget, r: int, c: int, text: str, _id: str):
         it = SortableTableItem(text or "")
         colname = VISIBLE_COLUMNS[c]
+        is_due_today = colname == "Prazo" and prazo_contains_today(text)
+        theme_name = self.theme_service.current_theme() if self.theme_service else "light"
         table_key = str(table.property("tableSortKey") or "")
         it.setData(SortableTableItem.SORT_ROLE, _column_sort_key(colname, text or ""))
 
@@ -1750,8 +1760,10 @@ class MainWindow(QMainWindow):
         if colname == "Status":
             rr, gg, bb = status_color(text)
             it.setBackground(QColor(rr, gg, bb))
-        if colname in {"Status", "Timing", "Prazo"}:
-            it.setForeground(get_dynamic_text_color())
+        if colname in {"Status", "Timing"}:
+            it.setForeground(QColor(0, 0, 0))
+        if colname == "Prazo":
+            it.setForeground(get_deadline_text_color(theme_name, is_due_today))
         if colname == "Prioridade":
             color = PRIORIDADE_TEXT_COLORS.get((text or "").strip().lower())
             if color:
@@ -1760,7 +1772,7 @@ class MainWindow(QMainWindow):
         if colname == "Timing":
             rr, gg, bb = timing_color(text)
             it.setBackground(QColor(rr, gg, bb))
-        if colname == "Prazo" and prazo_contains_today(text):
+        if is_due_today:
             rr, gg, bb = PRAZO_TODAY_BG
             it.setBackground(QColor(rr, gg, bb))
         table.setItem(r, c, it)

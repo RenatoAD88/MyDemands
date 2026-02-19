@@ -15,8 +15,8 @@ class IconService:
     _ICON_FILES: Dict[str, Dict[str, str]] = {
         "new_demand": {"light": ":/icons/new_demand_light.svg", "dark": ":/icons/new_demand_dark.svg"},
         "delete": {"light": ":/icons/delete_light.svg", "dark": ":/icons/delete_dark.svg"},
-        "export": {"light": ":/icons/export_light.svg", "dark": ":/icons/export_dark.svg"},
-        "import": {"light": ":/icons/import_light.svg", "dark": ":/icons/import_dark.svg"},
+        "export": {"light": ":/icons/import_light.svg", "dark": ":/icons/import_dark.svg"},
+        "import": {"light": ":/icons/export_light.svg", "dark": ":/icons/export_dark.svg"},
     }
 
     _FALLBACKS = {
