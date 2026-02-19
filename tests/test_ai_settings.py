@@ -82,13 +82,23 @@ def _install_qt_stubs():
     qtwidgets.QDoubleSpinBox = _Dummy
     qtwidgets.QSpinBox = _Dummy
     qtwidgets.QProgressBar = _Dummy
+    qtwidgets.QTextEdit = _Dummy
     qtwidgets.QWidget = _Dummy
+
+    qtgui = types.ModuleType("PySide6.QtGui")
+
+    class _TextOption:
+        WrapAtWordBoundaryOrAnywhere = 0
+
+    qtgui.QTextOption = _TextOption
 
     pyside6 = types.ModuleType("PySide6")
     pyside6.QtWidgets = qtwidgets
+    pyside6.QtGui = qtgui
 
     sys.modules["PySide6"] = pyside6
     sys.modules["PySide6.QtWidgets"] = qtwidgets
+    sys.modules["PySide6.QtGui"] = qtgui
 
 
 _install_qt_stubs()

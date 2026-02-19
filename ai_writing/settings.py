@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 from datetime import date
 from typing import Any, Dict
 
+from PySide6.QtGui import QTextOption
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSpinBox,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -102,6 +104,65 @@ class AIConsumptionDialog(QDialog):
         layout.addWidget(close_btn)
 
 
+class InfoTextDialog(QDialog):
+    def __init__(self, title: str, body: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+        self.setMinimumSize(520, 380)
+
+        body_text = QTextEdit()
+        body_text.setReadOnly(True)
+        body_text.setWordWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+        body_text.setPlainText(body)
+
+        close_btn = QPushButton("Fechar")
+        close_btn.clicked.connect(self.accept)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(body_text)
+        layout.addWidget(close_btn)
+
+        self.body_text = body_text
+
+
+OPENAI_HELP_TEXT = """Para usar a IA via OpenAI no MyDemands, você precisa de uma chave de API (API Key).
+
+Passo a passo:
+1) Crie/acesse sua conta da OpenAI e gere uma API Key no painel de chaves (API Keys).
+2) Copie a chave gerada (ela aparece uma vez; guarde em local seguro).
+3) No MyDemands, abra “Configuração de IA” e cole a chave no campo “OpenAI API Key”.
+4) Selecione o provedor “OpenAI” e escolha o modelo (quando aplicável).
+5) Clique em “Testar conexão” para validar. Se falhar:
+   - confira se a chave foi copiada completa,
+   - verifique sua conexão com a internet,
+   - e confirme se sua conta tem acesso ao uso da API.
+
+Boas práticas de segurança:
+- Não compartilhe sua API Key.
+- Se suspeitar de vazamento, revogue a chave e gere outra.
+"""
+
+HF_HELP_TEXT = """Para usar IA via Hugging Face no MyDemands, você precisa de um token de acesso (Access Token) e de um modelo compatível.
+
+Passo a passo:
+1) Crie/acesse sua conta no Hugging Face.
+2) Gere um Access Token nas configurações da conta (Tokens).
+   - Recomenda-se um token do tipo “Read” para consultar modelos.
+3) Copie o token e, no MyDemands, abra “Configuração de IA”.
+4) Selecione o provedor “Hugging Face” e cole o token no campo “Hugging Face Token”.
+5) Informe o identificador do modelo (ex.: “org/model-name”) conforme o campo do MyDemands.
+6) Clique em “Testar conexão”. Se falhar:
+   - confirme se o token está correto,
+   - verifique se o modelo existe e é acessível publicamente (ou por permissão),
+   - e revise limites de uso (rate limits) da conta.
+
+Boas práticas:
+- Não compartilhe seu token.
+- Se suspeitar de vazamento, revogue o token e gere outro.
+"""
+
+
 class AISettingsDialog(QDialog):
     def __init__(self, store: AISettingsStore, parent=None):
         super().__init__(parent)
@@ -140,6 +201,10 @@ class AISettingsDialog(QDialog):
         test_btn.clicked.connect(self._test_connection)
         consumo_btn = QPushButton("Consumo de IA")
         consumo_btn.clicked.connect(self._open_consumption_dialog)
+        self.btn_help_openai = QPushButton("Como configurar OpenAI")
+        self.btn_help_openai.clicked.connect(self.open_openai_help_dialog)
+        self.btn_help_hf = QPushButton("Como configurar Hugging Face")
+        self.btn_help_hf.clicked.connect(self.open_hf_help_dialog)
         save_btn = QPushButton("Salvar")
         cancel_btn = QPushButton("Cancelar")
         save_btn.clicked.connect(self._save)
@@ -153,6 +218,13 @@ class AISettingsDialog(QDialog):
         form.addRow("", self.cache_enabled)
         form.addRow("", self.usage_label)
 
+        help_buttons = QHBoxLayout()
+        help_buttons.addWidget(self.btn_help_openai)
+        help_buttons.addWidget(self.btn_help_hf)
+        help_container = QWidget()
+        help_container.setLayout(help_buttons)
+        form.addRow("Ajuda", help_container)
+
         buttons = QHBoxLayout()
         buttons.addStretch(); buttons.addWidget(consumo_btn); buttons.addWidget(test_btn); buttons.addWidget(save_btn); buttons.addWidget(cancel_btn)
 
@@ -162,6 +234,14 @@ class AISettingsDialog(QDialog):
         layout.addLayout(buttons)
 
         self._sync_fields()
+
+    def open_openai_help_dialog(self):
+        dialog = InfoTextDialog("Como configurar OpenAI", OPENAI_HELP_TEXT, self)
+        dialog.exec()
+
+    def open_hf_help_dialog(self):
+        dialog = InfoTextDialog("Como configurar Hugging Face", HF_HELP_TEXT, self)
+        dialog.exec()
 
     def _build_openai_form(self) -> QWidget:
         widget = QWidget()

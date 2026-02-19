@@ -32,16 +32,28 @@ for name in [
     "QProgressBar",
     "QPushButton",
     "QSpinBox",
+    "QTextEdit",
     "QVBoxLayout",
     "QWidget",
 ]:
     setattr(qtwidgets, name, _Dummy)
 qtwidgets.QMessageBox = _MessageBox
 
+qtgui = types.ModuleType("PySide6.QtGui")
+
+
+class _TextOption:
+    WrapAtWordBoundaryOrAnywhere = 0
+
+
+qtgui.QTextOption = _TextOption
+
 pyside6 = types.ModuleType("PySide6")
 pyside6.QtWidgets = qtwidgets
+pyside6.QtGui = qtgui
 sys.modules.setdefault("PySide6", pyside6)
 sys.modules.setdefault("PySide6.QtWidgets", qtwidgets)
+sys.modules.setdefault("PySide6.QtGui", qtgui)
 
 from ai_writing.settings import AISettingsDialog
 
@@ -163,3 +175,51 @@ def test_save_persists_and_reopen_restores(tmp_path):
     assert loaded.ai_provider == HUGGINGFACE_PROVIDER
     assert loaded.hf_api_token == "hf-token"
     assert loaded.hf_model == "repo/model"
+
+
+def test_openai_help_dialog_opens_and_has_text(monkeypatch):
+    dlg = AISettingsDialog.__new__(AISettingsDialog)
+    captured = {}
+
+    class _FakeInfoDialog:
+        def __init__(self, title, body, parent):
+            captured["title"] = title
+            captured["body"] = body
+            captured["parent"] = parent
+
+        def exec(self):
+            captured["executed"] = True
+
+    monkeypatch.setattr("ai_writing.settings.InfoTextDialog", _FakeInfoDialog)
+
+    dlg.open_openai_help_dialog()
+
+    assert captured["title"] == "Como configurar OpenAI"
+    assert "API Key" in captured["body"]
+    assert captured["body"].strip()
+    assert captured["parent"] is dlg
+    assert captured.get("executed") is True
+
+
+def test_hf_help_dialog_opens_and_has_text(monkeypatch):
+    dlg = AISettingsDialog.__new__(AISettingsDialog)
+    captured = {}
+
+    class _FakeInfoDialog:
+        def __init__(self, title, body, parent):
+            captured["title"] = title
+            captured["body"] = body
+            captured["parent"] = parent
+
+        def exec(self):
+            captured["executed"] = True
+
+    monkeypatch.setattr("ai_writing.settings.InfoTextDialog", _FakeInfoDialog)
+
+    dlg.open_hf_help_dialog()
+
+    assert captured["title"] == "Como configurar Hugging Face"
+    assert "Access Token" in captured["body"]
+    assert captured["body"].strip()
+    assert captured["parent"] is dlg
+    assert captured.get("executed") is True
