@@ -2732,7 +2732,7 @@ class MainWindow(QMainWindow):
                 if not item:
                     item = QTableWidgetItem()
                     table.setHorizontalHeaderItem(c, item)
-                item.setText(f"{text}\n{headers_bottom[c] if c > 0 else ""}".strip())
+                item.setText(f"{text}\n{headers_bottom[c] if c > 0 else ''}".strip())
                 curr_date = date(year, month, c) if 0 < c <= total_days else None
                 curr_is_today = curr_date == today
                 if curr_is_today:
