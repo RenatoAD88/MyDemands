@@ -1,4 +1,4 @@
-from ui_theme import _read_qss, build_app_stylesheet
+from ui_theme import build_app_stylesheet
 
 
 def test_build_stylesheet_light_not_empty():
@@ -13,7 +13,5 @@ def test_build_stylesheet_dark_not_empty():
     assert stylesheet.strip()
 
 
-def test_read_qss_files_exist():
-    assert _read_qss("base.qss")
-    assert _read_qss("light_colors.qss")
-    assert _read_qss("dark_colors.qss")
+def test_stylesheets_are_embedded_and_do_not_require_qss_files():
+    assert "mydemands/ui/styles" not in build_app_stylesheet("light")

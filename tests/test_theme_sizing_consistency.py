@@ -11,6 +11,7 @@ QLineEdit = qtwidgets.QLineEdit
 QPushButton = qtwidgets.QPushButton
 QTabBar = qtwidgets.QTabBar
 QToolButton = qtwidgets.QToolButton
+QTableWidget = qtwidgets.QTableWidget
 
 
 def _app():
@@ -36,6 +37,10 @@ def _metrics(win: MainWindow) -> dict[str, int]:
     assert line_edit is not None
     assert push_btn is not None
 
+    table = win.findChild(QTableWidget)
+    assert table is not None
+    header = table.horizontalHeader()
+
     return {
         "toolbar_button_hint": toolbar_btn.sizeHint().height(),
         "toolbar_button_icon": toolbar_btn.iconSize().height(),
@@ -43,6 +48,7 @@ def _metrics(win: MainWindow) -> dict[str, int]:
         "lineedit_hint": line_edit.sizeHint().height(),
         "button_hint": push_btn.sizeHint().height(),
         "tab_height": tab_h,
+        "header_height": header.height(),
     }
 
 
