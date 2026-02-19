@@ -44,6 +44,8 @@ class NotificationStore:
                     title TEXT NOT NULL,
                     body TEXT NOT NULL,
                     payload_json TEXT NOT NULL,
+                    demand_id TEXT,
+                    demand_description TEXT,
                     occurrence_key TEXT,
                     read INTEGER NOT NULL DEFAULT 0
                 )
@@ -55,6 +57,10 @@ class NotificationStore:
             }
             if "occurrence_key" not in cols:
                 con.execute("ALTER TABLE notifications ADD COLUMN occurrence_key TEXT")
+            if "demand_id" not in cols:
+                con.execute("ALTER TABLE notifications ADD COLUMN demand_id TEXT")
+            if "demand_description" not in cols:
+                con.execute("ALTER TABLE notifications ADD COLUMN demand_description TEXT")
 
             con.execute(
                 """
@@ -155,13 +161,15 @@ class NotificationStore:
         self._mark_occurrence_presented(occurrence_key)
         with self._connect() as con:
             cur = con.execute(
-                "INSERT INTO notifications (timestamp, type, title, body, payload_json, occurrence_key, read) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO notifications (timestamp, type, title, body, payload_json, demand_id, demand_description, occurrence_key, read) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     notification.timestamp.isoformat(),
                     notification.type.value,
                     notification.title,
                     notification.body,
                     json.dumps(notification.payload, ensure_ascii=False),
+                    (str(notification.demand_id) if notification.demand_id not in (None, "") else None),
+                    (str(notification.demand_description) if notification.demand_description not in (None, "") else None),
                     occurrence_key,
                     1 if notification.read else 0,
                 ),
@@ -189,7 +197,7 @@ class NotificationStore:
 
         with self._connect() as con:
             rows = con.execute(
-                f"SELECT id, timestamp, type, title, body, payload_json, read FROM notifications {where} ORDER BY id DESC LIMIT ?",
+                f"SELECT id, timestamp, type, title, body, payload_json, demand_id, demand_description, read FROM notifications {where} ORDER BY id DESC LIMIT ?",
                 [*params, limit],
             ).fetchall()
         out = []
@@ -206,6 +214,8 @@ class NotificationStore:
                     body=r["body"],
                     payload=json.loads(r["payload_json"] or "{}"),
                     read=bool(r["read"]),
+                    demand_id=(str(r["demand_id"]) if r["demand_id"] not in (None, "") else None),
+                    demand_description=(str(r["demand_description"]) if r["demand_description"] not in (None, "") else None),
                 )
             )
         return out
@@ -230,7 +240,7 @@ class NotificationStore:
     def get_notification_by_id(self, notification_id: int) -> Notification | None:
         with self._connect() as con:
             row = con.execute(
-                "SELECT id, timestamp, type, title, body, payload_json, read FROM notifications WHERE id = ?",
+                "SELECT id, timestamp, type, title, body, payload_json, demand_id, demand_description, read FROM notifications WHERE id = ?",
                 (notification_id,),
             ).fetchone()
         if not row:
@@ -246,6 +256,8 @@ class NotificationStore:
             body=row["body"],
             payload=json.loads(row["payload_json"] or "{}"),
             read=bool(row["read"]),
+            demand_id=(str(row["demand_id"]) if row["demand_id"] not in (None, "") else None),
+            demand_description=(str(row["demand_description"]) if row["demand_description"] not in (None, "") else None),
         )
 
     def count_unread(self) -> int:
@@ -292,7 +304,7 @@ class NotificationStore:
         notifications = self.list_notifications(limit=5000)
         out = io.StringIO()
         writer = csv.writer(out, delimiter=";")
-        writer.writerow(["id", "timestamp", "type", "title", "body", "payload_json", "read"])
+        writer.writerow(["id", "timestamp", "type", "title", "body", "demand_id", "demand_description", "payload_json", "read"])
         for n in reversed(notifications):
             writer.writerow([
                 n.id,
@@ -300,6 +312,8 @@ class NotificationStore:
                 n.type.value,
                 n.title,
                 n.body,
+                n.demand_id or "",
+                n.demand_description or "",
                 json.dumps(n.payload, ensure_ascii=False),
                 "1" if n.read else "0",
             ])
