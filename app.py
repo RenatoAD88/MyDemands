@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import mydemands.resources_rc  # noqa: F401
+
 import csv
 import os
 import re

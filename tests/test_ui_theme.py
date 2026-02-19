@@ -1,3 +1,6 @@
+from PySide6.QtWidgets import QApplication
+
+from mydemands.services.theme_service import ThemeService
 from ui_theme import APP_STYLESHEET, build_app_stylesheet, status_color, timing_color
 
 
@@ -59,3 +62,23 @@ def test_dark_theme_uses_same_sizing_tokens_as_light():
     for token in shared_tokens:
         assert token in light
         assert token in dark
+
+
+def test_build_stylesheet_returns_string():
+    css_light = build_app_stylesheet("light")
+    css_dark = build_app_stylesheet("dark")
+    assert isinstance(css_light, str)
+    assert isinstance(css_dark, str)
+    assert len(css_light) > 0
+    assert len(css_dark) > 0
+
+
+def test_theme_service_applies_stylesheet_without_exception():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    service = ThemeService(app)
+    service.apply_theme("light")
+    service.apply_theme("dark")
+    assert isinstance(app.styleSheet(), str)
+    assert len(app.styleSheet()) > 0

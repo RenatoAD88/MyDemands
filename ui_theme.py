@@ -1,19 +1,26 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Tuple
 
-_STYLE_DIR = Path(__file__).resolve().parent / "mydemands" / "ui" / "styles"
+from PySide6.QtCore import QFile, QTextStream
+
+import mydemands.resources_rc  # noqa: F401
 
 
-def _read_qss(filename: str) -> str:
-    return (_STYLE_DIR / filename).read_text(encoding="utf-8").strip()
+def _read_qss(resource_path: str) -> str:
+    file = QFile(resource_path)
+    if not file.open(QFile.ReadOnly | QFile.Text):
+        raise RuntimeError(f"Erro ao carregar QSS: {resource_path}")
+    stream = QTextStream(file)
+    content = stream.readAll().strip()
+    file.close()
+    return content
 
 
 def build_app_stylesheet(theme: str = "light") -> str:
     normalized = (theme or "light").strip().lower()
-    color_file = "dark_colors.qss" if normalized == "dark" else "light_colors.qss"
-    return f"{_read_qss('base.qss')}\n\n{_read_qss(color_file)}\n"
+    color_resource = ":/styles/dark_colors.qss" if normalized == "dark" else ":/styles/light_colors.qss"
+    return f"{_read_qss(':/styles/base.qss')}\n\n{_read_qss(color_resource)}\n"
 
 
 APP_STYLESHEET = build_app_stylesheet("light")

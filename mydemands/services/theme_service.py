@@ -21,7 +21,8 @@ class ThemeService:
         if theme not in {"light", "dark"}:
             theme = "light"
         stylesheet = build_app_stylesheet(theme)
-        self.app.setStyleSheet(stylesheet)
+        app = QApplication.instance() or self.app
+        app.setStyleSheet(stylesheet)
         self._current = theme
         for callback in list(self._listeners):
             callback(theme)
