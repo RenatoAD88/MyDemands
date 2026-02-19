@@ -4,14 +4,15 @@ from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 crypt = collect_all('cryptography')
 mydemands_datas = collect_data_files('mydemands')
-styles_datas = collect_data_files('mydemands.ui.styles')
-
-
 a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=crypt[1],
-    datas=crypt[0] + mydemands_datas + styles_datas,
+    datas=crypt[0] + mydemands_datas + [
+        ('mydemands/ui/styles/base.qss', 'mydemands/ui/styles'),
+        ('mydemands/ui/styles/light_colors.qss', 'mydemands/ui/styles'),
+        ('mydemands/ui/styles/dark_colors.qss', 'mydemands/ui/styles'),
+    ],
     hiddenimports=["huggingface_hub", "bcrypt", "mydemands.resources_rc", *crypt[2], "cryptography.hazmat.bindings._rust", "cryptography.hazmat.primitives.ciphers.aead"],
     hookspath=[],
     hooksconfig={},
