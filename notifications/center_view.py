@@ -43,8 +43,8 @@ class NotificationCenterDialog(QDialog):
         self.read_filter.addItem("Não lidas", False)
         self.read_filter.addItem("Lidas", True)
 
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Data", "Tipo", "Título", "Mensagem", "Status"])
+        self.table = QTableWidget(0, 7)
+        self.table.setHorizontalHeaderLabels(["Data", "Tipo", "Título", "ID", "Descrição", "Mensagem", "Status"])
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.itemSelectionChanged.connect(self._update_mark_button_label)
         self.table.itemDoubleClicked.connect(self._open_selected)
@@ -80,18 +80,44 @@ class NotificationCenterDialog(QDialog):
             self._set_row(i, n)
         self._update_mark_button_label()
 
+    def _display_demand_id(self, n: Notification) -> str:
+        raw_id = n.demand_id
+        if raw_id in (None, ""):
+            raw_id = (n.payload or {}).get("demand_id")
+        text = str(raw_id or "").strip()
+        return text or "—"
+
+    def _display_demand_description(self, n: Notification) -> str:
+        raw_description = n.demand_description
+        if raw_description in (None, ""):
+            raw_description = (n.payload or {}).get("demand_description")
+        text = str(raw_description or "").strip()
+        return text or "—"
+
     def _set_row(self, row: int, n: Notification) -> None:
+        description_text = self._display_demand_description(n)
         values = [
             n.timestamp.strftime("%d/%m/%Y %H:%M"),
             n.type.value,
             n.title,
+            self._display_demand_id(n),
+            description_text,
             n.body,
             "Lida" if n.read else "Não lida",
         ]
         for col, value in enumerate(values):
             item = QTableWidgetItem(value)
+            if col == 4:
+                item.setToolTip(description_text)
+                item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             item.setData(Qt.UserRole, n.id)
             self.table.setItem(row, col, item)
+
+        desc_item = self.table.item(row, 4)
+        if desc_item:
+            metrics = self.table.fontMetrics()
+            col_width = max(self.table.columnWidth(4) - 12, 10)
+            desc_item.setText(metrics.elidedText(description_text, Qt.ElideRight, col_width))
 
     def _selected_notification_ids(self) -> list[int]:
         selected_ids: list[int] = []

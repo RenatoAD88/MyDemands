@@ -45,6 +45,25 @@ class Notification:
     timestamp: datetime = field(default_factory=brasilia_now)
     read: bool = False
     id: int | None = None
+    demand_id: str | None = None
+    demand_description: str | None = None
+
+    def __post_init__(self) -> None:
+        payload = self.payload or {}
+        payload_demand_id = payload.get("demand_id")
+        payload_description = payload.get("demand_description")
+
+        if self.demand_id is None and payload_demand_id not in (None, ""):
+            self.demand_id = str(payload_demand_id)
+        elif self.demand_id:
+            payload["demand_id"] = str(self.demand_id)
+
+        if self.demand_description is None and payload_description not in (None, ""):
+            self.demand_description = str(payload_description)
+        elif self.demand_description:
+            payload["demand_description"] = str(self.demand_description)
+
+        self.payload = payload
 
 
 @dataclass

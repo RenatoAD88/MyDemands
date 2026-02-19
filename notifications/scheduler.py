@@ -51,6 +51,7 @@ class DeadlineScheduler(QObject):
 
         for demand in self.repo.list_open_demands():
             demand_id = str(demand.get("ID") or demand.get("_id") or "")
+            demand_description = str(demand.get("Descrição") or "").strip()
             deadline_text = demand.get("Prazo") or ""
             deadlines = parse_prazos_list(deadline_text)
             if not deadlines:
@@ -64,10 +65,13 @@ class DeadlineScheduler(QObject):
                     body=f"Prazo em {closest.strftime('%d/%m/%Y')}.",
                     payload={
                         "demand_id": demand_id,
+                        "demand_description": demand_description,
                         "route": "atrasadas",
                         "deadline_date": closest.isoformat(),
                         "event_code": "deadline_overdue",
                     },
+                    demand_id=demand_id,
+                    demand_description=demand_description,
                 )
                 self.emitter(evt)
                 events.append(DeadlineEvent(demand_id, NotificationType.PRAZO_ESTOURADO))
@@ -78,10 +82,13 @@ class DeadlineScheduler(QObject):
                     body=f"Demanda vence em {closest.strftime('%d/%m/%Y')}.",
                     payload={
                         "demand_id": demand_id,
+                        "demand_description": demand_description,
                         "route": "demanda",
                         "deadline_date": closest.isoformat(),
                         "event_code": "deadline_due",
                     },
+                    demand_id=demand_id,
+                    demand_description=demand_description,
                 )
                 self.emitter(evt)
                 events.append(DeadlineEvent(demand_id, NotificationType.PRAZO_PROXIMO))

@@ -1002,7 +1002,7 @@ class NewDemandDialog(BaseModalDialog):
         opc_box = QGroupBox("Controle e identificação")
         opc_form = QFormLayout()
         opc_form.addRow("É Urgente?", self.urgente)
-        opc_form.addRow("ID Azure", self.id_azure)
+        opc_form.addRow("Núm. Controle", self.id_azure)
         opc_form.addRow("% Conclusão", self.perc)
         opc_form.addRow("Data Conclusão", conc_row)
         opc_form.addRow("Reportar?", self.reportar)
@@ -1473,7 +1473,7 @@ class MainWindow(QMainWindow):
     def _handle_notification_click(self, notif: Notification) -> None:
         self._bring_to_front()
         route = str(notif.payload.get("route") or "")
-        demand_id = str(notif.payload.get("demand_id") or "")
+        demand_id = str(notif.payload.get("demand_id") or notif.demand_id or "")
         if route == "atrasadas":
             self.tabs.setCurrentIndex(1)
             self.t3_status.setCurrentText("")
@@ -1637,7 +1637,8 @@ class MainWindow(QMainWindow):
 
     def _make_table(self, table_key: str) -> QTableWidget:
         table = DemandTable(0, len(VISIBLE_COLUMNS))
-        table.setHorizontalHeaderLabels(VISIBLE_COLUMNS)
+        display_columns = ["Núm. Controle" if col == "ID Azure" else col for col in VISIBLE_COLUMNS]
+        table.setHorizontalHeaderLabels(display_columns)
         if table_key in {"t3", "t4", "t4_cancelled"}:
             first_header_item = table.horizontalHeaderItem(0)
             if first_header_item is not None:
@@ -1997,7 +1998,7 @@ class MainWindow(QMainWindow):
                         type=NotificationType.ALTERACAO_STATUS,
                         title=f"Status atualizado: #{_id}",
                         body="Demanda marcada como Concluído.",
-                        payload={"demand_id": _id, "route": "demanda"},
+                        payload=self._build_demand_notification_payload(_id),
                     )
                 )
             except ValidationError as ve:
@@ -2024,7 +2025,7 @@ class MainWindow(QMainWindow):
                         type=NotificationType.ALTERACAO_STATUS,
                         title=f"Status atualizado: #{_id}",
                         body="Demanda marcada como Cancelado.",
-                        payload={"demand_id": _id, "route": "demanda"},
+                        payload=self._build_demand_notification_payload(_id),
                     )
                 )
             except ValidationError as ve:
@@ -2064,7 +2065,7 @@ class MainWindow(QMainWindow):
                         type=NotificationType.ALTERACAO_STATUS,
                         title=f"Status atualizado: #{_id}",
                         body=f"Novo status: {new_value}.",
-                        payload={"demand_id": _id, "route": "demanda"},
+                        payload=self._build_demand_notification_payload(_id),
                     )
                 )
             except ValidationError as ve:
@@ -3094,6 +3095,22 @@ class MainWindow(QMainWindow):
                 return demand_number
         return str(row_id or "")
 
+    def _resolve_demand_description(self, row_id: str) -> str:
+        row = self.store.get(row_id) if row_id else None
+        if row:
+            return str(row.data.get("Descrição") or "").strip()
+        return ""
+
+    def _build_demand_notification_payload(self, row_id: str, *, demand_number: str | None = None) -> Dict[str, str]:
+        resolved_id = str(demand_number or self._resolve_demand_number(row_id) or "").strip()
+        resolved_description = self._resolve_demand_description(row_id)
+        payload: Dict[str, str] = {
+            "route": "demanda",
+            "demand_id": resolved_id,
+            "demand_description": resolved_description,
+        }
+        return payload
+
     def _show_duplicate_success_modal(self, demand_id: str):
         confirm_box = QMessageBox(self)
         confirm_box.setIcon(QMessageBox.Information)
@@ -3151,7 +3168,7 @@ class MainWindow(QMainWindow):
     def _init_tab3(self):
         tab = QWidget()
         self.t3_search = QLineEdit()
-        self.t3_search.setPlaceholderText("Buscar por projeto, descrição, comentário, Azure, responsável, nome e time/função")
+        self.t3_search.setPlaceholderText("Buscar por projeto, descrição, comentário, núm. controle, responsável, nome e time/função")
         self.t3_status = QComboBox()
         self.t3_status.addItem("")
         self.t3_status.addItems(TAB3_STATUS_FILTER_OPTIONS)
@@ -3383,7 +3400,7 @@ class MainWindow(QMainWindow):
                         type=NotificationType.NOVA_DEMANDA,
                         title="Nova demanda atribuída",
                         body=f"Demanda #{demand_number} criada com sucesso.",
-                        payload={"demand_id": demand_number, "route": "demanda"},
+                        payload=self._build_demand_notification_payload(new_row_id, demand_number=demand_number),
                     )
                 )
             self.refresh_all()
