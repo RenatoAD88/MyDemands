@@ -268,6 +268,74 @@ class CsvStore:
             pass
         return raw
 
+    def _persist_key(self, key: bytes) -> None:
+        try:
+            with open(self.key_path, "wb") as f:
+                f.write(key)
+            os.chmod(self.key_path, 0o600)
+        except Exception:
+            pass
+
+    def _iter_fallback_keys(self) -> List[bytes]:
+        seen_paths = set()
+        candidates: List[str] = []
+        current = os.path.abspath(self.base_dir)
+
+        for _ in range(6):
+            key_candidate = os.path.join(current, KEY_FILE_NAME)
+            legacy_candidate = os.path.join(current, "legacy", KEY_FILE_NAME)
+            for path in (key_candidate, legacy_candidate):
+                norm = os.path.normcase(os.path.normpath(path))
+                if norm not in seen_paths:
+                    seen_paths.add(norm)
+                    candidates.append(path)
+            parent = os.path.dirname(current)
+            if parent == current:
+                break
+            current = parent
+
+        out: List[bytes] = []
+        current_key = self._crypto_key[:32]
+        for path in candidates:
+            if not os.path.exists(path):
+                continue
+            try:
+                raw = open(path, "rb").read()
+            except Exception:
+                continue
+            key = raw[:32]
+            if len(key) < 32 or key == current_key:
+                continue
+            if key not in out:
+                out.append(key)
+        return out
+
+    @staticmethod
+    def _decrypt_with_key(payload: bytes, key: bytes) -> bytes:
+        packed = payload[len(ENC_MAGIC) + 1 :].strip()
+        raw = base64.urlsafe_b64decode(packed)
+        if len(raw) < 16 + 32:
+            raise ValueError("Arquivo criptografado inválido")
+
+        nonce = raw[:16]
+        mac = raw[-32:]
+        cipher = raw[16:-32]
+        expected = hmac.new(key, ENC_MAGIC + nonce + cipher, hashlib.sha256).digest()
+        if not hmac.compare_digest(mac, expected):
+            raise ValueError("Falha de integridade no arquivo criptografado")
+
+        out = bytearray(len(cipher))
+        counter = 0
+        offset = 0
+        while offset < len(cipher):
+            block = hashlib.sha256(key + nonce + counter.to_bytes(8, "big")).digest()
+            n = min(32, len(cipher) - offset)
+            for i in range(n):
+                out[offset + i] = cipher[offset + i] ^ block[i]
+            offset += n
+            counter += 1
+        return bytes(out)
+
     def _encrypt_bytes(self, plain: bytes) -> bytes:
         nonce = os.urandom(16)
         out = bytearray(len(plain))
@@ -287,30 +355,22 @@ class CsvStore:
     def _decrypt_bytes(self, payload: bytes) -> bytes:
         if not payload.startswith(ENC_MAGIC + b"\n"):
             return payload
+        try:
+            return self._decrypt_with_key(payload, self._crypto_key)
+        except ValueError as exc:
+            if str(exc) != "Falha de integridade no arquivo criptografado":
+                raise
 
-        packed = payload[len(ENC_MAGIC) + 1 :].strip()
-        raw = base64.urlsafe_b64decode(packed)
-        if len(raw) < 16 + 32:
-            raise ValueError("Arquivo criptografado inválido")
+        for fallback_key in self._iter_fallback_keys():
+            try:
+                plain = self._decrypt_with_key(payload, fallback_key)
+            except ValueError:
+                continue
+            self._crypto_key = fallback_key
+            self._persist_key(fallback_key)
+            return plain
 
-        nonce = raw[:16]
-        mac = raw[-32:]
-        cipher = raw[16:-32]
-        expected = hmac.new(self._crypto_key, ENC_MAGIC + nonce + cipher, hashlib.sha256).digest()
-        if not hmac.compare_digest(mac, expected):
-            raise ValueError("Falha de integridade no arquivo criptografado")
-
-        out = bytearray(len(cipher))
-        counter = 0
-        offset = 0
-        while offset < len(cipher):
-            block = hashlib.sha256(self._crypto_key + nonce + counter.to_bytes(8, "big")).digest()
-            n = min(32, len(cipher) - offset)
-            for i in range(n):
-                out[offset + i] = cipher[offset + i] ^ block[i]
-            offset += n
-            counter += 1
-        return bytes(out)
+        raise ValueError("Falha de integridade no arquivo criptografado")
 
     def _read_csv_text(self) -> str:
         if not os.path.exists(self.csv_path):
