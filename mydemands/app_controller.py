@@ -56,6 +56,7 @@ class AppController:
 
         self.auth_service.logout()
         clear()
+        self._close_open_modal()
 
         if main_window is not None:
             if hasattr(main_window, "prepare_for_logoff"):
@@ -67,3 +68,15 @@ class AppController:
                 self.qt_app._main_win = None
 
         self._show_login_window()
+
+    def _close_open_modal(self) -> None:
+        active_modal_getter = getattr(self.qt_app, "activeModalWidget", None)
+        if not callable(active_modal_getter):
+            return
+        active_modal = active_modal_getter()
+        if active_modal is None:
+            return
+        try:
+            active_modal.reject()
+        except Exception:
+            active_modal.close()

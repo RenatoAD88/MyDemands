@@ -6,9 +6,13 @@ class _FakeQtApp:
     def __init__(self):
         self._quit_called = False
         self._main_win = None
+        self.modal = None
 
     def quit(self):
         self._quit_called = True
+
+    def activeModalWidget(self):
+        return self.modal
 
 
 class _FakeMainWindow:
@@ -55,6 +59,14 @@ class _FakeLoginDialog:
         return None
 
 
+class _FakeModal:
+    def __init__(self):
+        self.rejected = False
+
+    def reject(self):
+        self.rejected = True
+
+
 def test_handle_logoff_clears_session_saves_backup_and_returns_to_login(env):
     auth = env["auth"]
     auth.register("user@test.com", "Abcdef1!")
@@ -69,6 +81,7 @@ def test_handle_logoff_clears_session_saves_backup_and_returns_to_login(env):
         return login
 
     app = _FakeQtApp()
+    app.modal = _FakeModal()
     main_window = _FakeMainWindow()
     app._main_win = main_window
 
@@ -78,6 +91,7 @@ def test_handle_logoff_clears_session_saves_backup_and_returns_to_login(env):
     controller.handle_logoff()
 
     assert main_window.backup_calls == 1
+    assert app.modal.rejected is True
     assert env["sessions"].load_session() is None
     assert auth.try_auto_login() is None
     assert current_user() is None
