@@ -1,10 +1,6 @@
 from __future__ import annotations
 
 import os
-import certifi
-
-os.environ["SSL_CERT_FILE"] = certifi.where()
-os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
 
 import mydemands.resources_rc  # noqa: F401
 
@@ -47,7 +43,9 @@ from PySide6.QtWidgets import QSizePolicy
 from csv_store import CsvStore, parse_prazos_list
 from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, build_team_control_report_rows, monthly_k_count, split_member_names
 from validation import ValidationError, normalize_prazo_text, validate_payload
-from bootstrap import resolve_storage_root, ensure_storage_root
+from bootstrap import resolve_storage_root, ensure_storage_root, configure_ssl_cert_env
+
+configure_ssl_cert_env()
 from ui_theme import apply_dynamic_selection_style, status_color, timing_color
 from ui_filters import filter_rows, summary_counts
 from ui_prefs import load_prefs, save_prefs
