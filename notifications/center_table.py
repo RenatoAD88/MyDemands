@@ -16,7 +16,7 @@ class NotificationColumn:
 
 
 NOTIFICATION_COLUMNS: tuple[NotificationColumn, ...] = (
-    NotificationColumn("demand_id", "Número da demanda"),
+    NotificationColumn("demand_id", "ID"),
     NotificationColumn("demand_description", "Descrição da demanda"),
     NotificationColumn("timestamp", "Data notificação"),
     NotificationColumn("type", "Tag"),
@@ -76,6 +76,8 @@ class NotificationTableModel(QAbstractTableModel):
             return self._display_value(notification, column_key)
         if role == Qt.ToolTipRole and column_key == "demand_description":
             return self._safe_text(self._demand_description(notification), placeholder="—")
+        if role == Qt.TextAlignmentRole and column_key in {"demand_id", "timestamp", "type"}:
+            return int(Qt.AlignHCenter | Qt.AlignVCenter)
         if role == Qt.TextAlignmentRole and column_key == "demand_description":
             return int(Qt.AlignLeft | Qt.AlignVCenter)
         return None

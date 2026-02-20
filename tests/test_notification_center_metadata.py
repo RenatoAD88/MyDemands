@@ -10,7 +10,7 @@ from notifications.store import NotificationStore
 
 
 EXPECTED_HEADERS = [
-    "Número da demanda",
+    "ID",
     "Descrição da demanda",
     "Data notificação",
     "Tag",
