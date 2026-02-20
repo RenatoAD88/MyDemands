@@ -42,6 +42,7 @@ class DashboardMetricsService:
         por_prioridade: Dict[str, int] = {"Alta": 0, "Média": 0, "Baixa": 0}
         alertas: List[Dict[str, str]] = []
         today = date.today()
+        tomorrow = today.fromordinal(today.toordinal() + 1)
 
         for row in rows_list:
             status = str(row.get("Status") or "").strip()
@@ -84,6 +85,15 @@ class DashboardMetricsService:
                             "badge": "Prazo hoje",
                         }
                     )
+                elif min_prazo == tomorrow:
+                    alertas.append(
+                        {
+                            "id": demand_id,
+                            "titulo": f"{projeto} — {descricao}" if projeto else descricao,
+                            "prazo": min_prazo.strftime("%d/%m/%Y"),
+                            "badge": "Vencimento próximo",
+                        }
+                    )
 
         percentual = int(round((concluidas / total) * 100)) if total else 0
         metrics = DashboardMetrics(
@@ -95,7 +105,14 @@ class DashboardMetricsService:
             canceladas=canceladas,
             por_status=por_status,
             por_prioridade=por_prioridade,
-            alertas=sorted(alertas, key=lambda x: (x["badge"] != "Atrasada", x["prazo"], x["id"])),
+            alertas=sorted(
+                alertas,
+                key=lambda x: (
+                    {"Atrasada": 0, "Prazo hoje": 1, "Vencimento próximo": 2}.get(x["badge"], 3),
+                    x["prazo"],
+                    x["id"],
+                ),
+            ),
         )
         self._last_fingerprint = fingerprint
         self._last_metrics = metrics
