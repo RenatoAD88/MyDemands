@@ -76,6 +76,12 @@ from mydemands.services.icon_service import IconService
 from mydemands.services.theme_service import ThemeService
 from mydemands.infra.repositories.user_prefs_repository import UserPrefsRepository
 from mydemands.infra.secrets.fake_secret_store import FakeSecretStore
+from mydemands.dashboard import (
+    DashboardMetricsService,
+    LayoutPersistenceService,
+    MonitoramentoController,
+)
+from mydemands.dashboard.view import MonitoramentoView
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
@@ -1381,6 +1387,7 @@ class MainWindow(QMainWindow):
         self._init_tab2()
         self._init_tab3()
         self._init_tab4()
+        self._init_tab_monitoramento()
 
         self.refresh_all()
         self.tabs.currentChanged.connect(self._on_tab_changed)
@@ -2449,6 +2456,9 @@ class MainWindow(QMainWindow):
             btn.setIcon(self._icon_for(icon_name))
             btn.setIconSize(self._toolbar_icon_size())
 
+        if hasattr(self, "monitoramento_view") and self.monitoramento_view is not None:
+            self.monitoramento_view.apply_theme(_theme)
+
     def open_master_settings(self):
         if self.logged_user_role != "master" or self.email_service is None:
             return
@@ -3299,6 +3309,19 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(tab, "Consultar Demandas Concluídas")
         self._clear_tab4_filters()
 
+    def _init_tab_monitoramento(self):
+        self.monitoramento_view = MonitoramentoView()
+        self.monitoramento_controller = MonitoramentoController(
+            store=self.store,
+            metrics_service=DashboardMetricsService(),
+            layout_service=LayoutPersistenceService(self.store.base_dir),
+            user_email=self.logged_user_email or "anonimo",
+        )
+        self.monitoramento_view.order_changed.connect(self.monitoramento_controller.save_layout_order)
+        self.monitoramento_view.set_order(self.monitoramento_controller.load_layout_order())
+        self.tabs.addTab(self.monitoramento_view, "Monitoramento")
+        self.refresh_monitoramento()
+
     def _reset_tab3_filters(self):
         self.t3_search.clear()
         self.t3_status.setCurrentIndex(0)
@@ -3330,6 +3353,7 @@ class MainWindow(QMainWindow):
         self.store.load()
         self.refresh_team_control()
         self.refresh_tab3()
+        self.refresh_monitoramento()
 
         self.t4_start.blockSignals(True)
         self.t4_end.blockSignals(True)
@@ -3350,6 +3374,15 @@ class MainWindow(QMainWindow):
             self.refresh_tab3()
         elif i == 2:
             self.refresh_tab4()
+        elif i == 3:
+            self.refresh_monitoramento()
+
+    def refresh_monitoramento(self):
+        if not hasattr(self, "monitoramento_view"):
+            return
+        metrics = self.monitoramento_controller.load_metrics()
+        self.monitoramento_view.update_metrics(metrics)
+        self.monitoramento_view.apply_theme(self.theme_service.current_theme() if self.theme_service else "light")
 
     def refresh_tab3(self):
         rows = self.store.tab_pending_all()
