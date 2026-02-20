@@ -23,10 +23,15 @@ class AppController:
 
     def _show_login_window(self) -> None:
         if self._login_window is not None:
-            self._login_window.close()
-            self._login_window.deleteLater()
+            try:
+                self._login_window.close()
+                self._login_window.deleteLater()
+            except RuntimeError:
+                logger.debug("Janela de login anterior já foi destruída")
         login = self.login_factory()
         self._login_window = login
+        if hasattr(login, "destroyed"):
+            login.destroyed.connect(lambda *_: setattr(self, "_login_window", None))
         login.show()
         login.raise_()
         login.activateWindow()
@@ -61,10 +66,13 @@ class AppController:
         if main_window is not None:
             if hasattr(main_window, "prepare_for_logoff"):
                 main_window.prepare_for_logoff()
-            main_window.close()
-            main_window.deleteLater()
+            try:
+                main_window.close()
+                main_window.deleteLater()
+            except RuntimeError:
+                logger.debug("Janela principal já foi destruída")
             self._main_window = None
-            if getattr(self.qt_app, "_main_win", None) is main_window:
+            if hasattr(self.qt_app, "_main_win"):
                 self.qt_app._main_win = None
 
         self._show_login_window()
