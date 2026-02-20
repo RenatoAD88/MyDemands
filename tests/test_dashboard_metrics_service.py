@@ -34,6 +34,7 @@ def test_metrics_calculation_counts_and_alerts():
     assert metrics.concluidas_percentual == 33
     assert metrics.em_andamento == 1
     assert metrics.em_atraso == 1
+    assert metrics.canceladas == 0
     assert metrics.por_prioridade == {"Alta": 1, "Média": 1, "Baixa": 1}
     assert [a["badge"] for a in metrics.alertas] == ["Atrasada", "Prazo hoje"]
 

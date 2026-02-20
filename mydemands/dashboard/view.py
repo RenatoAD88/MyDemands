@@ -180,12 +180,13 @@ class MonitoramentoView(QWidget):
 
     def update_metrics(self, metrics: DashboardMetrics) -> None:
         self.total_value.setText(str(metrics.total_demandas))
-        self.done_value.setText(f"{metrics.concluidas_percentual}%")
+        self.done_value.setText(str(metrics.concluidas))
         self.done_subtitle.setText(
-            "Nenhuma demanda concluída ainda" if metrics.concluidas == 0 else f"{metrics.concluidas} demandas concluídas"
+            "Nenhuma demanda concluída ainda" if metrics.concluidas == 0 else f"Concluídas - {metrics.concluidas}"
         )
         self.delay_value.setText(str(metrics.em_atraso))
         self.progress_value.setText(str(metrics.em_andamento))
+        self.cancelled_value.setText(str(metrics.canceladas))
         self.progress_bar.setValue(metrics.concluidas_percentual)
         self.progress_percent_label.setText(f"{metrics.concluidas_percentual}%")
         self.progress_subtitle.setText(f"{metrics.concluidas} de {metrics.total_demandas} demandas concluídas")
@@ -251,18 +252,19 @@ class MonitoramentoView(QWidget):
     def _build_big_numbers_block(self) -> QFrame:
         frame = QFrame()
         frame.setProperty("dashboardCard", True)
-        frame.setMinimumHeight(132)
+        frame.setMinimumHeight(150)
         l = QGridLayout(frame)
         l.setContentsMargins(18, 16, 18, 16)
         l.setHorizontalSpacing(12)
         l.setVerticalSpacing(12)
         c1, self.total_value, _ = self._metric_card("Total de Demandas", "📋", False)
-        c2, self.done_value, self.done_subtitle = self._metric_card("Concluídas", "✅", True)
+        c2, self.progress_value, _ = self._metric_card("Em Andamento", "📊", False)
         c3, self.delay_value, _ = self._metric_card("Em Atraso", "⚠️", False)
-        c4, self.progress_value, _ = self._metric_card("Em Andamento", "📊", False)
-        cards = ((c1, 0, 0), (c2, 0, 1), (c3, 1, 0), (c4, 1, 1))
-        for card, row, col in cards:
-            l.addWidget(card, row, col)
+        c4, self.cancelled_value, _ = self._metric_card("Canceladas", "🚫", False)
+        c5, self.done_value, self.done_subtitle = self._metric_card("Concluídas", "✅", True)
+        cards = (c1, c2, c3, c4, c5)
+        for col, card in enumerate(cards):
+            l.addWidget(card, 0, col)
             l.setColumnStretch(col, 1)
         return frame
 
@@ -293,7 +295,7 @@ class MonitoramentoView(QWidget):
     def _build_charts_block(self) -> QFrame:
         frame = QFrame()
         frame.setProperty("dashboardCard", True)
-        frame.setMinimumHeight(300)
+        frame.setMinimumHeight(320)
         l = QGridLayout(frame)
         l.setContentsMargins(18, 18, 18, 18)
         l.setHorizontalSpacing(14)
@@ -327,14 +329,15 @@ class MonitoramentoView(QWidget):
         lp.addWidget(self.bars)
 
         l.addWidget(status_card, 0, 0)
-        l.addWidget(priority_card, 1, 0)
+        l.addWidget(priority_card, 0, 1)
         l.setColumnStretch(0, 1)
+        l.setColumnStretch(1, 1)
         return frame
 
     def _build_alerts_block(self) -> QFrame:
         frame = QFrame()
         frame.setProperty("dashboardCard", True)
-        frame.setMinimumHeight(120)
+        frame.setMinimumHeight(260)
         l = QVBoxLayout(frame)
         l.setContentsMargins(20, 16, 20, 16)
         l.setSpacing(10)
@@ -367,6 +370,7 @@ class MonitoramentoView(QWidget):
             hl = QHBoxLayout(row)
             hl.setContentsMargins(14, 10, 14, 10)
             text = QLabel(f"{alerta['id']} — {alerta['titulo']}\nPrazo: {alerta['prazo']}")
+            text.setWordWrap(True)
             badge = QLabel(alerta["badge"])
             badge.setProperty("badge", "late" if alerta["badge"] == "Atrasada" else "today")
             hl.addWidget(text)

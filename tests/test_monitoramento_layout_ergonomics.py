@@ -23,6 +23,7 @@ def _empty_metrics() -> DashboardMetrics:
         concluidas_percentual=0,
         em_atraso=0,
         em_andamento=0,
+        canceladas=0,
         por_status={},
         por_prioridade={"Alta": 0, "Média": 0, "Baixa": 0},
         alertas=[],
