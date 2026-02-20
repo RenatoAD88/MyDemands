@@ -1333,6 +1333,7 @@ class MainWindow(QMainWindow):
         self.password_reset_service = password_reset_service
         self.master_password_admin_service = master_password_admin_service
         self._ui_ready = False
+        self._is_logging_off = False
         self.setWindowTitle("DemandasApp")
         icon_path = _app_icon_path()
         if os.path.exists(icon_path):
@@ -1503,8 +1504,21 @@ class MainWindow(QMainWindow):
     def _handle_logoff(self) -> None:
         if callable(self.on_logoff):
             self.on_logoff()
-        else:
-            QApplication.quit()
+
+    def save_backup_for_logoff(self) -> str:
+        self.team_store.load()
+        return self._save_automatic_backup()
+
+    def prepare_for_logoff(self) -> None:
+        self._is_logging_off = True
+        if hasattr(self, "deadline_scheduler") and self.deadline_scheduler is not None:
+            self.deadline_scheduler.timer.stop()
+        if hasattr(self, "notification_center_dialog") and self.notification_center_dialog is not None:
+            self.notification_center_dialog.close()
+            self.notification_center_dialog.deleteLater()
+            self.notification_center_dialog = None
+        if hasattr(self, "tray_icon") and self.tray_icon is not None:
+            self.tray_icon.hide()
 
     def _backup_day_dir_path(self, ref_day: Optional[date] = None) -> str:
         token = (ref_day or date.today()).strftime("%Y%m%d")
@@ -3568,6 +3582,11 @@ class MainWindow(QMainWindow):
         return None
 
     def closeEvent(self, event):
+        if self._is_logging_off:
+            self._save_preferences()
+            super().closeEvent(event)
+            return
+
         confirm_box = QMessageBox(self)
         confirm_box.setWindowTitle("Fechar aplicativo")
         confirm_box.setText("Deseja realmente fechar o aplicativo?")
