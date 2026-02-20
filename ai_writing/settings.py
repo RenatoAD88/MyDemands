@@ -351,8 +351,8 @@ class AISettingsDialog(QDialog):
             return "Este modelo exige aceite de termos/licença na Hugging Face. Libere o acesso e teste novamente"
         if "carregando" in text or "loading" in text:
             return "Modelo ainda está carregando. Tente novamente em instantes"
-        if "instale openai" in text or "dependência ausente" in text:
-            return "Dependência ausente: instale openai para usar o provider Hugging Face"
+        if "dependência ausente" in text:
+            return str(exc)
         return f"Falha ao testar conexão: {exc}"
 
     @staticmethod
