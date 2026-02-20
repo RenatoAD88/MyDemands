@@ -14,6 +14,7 @@ class DashboardMetrics:
     concluidas_percentual: int
     em_atraso: int
     em_andamento: int
+    canceladas: int
     por_status: Dict[str, int]
     por_prioridade: Dict[str, int]
     alertas: List[Dict[str, str]]
@@ -35,6 +36,7 @@ class DashboardMetricsService:
         total = len(rows_list)
         concluidas = 0
         em_andamento = 0
+        canceladas = 0
         em_atraso = 0
         por_status: Dict[str, int] = {}
         por_prioridade: Dict[str, int] = {"Alta": 0, "Média": 0, "Baixa": 0}
@@ -57,6 +59,8 @@ class DashboardMetricsService:
                 concluidas += 1
             if status == "Em andamento":
                 em_andamento += 1
+            if status == "Cancelado":
+                canceladas += 1
 
             prazos = parse_prazos_list(prazo_raw)
             if status not in {"Concluído", "Cancelado"} and prazos:
@@ -88,6 +92,7 @@ class DashboardMetricsService:
             concluidas_percentual=percentual,
             em_atraso=em_atraso,
             em_andamento=em_andamento,
+            canceladas=canceladas,
             por_status=por_status,
             por_prioridade=por_prioridade,
             alertas=sorted(alertas, key=lambda x: (x["badge"] != "Atrasada", x["prazo"], x["id"])),
