@@ -18,6 +18,7 @@ from ai_writing.errors import (
 from ai_writing.error_log import append_ai_error_log
 
 HF_ROUTER_BASE_URL = "https://router.huggingface.co/v1"
+HF_CHAT_COMPLETIONS_URL = f"{HF_ROUTER_BASE_URL}/chat/completions"
 HF_SYSTEM_PROMPT = (
     "Você é um assistente que reescreve textos corporativos em português do Brasil. "
     "Retorne SOMENTE o texto final entre <final> e </final>. Não escreva nada fora dessas tags."
@@ -111,13 +112,14 @@ class HuggingFaceClient:
         setattr(mapped, "hf_model", self.model)
         return mapped
 
-    def _create_router_client(self):
-        if importlib.util.find_spec("openai") is None:
-            raise AIWritingError("Dependência ausente: instale openai")
+    @staticmethod
+    def _load_requests_module():
+        if importlib.util.find_spec("requests") is None:
+            raise AIWritingError("Dependência ausente: instale requests para usar o provider Hugging Face")
 
-        from openai import OpenAI
+        import requests
 
-        return OpenAI(base_url=HF_ROUTER_BASE_URL, api_key=self.api_token, timeout=self.timeout)
+        return requests
 
     @staticmethod
     def _safe_get(value: Any, key: str) -> Any:
@@ -272,7 +274,7 @@ class HuggingFaceClient:
         max_tokens: Optional[int] = None,
         context: Optional[dict] = None,
     ) -> str:
-        client = self._create_router_client()
+        requests = self._load_requests_module()
 
         payload = {
             "model": self.model,
@@ -287,13 +289,23 @@ class HuggingFaceClient:
             payload["top_p"] = float(self.top_p)
 
         try:
-            completion = client.chat.completions.create(**payload)
+            completion_response = requests.post(
+                HF_CHAT_COMPLETIONS_URL,
+                headers={
+                    "Authorization": f"Bearer {self.api_token}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=self.timeout,
+            )
+            completion_response.raise_for_status()
+            completion = completion_response.json()
         except (TimeoutError, socket.timeout) as exc:
             raise AIRequestTimeoutError("Timeout/rede") from exc
         except Exception as exc:
             if "timeout" in str(exc).lower():
                 raise AIRequestTimeoutError("Timeout/rede") from exc
-            raise AIWritingError(str(exc) or "Falha na API do Hugging Face") from exc
+            raise self._map_hf_error(exc) from exc
 
         if isinstance(completion, Mapping) and completion.get("error"):
             error_data = completion.get("error")

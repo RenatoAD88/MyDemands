@@ -65,6 +65,12 @@ IA_CACHE_ENABLED=true
 ```
 
 
+
+## Dependências por provider
+- **OpenAI**: requer pacote `openai` instalado.
+- **Hugging Face**: usa `requests` para chamadas HTTP ao router, sem dependência do pacote `openai`.
+- Ao testar conexão, o app valida a dependência correta do provider selecionado e mostra mensagem amigável em caso de ausência.
+
 ## Como escolher um modelo no Hugging Face
 - Abra a página do modelo no Hugging Face e confira se existe seção **Inference Providers** e/ou **Playground**.
 - Copie exatamente o **model id** exibido (ex.: `meta-llama/Llama-3.1-8B-Instruct`).
@@ -76,4 +82,4 @@ IA_CACHE_ENABLED=true
 - O app não expõe tokens em logs da funcionalidade.
 - **Testar conexão** usa os valores atuais da modal (mesmo sem salvar) e **não** persiste em arquivo.
 - O fluxo **Redigir com IA** respeita `AI_ENABLED` e o `AI_PROVIDER` salvo.
-- Para Hugging Face, a integração usa `huggingface_hub.InferenceClient` com Chat Completions.
+- Para Hugging Face, a integração usa chamadas HTTP via `requests` no endpoint Chat Completions do router.

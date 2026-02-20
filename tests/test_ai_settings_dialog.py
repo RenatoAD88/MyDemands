@@ -259,3 +259,15 @@ def test_help_label_removed():
     settings_source = open("ai_writing/settings.py", "r", encoding="utf-8").read()
 
     assert 'form.addRow("Ajuda",' not in settings_source
+
+
+def test_friendly_error_message_keeps_provider_dependency_message_openai():
+    msg = AISettingsDialog._friendly_error_message(Exception("Dependência ausente: instale openai para usar o provider OpenAI"))
+
+    assert msg == "Dependência ausente: instale openai para usar o provider OpenAI"
+
+
+def test_friendly_error_message_keeps_provider_dependency_message_hf():
+    msg = AISettingsDialog._friendly_error_message(Exception("Dependência ausente: instale requests para usar o provider Hugging Face"))
+
+    assert msg == "Dependência ausente: instale requests para usar o provider Hugging Face"
