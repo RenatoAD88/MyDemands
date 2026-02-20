@@ -40,3 +40,24 @@ def test_creates_local_key_file_for_encryption(tmp_path):
     key_path = tmp_path / ".demandas.key"
     assert key_path.exists()
     assert len(key_path.read_bytes()) >= 32
+
+
+def test_load_uses_legacy_key_when_user_key_missing(tmp_path):
+    base_dir = tmp_path / "masterData"
+    user_dir = base_dir / "users" / "abc" / "data"
+    user_dir.mkdir(parents=True)
+
+    CsvStore(str(base_dir))
+    key_bytes = (base_dir / ".demandas.key").read_bytes()
+
+    store = CsvStore(str(user_dir))
+    store._crypto_key = key_bytes[:32]
+    store.add(_payload())
+
+    (user_dir / ".demandas.key").unlink()
+
+    reopened = CsvStore(str(user_dir))
+    rows = reopened.build_view()
+    assert len(rows) == 1
+    assert rows[0]["Projeto"] == "Projeto Secreto"
+    assert (user_dir / ".demandas.key").read_bytes()[:32] == key_bytes[:32]
