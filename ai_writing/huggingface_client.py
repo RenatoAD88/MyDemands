@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import re
 import socket
+import urllib.error
+import urllib.request
 from collections.abc import Mapping
 from http import HTTPStatus
 from typing import Any, Optional
@@ -117,9 +119,53 @@ class HuggingFaceClient:
         try:
             import requests
         except ImportError as exc:
-            raise ProviderDependencyError(
-                "Dependência ausente: instale requests para usar o provider Hugging Face"
-            ) from exc
+            class _FallbackResponse:
+                def __init__(self, status_code: int, body: str):
+                    self.status_code = int(status_code)
+                    self.text = body or ""
+
+                def raise_for_status(self):
+                    if self.status_code >= 400:
+                        error = AIWritingError(self.text or f"HTTP {self.status_code}")
+                        setattr(error, "status_code", self.status_code)
+                        setattr(error, "response", self)
+                        raise error
+
+                def json(self):
+                    return json.loads(self.text) if self.text else {}
+
+            class _FallbackRequests:
+                class exceptions:
+                    Timeout = TimeoutError
+
+                @staticmethod
+                def post(url, headers=None, json=None, timeout=None):
+                    payload = b""
+                    if json is not None:
+                        payload = (
+                            __import__("json").dumps(json, ensure_ascii=False).encode("utf-8")
+                        )
+                    req = urllib.request.Request(url=url, data=payload, method="POST")
+                    for key, value in (headers or {}).items():
+                        req.add_header(str(key), str(value))
+                    try:
+                        with urllib.request.urlopen(req, timeout=timeout) as resp:
+                            body = resp.read().decode("utf-8", errors="replace")
+                            return _FallbackResponse(getattr(resp, "status", 200), body)
+                    except urllib.error.HTTPError as http_exc:
+                        body = http_exc.read().decode("utf-8", errors="replace")
+                        return _FallbackResponse(getattr(http_exc, "code", 500), body)
+                    except urllib.error.URLError as url_exc:
+                        reason = getattr(url_exc, "reason", "")
+                        if isinstance(reason, TimeoutError):
+                            raise TimeoutError(str(reason)) from url_exc
+                        if isinstance(reason, socket.timeout):
+                            raise socket.timeout(str(reason)) from url_exc
+                        raise ProviderDependencyError(
+                            "Dependência requests ausente e fallback HTTP indisponível"
+                        ) from exc
+
+            return _FallbackRequests()
 
         return requests
 

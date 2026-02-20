@@ -140,7 +140,7 @@ def test_extract_exception_metadata_uses_exception_name_when_message_is_empty():
     assert meta["body"] == "_SilentError"
 
 
-def test_missing_requests_dependency_returns_friendly_error(monkeypatch):
+def test_missing_requests_dependency_uses_urllib_fallback(monkeypatch):
     monkeypatch.delitem(sys.modules, "requests", raising=False)
 
     real_import = __import__
@@ -150,11 +150,23 @@ def test_missing_requests_dependency_returns_friendly_error(monkeypatch):
             raise ImportError("No module named requests")
         return real_import(name, *args, **kwargs)
 
+    class _UrlopenResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return b'{"choices": [{"message": {"content": "OK"}}]}'
+
     monkeypatch.setattr("builtins.__import__", _fake_import)
+    monkeypatch.setattr("urllib.request.urlopen", lambda *args, **kwargs: _UrlopenResponse())
     client = HuggingFaceClient(api_token="hf_test", model="repo/model")
 
-    with pytest.raises(AIWritingError, match="instale requests"):
-        client.check_connectivity()
+    client.check_connectivity()
 
 
 def test_huggingface_does_not_import_openai(monkeypatch):
