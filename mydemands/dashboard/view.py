@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import math
 from typing import Dict, List
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
@@ -36,11 +37,13 @@ class DonutChartWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         total = sum(self.data.values())
-        rect = self.rect().adjusted(30, 20, -30, -20)
+        rect = self.rect().adjusted(24, 16, -24, -16)
         size = min(rect.width(), rect.height())
         pie_rect = rect
         pie_rect.setWidth(size)
         pie_rect.setHeight(size)
+        pie_rect.moveLeft(rect.left() + (rect.width() - size) // 2)
+        pie_rect.moveTop(rect.top() + (rect.height() - size) // 2)
         start_angle = 0
         if total <= 0:
             painter.setPen(Qt.NoPen)
@@ -53,13 +56,26 @@ class DonutChartWidget(QWidget):
             painter.setFont(placeholder_font)
             painter.drawText(self.rect(), Qt.AlignCenter, self.empty_placeholder)
         else:
-            for idx, (label, value) in enumerate(self.data.items()):
+            for idx, (_label, value) in enumerate(self.data.items()):
                 if value <= 0:
                     continue
                 span = int(5760 * (value / total))
                 painter.setPen(QPen(QColor("#F8FAFC"), 2))
                 painter.setBrush(QColor(self.colors[idx % len(self.colors)]))
                 painter.drawPie(pie_rect, start_angle, span)
+                mid_angle = start_angle + span / 2
+                radius = pie_rect.width() / 2
+                center_x = pie_rect.center().x()
+                center_y = pie_rect.center().y()
+                label_radius = radius * 0.72
+                x = int(center_x + label_radius * math.cos(-mid_angle / 16 * math.pi / 180))
+                y = int(center_y + label_radius * math.sin(-mid_angle / 16 * math.pi / 180))
+                value_font = QFont(self.font())
+                value_font.setPointSize(10)
+                value_font.setWeight(QFont.Bold)
+                painter.setFont(value_font)
+                painter.setPen(QColor("#FFFFFF"))
+                painter.drawText(QRect(x - 16, y - 10, 32, 20), Qt.AlignCenter, str(value))
                 start_angle += span
         painter.setPen(Qt.NoPen)
         painter.setBrush(self.palette().window().color())
@@ -103,9 +119,9 @@ class BarChartWidget(QWidget):
             value = self.data.get(label, 0)
             ratio = value / max_value
             bar_h = int((rect.height() - 20) * ratio)
-            x = rect.left() + idx * col_w + int(col_w * 0.3)
+            x = rect.left() + idx * col_w + int(col_w * 0.2)
             y = rect.bottom() - bar_h
-            bar_w = int(col_w * 0.4)
+            bar_w = int(col_w * 0.6)
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(bar_colors[label]))
             painter.drawRoundedRect(x, y, bar_w, bar_h, 6, 6)
@@ -114,12 +130,14 @@ class BarChartWidget(QWidget):
             label_font.setPointSize(11)
             label_font.setWeight(QFont.DemiBold)
             painter.setFont(label_font)
-            painter.drawText(x, rect.bottom() + 18, label)
+            col_rect = QRect(rect.left() + idx * col_w, rect.bottom() + 4, col_w, 26)
+            painter.drawText(col_rect, Qt.AlignHCenter | Qt.AlignTop, label)
             value_font = QFont(self.font())
             value_font.setPointSize(12)
             value_font.setWeight(QFont.Bold)
             painter.setFont(value_font)
-            painter.drawText(x, y - 8, str(value))
+            value_rect = QRect(rect.left() + idx * col_w, y - 24, col_w, 20)
+            painter.drawText(value_rect, Qt.AlignHCenter | Qt.AlignVCenter, str(value))
 
 
 class MonitoramentoView(QWidget):
@@ -181,9 +199,6 @@ class MonitoramentoView(QWidget):
     def update_metrics(self, metrics: DashboardMetrics) -> None:
         self.total_value.setText(str(metrics.total_demandas))
         self.done_value.setText(str(metrics.concluidas))
-        self.done_subtitle.setText(
-            "Nenhuma demanda concluída ainda" if metrics.concluidas == 0 else f"Concluídas - {metrics.concluidas}"
-        )
         self.delay_value.setText(str(metrics.em_atraso))
         self.progress_value.setText(str(metrics.em_andamento))
         self.cancelled_value.setText(str(metrics.canceladas))
@@ -208,8 +223,8 @@ class MonitoramentoView(QWidget):
             f"""
             MonitoramentoView, QListWidget {{ background: {bg}; color: {text}; }}
             QFrame[dashboardCard='true'] {{ background: {card_bg}; border: 1px solid {'#334155' if dark else '#E2E8F0'}; border-radius: 14px; }}
-            QLabel#metricTitle {{ color: {muted}; font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; }}
-            QLabel#metricValue {{ color: {text}; font-size: 42px; font-weight: 700; }}
+            QLabel#metricTitle {{ color: {muted}; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; text-decoration: underline; }}
+            QLabel#metricValue {{ color: {text}; font-size: 42px; font-weight: 800; text-decoration: underline; background: {'#1E293B' if dark else '#EEF2F7'}; border-radius: 8px; padding: 2px 10px; min-height: 48px; }}
             QLabel#metricSubtitle, QLabel#mutedText {{ color: {muted}; font-size: 13px; }}
             QLabel#metricPlaceholder {{ color: {muted}; font-size: 13px; font-weight: 500; }}
             QProgressBar {{ border: none; background: {'#334155' if dark else '#E2E8F0'}; border-radius: 8px; height: 18px; }}
@@ -234,7 +249,7 @@ class MonitoramentoView(QWidget):
         title_lbl = QLabel(title)
         title_lbl.setObjectName("metricTitle")
         icon_lbl = QLabel(icon)
-        icon_lbl.setStyleSheet("font-size: 20px;")
+        icon_lbl.setStyleSheet("font-size: 22px;")
         top.addWidget(title_lbl)
         top.addStretch()
         top.addWidget(icon_lbl)
@@ -252,20 +267,30 @@ class MonitoramentoView(QWidget):
     def _build_big_numbers_block(self) -> QFrame:
         frame = QFrame()
         frame.setProperty("dashboardCard", True)
-        frame.setMinimumHeight(150)
-        l = QGridLayout(frame)
+        frame.setMinimumHeight(260)
+        wrapper = QVBoxLayout(frame)
+        wrapper.setContentsMargins(18, 16, 18, 16)
+        wrapper.setSpacing(10)
+        section_title = QLabel("DADOS GERAIS")
+        section_title.setObjectName("metricTitle")
+        wrapper.addWidget(section_title)
+
+        l = QGridLayout()
         l.setContentsMargins(18, 16, 18, 16)
         l.setHorizontalSpacing(12)
         l.setVerticalSpacing(12)
-        c1, self.total_value, _ = self._metric_card("Total de Demandas", "📋", False)
-        c2, self.progress_value, _ = self._metric_card("Em Andamento", "📊", False)
-        c3, self.delay_value, _ = self._metric_card("Em Atraso", "⚠️", False)
-        c4, self.cancelled_value, _ = self._metric_card("Canceladas", "🚫", False)
-        c5, self.done_value, self.done_subtitle = self._metric_card("Concluídas", "✅", True)
+        c1, self.total_value, _ = self._metric_card("Total de Demandas", "🧾", False)
+        c2, self.progress_value, _ = self._metric_card("Em Andamento", "🚀", False)
+        c3, self.delay_value, _ = self._metric_card("Em Atraso", "⏳", False)
+        c4, self.cancelled_value, _ = self._metric_card("Canceladas", "🛑", False)
+        c5, self.done_value, self.done_subtitle = self._metric_card("Concluídas", "✅", False)
         cards = (c1, c2, c3, c4, c5)
         for col, card in enumerate(cards):
-            l.addWidget(card, 0, col)
-            l.setColumnStretch(col, 1)
+            row = col // 3
+            column = col % 3
+            l.addWidget(card, row, column)
+            l.setColumnStretch(column, 1)
+        wrapper.addLayout(l)
         return frame
 
     def _build_progress_block(self) -> QFrame:
@@ -350,7 +375,13 @@ class MonitoramentoView(QWidget):
         return frame
 
     def _render_legendas(self, by_status: Dict[str, int]) -> None:
-        self.legend_status.setText(" • ".join([f"{k}: {v}" for k, v in by_status.items() if v > 0]) or "Sem dados")
+        legend_items = []
+        for idx, (status, value) in enumerate(by_status.items()):
+            if value <= 0:
+                continue
+            color = self.donut.colors[idx % len(self.donut.colors)]
+            legend_items.append(f"<span style='color:{color}; font-weight:700'>●</span> {status}: <b>{value}</b>")
+        self.legend_status.setText(" &nbsp;&nbsp; ".join(legend_items) or "Sem dados")
 
     def _render_alertas(self, alertas: List[Dict[str, str]]) -> None:
         while self.alerts_container.count():
