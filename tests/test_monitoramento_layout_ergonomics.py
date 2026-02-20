@@ -65,7 +65,7 @@ def test_empty_dataset_shows_placeholders():
         for lbl in view.findChildren(QLabel)
         if lbl.objectName() == "metricPlaceholder"
     ]
-    assert "Sem demandas atrasadas ou vencendo hoje." in placeholders
+    assert "Sem demandas atrasadas, para hoje ou com vencimento próximo." in placeholders
 
 
 def test_typography_hierarchy_is_applied_in_stylesheet():
@@ -74,8 +74,7 @@ def test_typography_hierarchy_is_applied_in_stylesheet():
     qss = view.styleSheet()
 
     assert "QLabel#metricTitle" in qss
-    assert "font-size: 13px" in qss
-    assert "font-weight: 500" in qss
+    assert "QLabel#sectionTitle" in qss
     assert "QLabel#metricValue" in qss
-    assert "font-size: 42px" in qss
-    assert "font-weight: 700" in qss
+    assert "font-size: 32px" in qss
+    assert "QLabel#progressPercent" in qss
