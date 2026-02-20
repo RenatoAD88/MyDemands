@@ -46,8 +46,13 @@ class WindowsDpapiSecretStore(ISecretStore):
         encoded = payload.get(key)
         if not encoded:
             return None
-        raw = base64.b64decode(encoded)
-        return self._unprotect(raw)
+        try:
+            raw = base64.b64decode(encoded)
+            return self._unprotect(raw)
+        except Exception:
+            payload.pop(key, None)
+            self._save(payload)
+            return None
 
     def delete(self, key: str) -> None:
         payload = self._load()
