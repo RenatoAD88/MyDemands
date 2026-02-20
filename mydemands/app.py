@@ -49,7 +49,18 @@ def main() -> int:
     reset_service = PasswordResetService(users, email_service)
     master_password_admin_service = MasterPasswordAdminService(users, email_service, reset_service)
 
-    app_controller = AppController(auth, qt_app)
+    def _create_login_window() -> LoginWindow:
+        login = LoginWindow(
+            auth,
+            reset_service,
+            _open_main,
+            user_prefs,
+            last_login,
+            on_authenticated=lambda: login.close(),
+        )
+        return login
+
+    app_controller = AppController(auth, qt_app, _create_login_window)
     theme_service = ThemeService(qt_app)
 
     def _open_main(email: str):
@@ -72,21 +83,26 @@ def main() -> int:
             master_password_admin_service=master_password_admin_service,
             backup_root=str(user_dir / "backups"),
             exports_root=str(user_dir / "exports"),
-            on_logoff=app_controller.logoff_and_exit,
+            on_logoff=app_controller.handle_logoff,
             user_prefs_repo=user_prefs,
             theme_service=theme_service,
             secure_csv_service=SecureCsvExchangeService(secrets_store),
         )
         win.resize(1280, 720)
+        existing_win = getattr(qt_app, "_main_win", None)
+        if existing_win is not None:
+            existing_win.close()
+            existing_win.deleteLater()
+        app_controller.register_main_window(win)
         win.show()
         qt_app._main_win = win  # type: ignore[attr-defined]
 
     user_prefs = UserPrefsRepository(paths)
     last_login = LastLoginRepository(paths.base_dir / "last_login.json")
 
-    login = LoginWindow(auth, reset_service, _open_main, user_prefs, last_login)
-    if login.exec() != LoginWindow.Accepted:
-        return 0
+    login = _create_login_window()
+    login.show()
+    login.focus_first_field()
 
     return qt_app.exec()
 

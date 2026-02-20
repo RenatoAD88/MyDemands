@@ -41,6 +41,7 @@ class LoginWindow(QDialog):
         on_login: Callable[[str], None],
         user_prefs: UserPrefsRepository,
         last_login: LastLoginRepository,
+        on_authenticated: Callable[[], None] | None = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -49,6 +50,7 @@ class LoginWindow(QDialog):
         self.on_login = on_login
         self.user_prefs = user_prefs
         self.last_login = last_login
+        self.on_authenticated = on_authenticated
         self.remembered_user_email: str | None = None
         self._known_email: str | None = None
         self.setWindowTitle("Login")
@@ -92,6 +94,13 @@ class LoginWindow(QDialog):
         layout.addWidget(self.msg)
 
         self._initialize_start_mode()
+
+
+    def focus_first_field(self) -> None:
+        if self.email.text().strip():
+            self.password.setFocus()
+        else:
+            self.email.setFocus()
 
     def _initialize_start_mode(self) -> None:
         last_email = self.last_login.load_last_email()
@@ -191,6 +200,8 @@ class LoginWindow(QDialog):
                 self._known_email = user.email
             self.last_login.save_last_email(user.email)
             self.on_login(user.email)
+            if callable(self.on_authenticated):
+                self.on_authenticated()
             self.accept()
         except Exception as exc:
             QMessageBox.warning(self, "Erro", str(exc))
