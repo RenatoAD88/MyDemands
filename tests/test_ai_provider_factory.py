@@ -36,3 +36,18 @@ def test_provider_factory_openai_missing_dependency(monkeypatch):
 
     with pytest.raises(AIWritingError, match="instale openai para usar o provider OpenAI"):
         AIProviderFactory.create(OPENAI_PROVIDER, cfg)
+
+
+def test_provider_factory_openai_does_not_depend_on_requests(monkeypatch):
+    cfg = AIConfig(openai_api_key="sk", hf_api_token="hf")
+    monkeypatch.delitem(sys.modules, "requests", raising=False)
+    original_find_spec = importlib.util.find_spec
+    monkeypatch.setattr(
+        importlib.util,
+        "find_spec",
+        lambda name: object() if name == "openai" else original_find_spec(name),
+    )
+
+    openai_client = AIProviderFactory.create(OPENAI_PROVIDER, cfg)
+
+    assert openai_client.__class__.__name__ == "OpenAIClient"

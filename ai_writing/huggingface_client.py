@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import re
 import socket
@@ -13,6 +12,7 @@ from ai_writing.errors import (
     AIWritingError,
     MissingAPIKeyError,
     ModelNotFoundError,
+    ProviderDependencyError,
     RateLimitError,
 )
 from ai_writing.error_log import append_ai_error_log
@@ -114,10 +114,12 @@ class HuggingFaceClient:
 
     @staticmethod
     def _load_requests_module():
-        if importlib.util.find_spec("requests") is None:
-            raise AIWritingError("Dependência ausente: instale requests para usar o provider Hugging Face")
-
-        import requests
+        try:
+            import requests
+        except ImportError as exc:
+            raise ProviderDependencyError(
+                "Dependência ausente: instale requests para usar o provider Hugging Face"
+            ) from exc
 
         return requests
 

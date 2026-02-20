@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import sys
 import types
@@ -61,11 +60,8 @@ def _install_fake_requests(monkeypatch, *, payload=None, status_code: int = 200,
     fake_module = types.ModuleType("requests")
     fake_module.post = _FAKE_REQUESTS.post
     fake_module.exceptions = _FakeRequests.exceptions
-    fake_module.__spec__ = types.SimpleNamespace()
 
     monkeypatch.setitem(sys.modules, "requests", fake_module)
-    original_find_spec = importlib.util.find_spec
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object() if name == "requests" else original_find_spec(name))
 
 
 def test_hf_chat_completions_parsing(monkeypatch):
@@ -146,7 +142,15 @@ def test_extract_exception_metadata_uses_exception_name_when_message_is_empty():
 
 def test_missing_requests_dependency_returns_friendly_error(monkeypatch):
     monkeypatch.delitem(sys.modules, "requests", raising=False)
-    monkeypatch.setattr("importlib.util.find_spec", lambda _: None)
+
+    real_import = __import__
+
+    def _fake_import(name, *args, **kwargs):
+        if name == "requests":
+            raise ImportError("No module named requests")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", _fake_import)
     client = HuggingFaceClient(api_token="hf_test", model="repo/model")
 
     with pytest.raises(AIWritingError, match="instale requests"):
