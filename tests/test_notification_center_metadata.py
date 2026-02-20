@@ -9,6 +9,17 @@ from notifications.models import Notification, NotificationType
 from notifications.store import NotificationStore
 
 
+EXPECTED_HEADERS = [
+    "Número da demanda",
+    "Descrição da demanda",
+    "Data notificação",
+    "Tag",
+    "Observação",
+    "Mensagem",
+    "Status",
+]
+
+
 def test_notification_payload_contains_demand_id_and_description_when_created(tmp_path):
     store = NotificationStore(str(tmp_path))
     notif_id = store.insert(
@@ -30,7 +41,7 @@ def test_notification_payload_contains_demand_id_and_description_when_created(tm
     assert saved.payload.get("demand_description") == "Descrição snapshot"
 
 
-def test_notification_center_renders_id_and_description(tmp_path):
+def test_notification_center_column_order_headers_and_mapping(tmp_path):
     try:
         qtwidgets = __import__("PySide6.QtWidgets", fromlist=["QApplication"])
     except ImportError as exc:
@@ -58,15 +69,56 @@ def test_notification_center_renders_id_and_description(tmp_path):
     qtcore = __import__("PySide6.QtCore", fromlist=["Qt"])
     Qt = qtcore.Qt
     headers = [dialog.proxy.headerData(i, Qt.Horizontal, Qt.DisplayRole) for i in range(dialog.proxy.columnCount())]
-    assert "ID" in headers
-    assert "Descrição" in headers
+    assert headers == EXPECTED_HEADERS
 
-    id_text = dialog.proxy.data(dialog.proxy.index(0, 3))
-    rendered_desc = dialog.proxy.data(dialog.proxy.index(0, 4))
-    tooltip_desc = dialog.proxy.data(dialog.proxy.index(0, 4), role=Qt.ToolTipRole)
-    assert id_text == "D-10"
-    assert rendered_desc
+    assert dialog.proxy.data(dialog.proxy.index(0, 0)) == "D-10"
+    assert dialog.proxy.data(dialog.proxy.index(0, 1)).startswith("Uma descrição")
+    assert dialog.proxy.data(dialog.proxy.index(0, 2)) == "01/01/2026 11:00"
+    assert dialog.proxy.data(dialog.proxy.index(0, 3)) == NotificationType.ALTERACAO_STATUS.value
+    assert dialog.proxy.data(dialog.proxy.index(0, 4)) == "Status atualizado"
+    assert dialog.proxy.data(dialog.proxy.index(0, 5)) == "Novo status"
+    assert dialog.proxy.data(dialog.proxy.index(0, 6)) == "Não lida"
+
+    tooltip_desc = dialog.proxy.data(dialog.proxy.index(0, 1), role=Qt.ToolTipRole)
     assert str(tooltip_desc).startswith("Uma descrição")
+
+    dialog.close()
+    app.quit()
+
+
+def test_notification_center_toggle_read_status_still_works_after_reorder(tmp_path):
+    try:
+        qtwidgets = __import__("PySide6.QtWidgets", fromlist=["QApplication"])
+    except ImportError as exc:
+        pytest.skip(f"PySide6 indisponível no ambiente: {exc}")
+    QApplication = qtwidgets.QApplication
+    app = QApplication.instance() or QApplication([])
+
+    store = NotificationStore(str(tmp_path))
+    notif_id = store.insert(
+        Notification(
+            type=NotificationType.NOVA_DEMANDA,
+            title="Demanda",
+            body="Corpo",
+            timestamp=datetime(2026, 1, 5, 8, 30, 0),
+            demand_id="55",
+            demand_description="Descrição",
+            read=False,
+        )
+    )
+
+    from notifications.center_view import NotificationCenterDialog
+
+    dialog = NotificationCenterDialog(store, lambda _n: None)
+    dialog.refresh()
+    dialog.table.selectRow(0)
+
+    assert dialog.proxy.data(dialog.proxy.index(0, 6)) == "Não lida"
+    dialog.toggle_selected_read_status()
+
+    updated = store.get_notification_by_id(notif_id)
+    assert updated is not None and updated.read is True
+    assert dialog.proxy.data(dialog.proxy.index(0, 6)) == "Lida"
 
     dialog.close()
     app.quit()
@@ -95,8 +147,8 @@ def test_legacy_notification_without_fields_does_not_crash(tmp_path):
     dialog = NotificationCenterDialog(store, lambda _n: None)
     dialog.refresh()
 
-    assert dialog.proxy.data(dialog.proxy.index(0, 3)) == "—"
-    assert dialog.proxy.data(dialog.proxy.index(0, 4)) == "—"
+    assert dialog.proxy.data(dialog.proxy.index(0, 0)) == "—"
+    assert dialog.proxy.data(dialog.proxy.index(0, 1)) == "—"
 
     dialog.close()
     app.quit()
