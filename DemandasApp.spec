@@ -16,6 +16,7 @@ datas = []
 binaries = []
 hiddenimports = [
     'huggingface_hub',
+    'requests',
     'bcrypt',
     'mydemands.resources_rc',
 ]

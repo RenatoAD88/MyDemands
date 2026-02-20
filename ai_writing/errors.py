@@ -21,5 +21,9 @@ class AIRequestTimeoutError(AIWritingError):
     pass
 
 
+class ProviderDependencyError(AIWritingError):
+    pass
+
+
 class UsageLimitReachedError(AIWritingError):
     pass
