@@ -48,7 +48,7 @@ from csv_store import CsvStore, parse_prazos_list
 from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, build_team_control_report_rows, monthly_k_count, split_member_names
 from validation import ValidationError, normalize_prazo_text, validate_payload
 from bootstrap import resolve_storage_root, ensure_storage_root
-from ui_theme import status_color, timing_color
+from ui_theme import apply_dynamic_selection_style, status_color, timing_color
 from ui_filters import filter_rows, summary_counts
 from ui_prefs import load_prefs, save_prefs
 from form_rules import required_fields
@@ -1671,7 +1671,6 @@ class MainWindow(QMainWindow):
 
         table.setItemDelegate(ColumnComboDelegate(table, col_map))
         table.setAlternatingRowColors(True)
-        table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         table.verticalHeader().setVisible(False)
         table.setWordWrap(True)
@@ -1688,6 +1687,7 @@ class MainWindow(QMainWindow):
         self._apply_capped_text_column_width(table, "Descrição", DESC_COLUMN_MAX_CHARS)
         self._apply_capped_text_column_width(table, "Comentário", COMMENT_COLUMN_MAX_CHARS)
         self._setup_sortable_header(table)
+        apply_dynamic_selection_style(table)
 
         return table
 
@@ -2423,6 +2423,9 @@ class MainWindow(QMainWindow):
 
 
     def _on_theme_changed(self, _theme: str) -> None:
+        for table in self.findChildren(QTableWidget):
+            apply_dynamic_selection_style(table)
+
         for btn, icon_name in (
             (getattr(self, "new_btn", None), "new_demand"),
             (getattr(self, "delete_btn", None), "delete"),

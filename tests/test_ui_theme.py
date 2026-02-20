@@ -1,10 +1,14 @@
 import pytest
 
 qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
+qtgui = pytest.importorskip("PySide6.QtGui", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
 QApplication = qtwidgets.QApplication
+QTableWidget = qtwidgets.QTableWidget
+QAbstractItemView = qtwidgets.QAbstractItemView
+QColor = qtgui.QColor
 
 from mydemands.services.theme_service import ThemeService
-from ui_theme import build_app_stylesheet, status_color, timing_color
+from ui_theme import apply_dynamic_selection_style, best_text_color, build_app_stylesheet, luminance, status_color, timing_color
 
 
 def test_status_color_maps_known_states():
@@ -131,3 +135,43 @@ def test_dark_stylesheet_has_high_contrast_table_and_header_colors():
     assert "color: #FFFFFF;" in stylesheet
     assert "QHeaderView::section {" in stylesheet
     assert "background: #2A2A2A;" in stylesheet
+
+
+def test_luminance_detects_light_and_dark_backgrounds():
+    assert luminance(QColor(255, 255, 255)) > 0.5
+    assert luminance(QColor(20, 20, 20)) <= 0.5
+
+
+def test_best_text_color_prefers_high_contrast_pair():
+    assert best_text_color(QColor("#101010")).name() == QColor("white").name()
+    assert best_text_color(QColor("#f0f4ff")).name() == QColor("black").name()
+
+
+def test_apply_dynamic_selection_style_sets_rows_selection_and_qss():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+
+    table = QTableWidget(0, 2)
+    table.setStyleSheet("QTableWidget { border: 1px solid #000; }")
+    apply_dynamic_selection_style(table)
+
+    assert table.selectionBehavior() == QAbstractItemView.SelectRows
+    qss = table.styleSheet()
+    assert "/* dynamic-table-selection:start */" in qss
+    assert "QTableWidget::item:selected" in qss
+
+
+def test_apply_dynamic_selection_style_replaces_previous_dynamic_block():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+
+    table = QTableWidget(0, 2)
+    apply_dynamic_selection_style(table)
+    first = table.styleSheet()
+    apply_dynamic_selection_style(table)
+    second = table.styleSheet()
+
+    assert second.count("/* dynamic-table-selection:start */") == 1
+    assert len(second) >= len(first)
