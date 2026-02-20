@@ -75,7 +75,9 @@ class AppController:
             if hasattr(self.qt_app, "_main_win"):
                 self.qt_app._main_win = None
 
-        self._show_login_window()
+        quit_app = getattr(self.qt_app, "quit", None)
+        if callable(quit_app):
+            quit_app()
 
     def _close_open_modal(self) -> None:
         active_modal_getter = getattr(self.qt_app, "activeModalWidget", None)

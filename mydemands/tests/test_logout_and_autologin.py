@@ -67,7 +67,7 @@ class _FakeModal:
         self.rejected = True
 
 
-def test_handle_logoff_clears_session_saves_backup_and_returns_to_login(env):
+def test_handle_logoff_clears_session_saves_backup_and_quits_app(env):
     auth = env["auth"]
     auth.register("user@test.com", "Abcdef1!")
     auth.create_remember_session("user@test.com", ttl_days=1)
@@ -99,10 +99,8 @@ def test_handle_logoff_clears_session_saves_backup_and_returns_to_login(env):
     assert main_window.closed is True
     assert main_window.deleted is True
     assert app._main_win is None
-    assert app._quit_called is False
-    assert len(created_logins) == 1
-    assert created_logins[0].visible is True
-    assert created_logins[0].focused is True
+    assert app._quit_called is True
+    assert len(created_logins) == 0
 
 
 def test_relogin_reuses_single_main_window_instance(env):
@@ -130,6 +128,7 @@ def test_relogin_reuses_single_main_window_instance(env):
 
     controller.handle_logoff()
     assert first.closed is True
+    assert app._quit_called is True
 
     _open_main()
     second = app._main_win
@@ -138,7 +137,7 @@ def test_relogin_reuses_single_main_window_instance(env):
     assert not [w for w in opened_windows if (w is not second and not w.closed)]
 
 
-def test_handle_logoff_ignores_already_deleted_previous_login(env):
+def test_handle_logoff_ignores_already_deleted_previous_login_and_quits(env):
     auth = env["auth"]
     auth.register("user@test.com", "Abcdef1!")
 
@@ -167,5 +166,5 @@ def test_handle_logoff_ignores_already_deleted_previous_login(env):
 
     controller.handle_logoff()
 
-    assert len(created_logins) == 1
-    assert created_logins[0].visible is True
+    assert len(created_logins) == 0
+    assert app._quit_called is True
