@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -19,7 +20,11 @@ from PySide6.QtWidgets import (
 
 from .models import Notification, NotificationType
 from .store import NotificationStore
-from .center_table import NotificationFilterProxy, NotificationTableModel
+from .center_table import (
+    NotificationFilterProxy,
+    NotificationTableModel,
+    notification_column_index,
+)
 
 
 class NotificationCenterDialog(QDialog):
@@ -79,6 +84,14 @@ class NotificationCenterDialog(QDialog):
         self.table.setSelectionBehavior(QTableView.SelectRows)
         self.table.setSortingEnabled(True)
         self.table.horizontalHeader().setSortIndicatorShown(True)
+        self.table.horizontalHeader().setSectionResizeMode(notification_column_index("body"), QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(notification_column_index("demand_id"), QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(notification_column_index("type"), QHeaderView.ResizeToContents)
+        self.table.setColumnWidth(notification_column_index("demand_description"), 220)
+        self.table.setColumnWidth(notification_column_index("timestamp"), 170)
+        self.table.setColumnWidth(notification_column_index("title"), 220)
+        self.table.setWordWrap(False)
+        self.table.setTextElideMode(Qt.ElideRight)
         self.table.selectionModel().selectionChanged.connect(self._update_mark_button_label)
         self.table.doubleClicked.connect(self._open_selected)
 
@@ -131,7 +144,7 @@ class NotificationCenterDialog(QDialog):
         read_filter = self.read_filter.currentData()
         rows = self.store.list_notifications(type_filter=type_filter, read_filter=read_filter)
         self.table_model.set_notifications(rows)
-        self.proxy.sort(0, Qt.DescendingOrder)
+        self.proxy.sort(notification_column_index("timestamp"), Qt.DescendingOrder)
         self._apply_text_filters()
         self._apply_date_filters()
         self._update_mark_button_label()

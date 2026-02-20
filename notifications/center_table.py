@@ -16,14 +16,21 @@ class NotificationColumn:
 
 
 NOTIFICATION_COLUMNS: tuple[NotificationColumn, ...] = (
-    NotificationColumn("timestamp", "Data"),
-    NotificationColumn("type", "Tipo"),
-    NotificationColumn("title", "Título"),
-    NotificationColumn("demand_id", "ID"),
-    NotificationColumn("demand_description", "Descrição"),
+    NotificationColumn("demand_id", "Número da demanda"),
+    NotificationColumn("demand_description", "Descrição da demanda"),
+    NotificationColumn("timestamp", "Data notificação"),
+    NotificationColumn("type", "Tag"),
+    NotificationColumn("title", "Observação"),
     NotificationColumn("body", "Mensagem"),
     NotificationColumn("read", "Status"),
 )
+
+
+def notification_column_index(column_key: str) -> int:
+    for index, column in enumerate(NOTIFICATION_COLUMNS):
+        if column.key == column_key:
+            return index
+    raise ValueError(f"Coluna não suportada: {column_key}")
 
 
 class NotificationTableModel(QAbstractTableModel):

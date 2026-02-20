@@ -8,7 +8,7 @@ Qt = pytest.importorskip("PySide6.QtCore").Qt
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from notifications.center_table import NotificationFilterProxy, NotificationTableModel
+from notifications.center_table import NotificationFilterProxy, NotificationTableModel, notification_column_index
 from notifications.models import Notification, NotificationType
 
 
@@ -69,25 +69,25 @@ def _visible_ids(model, proxy):
 
 def test_sort_by_date_desc(sample_model):
     model, proxy = sample_model
-    proxy.sort(0, Qt.DescendingOrder)
+    proxy.sort(notification_column_index("timestamp"), Qt.DescendingOrder)
     assert _visible_ids(model, proxy) == [2, 3, 1]
 
 
 def test_sort_by_demand_id_numeric(sample_model):
     model, proxy = sample_model
-    proxy.sort(3, Qt.AscendingOrder)
+    proxy.sort(notification_column_index("demand_id"), Qt.AscendingOrder)
     assert _visible_ids(model, proxy) == [3, 1, 2]
 
 
 def test_sort_by_text_column_case_insensitive(sample_model):
     model, proxy = sample_model
-    proxy.sort(2, Qt.AscendingOrder)
+    proxy.sort(notification_column_index("title"), Qt.AscendingOrder)
     assert _visible_ids(model, proxy) == [1, 2, 3]
 
 
 def test_filter_text_contains_matches(sample_model):
     model, proxy = sample_model
-    proxy.set_filter_value("body", "mensagem")
+    proxy.set_filter_value("keyword", "mensagem")
     assert _visible_ids(model, proxy) == [1, 2]
 
 
@@ -112,15 +112,15 @@ def test_filter_bool_read_status(sample_model):
 
 def test_clear_filters_restores_all_rows(sample_model):
     model, proxy = sample_model
-    proxy.set_filter_value("title", "alpha")
-    assert proxy.rowCount() == 1
+    proxy.set_filter_value("keyword", "alpha")
+    assert proxy.rowCount() == 0
     proxy.clear_filters()
     assert _visible_ids(model, proxy) == [1, 2, 3]
 
 
 def test_legacy_notifications_with_missing_fields_do_not_crash_filters(sample_model):
     model, proxy = sample_model
-    proxy.set_filter_value("demand_description", "descrição")
+    proxy.set_filter_value("keyword", "descrição")
     assert _visible_ids(model, proxy) == [1, 2]
     proxy.set_filter_value("demand_id", "999")
     assert proxy.rowCount() == 0
