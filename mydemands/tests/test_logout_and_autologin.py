@@ -136,3 +136,36 @@ def test_relogin_reuses_single_main_window_instance(env):
     assert second is not None
     assert second is not first
     assert not [w for w in opened_windows if (w is not second and not w.closed)]
+
+
+def test_handle_logoff_ignores_already_deleted_previous_login(env):
+    auth = env["auth"]
+    auth.register("user@test.com", "Abcdef1!")
+
+    app = _FakeQtApp()
+    main_window = _FakeMainWindow()
+    app._main_win = main_window
+
+    created_logins = []
+
+    def _login_factory():
+        login = _FakeLoginDialog()
+        created_logins.append(login)
+        return login
+
+    controller = AppController(auth, app, _login_factory)
+    controller.register_main_window(main_window)
+
+    class _DeletedLogin:
+        def close(self):
+            raise RuntimeError("Internal C++ object already deleted")
+
+        def deleteLater(self):
+            raise RuntimeError("Internal C++ object already deleted")
+
+    controller._login_window = _DeletedLogin()
+
+    controller.handle_logoff()
+
+    assert len(created_logins) == 1
+    assert created_logins[0].visible is True
