@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, List
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -24,7 +24,7 @@ class DonutChartWidget(QWidget):
         super().__init__()
         self.data: Dict[str, int] = {}
         self.colors = ["#6366F1", "#10B981", "#F59E0B", "#F97316", "#94A3B8"]
-        self.setMinimumHeight(180)
+        self.setMinimumHeight(220)
 
     def set_data(self, data: Dict[str, int]) -> None:
         self.data = data
@@ -63,7 +63,7 @@ class BarChartWidget(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.data = {"Alta": 0, "Média": 0, "Baixa": 0}
-        self.setMinimumHeight(180)
+        self.setMinimumHeight(220)
 
     def set_data(self, data: Dict[str, int]) -> None:
         self.data = {"Alta": data.get("Alta", 0), "Média": data.get("Média", 0), "Baixa": data.get("Baixa", 0)}
@@ -90,8 +90,16 @@ class BarChartWidget(QWidget):
             painter.setBrush(QColor(bar_colors[label]))
             painter.drawRoundedRect(x, y, bar_w, bar_h, 6, 6)
             painter.setPen(self.palette().text().color())
-            painter.drawText(x, rect.bottom() + 16, label)
-            painter.drawText(x, y - 6, str(value))
+            label_font = QFont(self.font())
+            label_font.setPointSize(11)
+            label_font.setWeight(QFont.DemiBold)
+            painter.setFont(label_font)
+            painter.drawText(x, rect.bottom() + 18, label)
+            value_font = QFont(self.font())
+            value_font.setPointSize(12)
+            value_font.setWeight(QFont.Bold)
+            painter.setFont(value_font)
+            painter.drawText(x, y - 8, str(value))
 
 
 class MonitoramentoView(QWidget):
@@ -106,6 +114,7 @@ class MonitoramentoView(QWidget):
         self.header_title = QLabel("Dashboard")
         self.header_title.setStyleSheet("font-size: 30px; font-weight: 800;")
         self.header_subtitle = QLabel("Visão geral das suas demandas")
+        self.header_subtitle.setStyleSheet("font-size: 16px;")
         self.header_subtitle.setObjectName("mutedText")
         root.addWidget(self.header_title)
         root.addWidget(self.header_subtitle)
@@ -168,15 +177,15 @@ class MonitoramentoView(QWidget):
         bg = "#0F172A" if dark else "#F7F9FC"
         card_bg = "#1E293B" if dark else "#FFFFFF"
         text = "#E2E8F0" if dark else "#0F172A"
-        muted = "#94A3B8" if dark else "#64748B"
+        muted = "#94A3B8" if dark else "#475569"
         self.setStyleSheet(
             f"""
             MonitoramentoView, QListWidget {{ background: {bg}; color: {text}; }}
             QFrame[dashboardCard='true'] {{ background: {card_bg}; border: 1px solid {'#334155' if dark else '#E2E8F0'}; border-radius: 14px; }}
-            QLabel#metricTitle {{ color: {muted}; font-size: 12px; font-weight: 700; text-transform: uppercase; }}
-            QLabel#metricValue {{ color: {text}; font-size: 38px; font-weight: 800; }}
-            QLabel#metricSubtitle, QLabel#mutedText {{ color: {muted}; font-size: 13px; }}
-            QProgressBar {{ border: none; background: {'#334155' if dark else '#E2E8F0'}; border-radius: 6px; height: 14px; }}
+            QLabel#metricTitle {{ color: {muted}; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }}
+            QLabel#metricValue {{ color: {text}; font-size: 46px; font-weight: 800; }}
+            QLabel#metricSubtitle, QLabel#mutedText {{ color: {muted}; font-size: 16px; }}
+            QProgressBar {{ border: none; background: {'#334155' if dark else '#E2E8F0'}; border-radius: 8px; height: 18px; }}
             QProgressBar::chunk {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #6366F1, stop:1 #8B5CF6); border-radius: 6px; }}
             QLabel[badge='late'] {{ background: {'#7F1D1D' if dark else '#FEE2E2'}; color: {'#FECACA' if dark else '#B91C1C'}; border-radius: 10px; padding: 3px 8px; font-weight: 700; }}
             QLabel[badge='today'] {{ background: {'#854D0E' if dark else '#FEF3C7'}; color: {'#FDE68A' if dark else '#92400E'}; border-radius: 10px; padding: 3px 8px; font-weight: 700; }}
@@ -194,7 +203,7 @@ class MonitoramentoView(QWidget):
         title_lbl = QLabel(title)
         title_lbl.setObjectName("metricTitle")
         icon_lbl = QLabel(icon)
-        icon_lbl.setStyleSheet("font-size: 18px;")
+        icon_lbl.setStyleSheet("font-size: 24px;")
         top.addWidget(title_lbl)
         top.addStretch()
         top.addWidget(icon_lbl)
@@ -230,7 +239,7 @@ class MonitoramentoView(QWidget):
         title = QLabel("PROGRESSO GERAL")
         title.setObjectName("metricTitle")
         self.progress_percent_label = QLabel("0%")
-        self.progress_percent_label.setStyleSheet("font-size: 28px; font-weight: 800;")
+        self.progress_percent_label.setStyleSheet("font-size: 34px; font-weight: 800;")
         top.addWidget(title)
         top.addStretch()
         top.addWidget(self.progress_percent_label)
@@ -255,6 +264,7 @@ class MonitoramentoView(QWidget):
         self.donut = DonutChartWidget()
         self.legend_status = QLabel("")
         self.legend_status.setWordWrap(True)
+        self.legend_status.setObjectName("metricSubtitle")
         ls.addWidget(t1)
         ls.addWidget(self.donut)
         ls.addWidget(self.legend_status)
