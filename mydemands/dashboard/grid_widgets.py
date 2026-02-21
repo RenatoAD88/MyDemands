@@ -88,6 +88,7 @@ class ColumnConfigDialog(QDialog):
 
 class BaseGridView(QTableWidget):
     preferences_changed = Signal(dict)
+    LEFT_ALIGNED_COLUMN_IDS = {"descricao", "comentario"}
 
     def __init__(self, schema: List[DemandColumnSchema], parent=None) -> None:
         super().__init__(0, len(schema), parent)
@@ -180,6 +181,10 @@ class BaseGridView(QTableWidget):
             for idx, col in enumerate(self._schema):
                 value = str(row_data.get(col.id, ""))
                 item = QTableWidgetItem(value)
+                if col.id in self.LEFT_ALIGNED_COLUMN_IDS:
+                    item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                else:
+                    item.setTextAlignment(Qt.AlignCenter)
                 if col.id == "prazo" and row_data.get("prazo_tooltip"):
                     item.setToolTip(str(row_data.get("prazo_tooltip")))
                 self.setItem(row, idx, item)
