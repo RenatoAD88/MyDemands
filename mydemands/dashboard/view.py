@@ -23,17 +23,21 @@ from mydemands.dashboard.metrics_service import DashboardMetrics
 
 
 class DonutChartWidget(QWidget):
-    def __init__(self) -> None:
+    def __init__(self, labels_order: List[str] | None = None, colors: Dict[str, str] | None = None) -> None:
         super().__init__()
+        self.labels_order = labels_order or []
         self.data: Dict[str, int] = {}
-        self.colors = ["#6366F1", "#10B981", "#F59E0B", "#F97316", "#94A3B8"]
+        self.colors = colors or {}
         self.empty_placeholder = "Sem dados suficientes"
         self.empty_color = "#64748B"
         self.value_color = QColor("black")
-        self.setMinimumHeight(280)
+        self.setMinimumHeight(260)
 
     def set_data(self, data: Dict[str, int]) -> None:
-        self.data = data
+        if self.labels_order:
+            self.data = {label: int(data.get(label, 0)) for label in self.labels_order}
+        else:
+            self.data = {str(k): int(v) for k, v in data.items()}
         self.update()
 
     def paintEvent(self, _event) -> None:  # noqa: N802
@@ -55,12 +59,13 @@ class DonutChartWidget(QWidget):
             painter.setPen(QColor(self.empty_color))
             painter.drawText(self.rect(), Qt.AlignCenter, self.empty_placeholder)
         else:
-            for idx, (_label, value) in enumerate(self.data.items()):
+            for idx, (label, value) in enumerate(self.data.items()):
                 if value <= 0:
                     continue
                 span = int(5760 * (value / total))
+                fill = self.colors.get(label, ["#6366F1", "#10B981", "#F59E0B"][idx % 3])
                 painter.setPen(QPen(QColor("#F8FAFC"), 2))
-                painter.setBrush(QColor(self.colors[idx % len(self.colors)]))
+                painter.setBrush(QColor(fill))
                 painter.drawPie(pie_rect, start_angle, span)
                 mid_angle = start_angle + span / 2
                 radius = pie_rect.width() / 2
@@ -81,52 +86,21 @@ class DonutChartWidget(QWidget):
         painter.drawEllipse(pie_rect.adjusted(30, 30, -30, -30))
 
 
-class BarChartWidget(QWidget):
-    def __init__(self) -> None:
-        super().__init__()
-        self.data = {"Alta": 0, "Média": 0, "Baixa": 0}
-        self.empty_placeholder = "Sem dados suficientes"
-        self.empty_color = "#64748B"
-        self.setMinimumHeight(280)
-
-    def set_data(self, data: Dict[str, int]) -> None:
-        self.data = {"Alta": data.get("Alta", 0), "Média": data.get("Média", 0), "Baixa": data.get("Baixa", 0)}
-        self.update()
-
-    def paintEvent(self, _event) -> None:  # noqa: N802
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        rect = self.rect().adjusted(20, 20, -20, -30)
-        max_value = max(max(self.data.values()), 1)
-        labels = ["Alta", "Média", "Baixa"]
-        bar_colors = {"Alta": "#EF4444", "Média": "#F59E0B", "Baixa": "#10B981"}
-        col_w = rect.width() // max(1, len(labels))
-
-        if sum(self.data.values()) <= 0:
-            painter.setPen(QColor(self.empty_color))
-            painter.drawText(self.rect(), Qt.AlignCenter, self.empty_placeholder)
-            return
-
-        for idx, label in enumerate(labels):
-            value = self.data.get(label, 0)
-            bar_h = max(int((rect.height() - 20) * (value / max_value)), 2)
-            x = rect.left() + idx * col_w + int(col_w * 0.2)
-            y = rect.bottom() - bar_h
-            bar_w = int(col_w * 0.6)
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(bar_colors[label]))
-            painter.drawRoundedRect(x, y, bar_w, bar_h, 6, 6)
-            painter.setPen(self.palette().text().color())
-            painter.drawText(QRect(rect.left() + idx * col_w, rect.bottom() + 4, col_w, 26), Qt.AlignHCenter | Qt.AlignTop, label)
-            painter.drawText(QRect(rect.left() + idx * col_w, y - 24, col_w, 20), Qt.AlignHCenter | Qt.AlignVCenter, str(value))
-
-
 class TimingBarsWidget(QWidget):
+    COLOR_MAP = {
+        "Dentro do prazo": "#1E3A8A",
+        "Concluído antes do prazo": "#1D4ED8",
+        "Concluído no prazo": "#3B82F6",
+        "Concluída com atraso": "#93C5FD",
+        "Em atraso": "#EF4444",
+    }
+
     def __init__(self) -> None:
         super().__init__()
         self.order = ["Dentro do prazo", "Concluído antes do prazo", "Concluído no prazo", "Concluída com atraso", "Em atraso"]
         self.data = {k: 0 for k in self.order}
-        self.setMinimumHeight(220)
+        self.min_bar_height = 3
+        self.setMinimumHeight(260)
 
     def set_data(self, data: Dict[str, int]) -> None:
         self.data = {k: int(data.get(k, 0)) for k in self.order}
@@ -140,12 +114,13 @@ class TimingBarsWidget(QWidget):
         col_w = rect.width() // len(self.order)
         for idx, label in enumerate(self.order):
             value = self.data.get(label, 0)
-            bar_h = max(int((rect.height() - 44) * (value / max_value)), 2)
+            proportional = int((rect.height() - 44) * (value / max_value))
+            bar_h = max(proportional, self.min_bar_height)
             x = rect.left() + idx * col_w + int(col_w * 0.25)
             y = rect.bottom() - bar_h - 20
             bar_w = int(col_w * 0.5)
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor("#6366F1"))
+            painter.setBrush(QColor(self.COLOR_MAP[label]))
             painter.drawRoundedRect(x, y, bar_w, bar_h, 6, 6)
             painter.setPen(self.palette().text().color())
             painter.drawText(QRect(rect.left() + idx * col_w, y - 20, col_w, 18), Qt.AlignHCenter, str(value))
@@ -154,6 +129,25 @@ class TimingBarsWidget(QWidget):
 
 class MonitoramentoView(QWidget):
     order_changed = Signal(list)
+
+    ALERT_COLUMNS = [
+        "ID",
+        "É Urgente",
+        "Status",
+        "Timing",
+        "Prioridade",
+        "Data de Registro",
+        "Prazo",
+        "Projeto",
+        "Descrição",
+        "Comentário",
+        "Num Controle",
+        "% Conclusão",
+        "Responsável",
+        "Reportar?",
+        "Nome",
+        "Time/Função",
+    ]
 
     def __init__(self) -> None:
         super().__init__()
@@ -181,7 +175,6 @@ class MonitoramentoView(QWidget):
     def _build_blocks(self) -> None:
         self._cards = {
             "big_numbers": self._build_big_numbers_block(),
-            "status_gerais": self._build_status_gerais_block(),
             "progresso": self._build_progress_block(),
             "graficos": self._build_charts_block(),
             "alertas": self._build_alerts_block(),
@@ -209,16 +202,15 @@ class MonitoramentoView(QWidget):
         self.progress_bar.setValue(metrics.concluidas_percentual)
         self.progress_percent_label.setText(f"{metrics.concluidas_percentual}%")
         self.progress_subtitle.setText(f"{metrics.concluidas} de {metrics.total_demandas} demandas concluídas")
-        self.donut.set_data(metrics.por_status)
-        self.bars.set_data(metrics.por_prioridade)
+        self.priority_donut.set_data(metrics.por_prioridade)
         self.status_gerais_bars.set_data(metrics.status_gerais)
-        self._render_legendas(metrics.por_status)
+        self._render_priority_legenda(metrics.por_prioridade)
         self._render_alertas(metrics.alertas)
 
     def apply_theme(self, theme_name: str) -> None:
         dark = (theme_name or "light").lower() == "dark"
         text = "#E2E8F0" if dark else "#0F172A"
-        self.donut.value_color = QColor("white") if dark else QColor("black")
+        self.priority_donut.value_color = QColor("white") if dark else QColor("black")
         self.setStyleSheet(
             f"""
             MonitoramentoView, QListWidget {{ background: {'#0F172A' if dark else '#F7F9FC'}; color: {text}; }}
@@ -269,14 +261,6 @@ class MonitoramentoView(QWidget):
         wrapper.addLayout(row)
         return frame
 
-    def _build_status_gerais_block(self) -> QFrame:
-        frame = QFrame(); frame.setProperty("dashboardCard", True); frame.setMinimumHeight(260)
-        l = QVBoxLayout(frame); l.setContentsMargins(16, 16, 16, 16); l.setSpacing(8)
-        l.addLayout(self._section_header("Status Gerais"))
-        self.status_gerais_bars = TimingBarsWidget()
-        l.addWidget(self.status_gerais_bars)
-        return frame
-
     def _build_progress_block(self) -> QFrame:
         frame = QFrame(); frame.setProperty("dashboardCard", True); frame.setMinimumHeight(132)
         l = QVBoxLayout(frame); l.setContentsMargins(20, 18, 20, 18); l.setSpacing(10)
@@ -290,34 +274,59 @@ class MonitoramentoView(QWidget):
         return frame
 
     def _build_charts_block(self) -> QFrame:
-        frame = QFrame(); frame.setProperty("dashboardCard", True); frame.setMinimumHeight(320)
+        frame = QFrame(); frame.setProperty("dashboardCard", True); frame.setMinimumHeight(340)
         l = QGridLayout(frame); l.setContentsMargins(18, 18, 18, 18); l.setHorizontalSpacing(14); l.setVerticalSpacing(14)
-        status_card = QFrame(); status_card.setProperty("dashboardCard", True); status_card.setMinimumHeight(280)
-        ls = QVBoxLayout(status_card); ls.setContentsMargins(16, 16, 16, 16); ls.setSpacing(10)
-        ls.addLayout(self._section_header("Por status")); self.donut = DonutChartWidget(); self.legend_status = QLabel(""); self.legend_status.setObjectName("metricSubtitle")
-        ls.addWidget(self.donut); ls.addWidget(self.legend_status)
-        priority_card = QFrame(); priority_card.setProperty("dashboardCard", True); priority_card.setMinimumHeight(280)
-        lp = QVBoxLayout(priority_card); lp.setContentsMargins(16, 16, 16, 16); lp.setSpacing(10)
-        lp.addLayout(self._section_header("Por prioridade")); self.bars = BarChartWidget(); lp.addWidget(self.bars)
-        l.addWidget(status_card, 0, 0); l.addWidget(priority_card, 0, 1); l.setColumnStretch(0, 1); l.setColumnStretch(1, 1)
+
+        self.status_gerais_card = QFrame(); self.status_gerais_card.setProperty("dashboardCard", True); self.status_gerais_card.setMinimumHeight(300)
+        ls = QVBoxLayout(self.status_gerais_card); ls.setContentsMargins(16, 16, 16, 16); ls.setSpacing(10)
+        ls.addLayout(self._section_header("Status Gerais"))
+        self.status_gerais_bars = TimingBarsWidget()
+        ls.addWidget(self.status_gerais_bars)
+
+        self.priority_card = QFrame(); self.priority_card.setProperty("dashboardCard", True); self.priority_card.setMinimumHeight(300)
+        lp = QVBoxLayout(self.priority_card); lp.setContentsMargins(16, 16, 16, 16); lp.setSpacing(10)
+        lp.addLayout(self._section_header("Por prioridade"))
+        self.priority_donut = DonutChartWidget(
+            labels_order=["Alta", "Média", "Baixa"],
+            colors={"Alta": "#EF4444", "Média": "#FACC15", "Baixa": "#22C55E"},
+        )
+        self.priority_legend = QLabel("")
+        self.priority_legend.setObjectName("metricSubtitle")
+        lp.addWidget(self.priority_donut)
+        lp.addWidget(self.priority_legend)
+
+        l.addWidget(self.status_gerais_card, 0, 0)
+        l.addWidget(self.priority_card, 0, 1)
+        l.setColumnStretch(0, 1)
+        l.setColumnStretch(1, 1)
         return frame
 
     def _build_alerts_block(self) -> QFrame:
         frame = QFrame(); frame.setProperty("dashboardCard", True); frame.setMinimumHeight(280)
         l = QVBoxLayout(frame); l.setContentsMargins(16, 16, 16, 16); l.setSpacing(8)
         l.addLayout(self._section_header("Alertas de Prazo"))
-        self.alerts_table = QTableWidget(0, 7)
-        self.alerts_table.setHorizontalHeaderLabels(["Ações", "ID", "Status", "Timing", "Prioridade", "Prazo", "% conclusão"])
+        self.alerts_table = QTableWidget(0, len(self.ALERT_COLUMNS))
+        self.alerts_table.setHorizontalHeaderLabels(self.ALERT_COLUMNS)
         self.alerts_table.verticalHeader().setVisible(False)
         self.alerts_table.setWordWrap(True)
         l.addWidget(self.alerts_table)
         self.alerts_empty = QLabel("Nenhuma demanda com alerta de prazo.")
         self.alerts_empty.setObjectName("metricPlaceholder")
+        self.alerts_empty.setAlignment(Qt.AlignCenter)
         l.addWidget(self.alerts_empty)
         return frame
 
-    def _render_legendas(self, by_status: Dict[str, int]) -> None:
-        self.legend_status.setText("   ".join([f"{k}: <b>{v}</b>" for k, v in by_status.items() if v > 0]) or "Sem dados")
+    def _render_priority_legenda(self, by_priority: Dict[str, int]) -> None:
+        order = ["Alta", "Média", "Baixa"]
+        legend_parts = [f"{label}: <b>{int(by_priority.get(label, 0))}</b>" for label in order]
+        self.priority_legend.setText("   ".join(legend_parts))
+
+    def _elided_item(self, text: str, max_chars: int = 36) -> QTableWidgetItem:
+        raw = str(text or "")
+        display = raw if len(raw) <= max_chars else f"{raw[: max_chars - 3]}..."
+        item = QTableWidgetItem(display)
+        item.setToolTip(raw)
+        return item
 
     def _render_alertas(self, alertas: List[Dict[str, str]]) -> None:
         self.alerts_table.setRowCount(0)
@@ -325,31 +334,33 @@ class MonitoramentoView(QWidget):
             self.alerts_table.setVisible(False)
             self.alerts_empty.setVisible(True)
             return
+
         self.alerts_table.setVisible(True)
         self.alerts_empty.setVisible(False)
+
         for alerta in alertas:
             row = self.alerts_table.rowCount()
             self.alerts_table.insertRow(row)
             values = [
-                "⋮",
-                alerta.get("id", ""),
-                alerta.get("status", ""),
-                alerta.get("timing", ""),
-                alerta.get("prioridade", ""),
-                alerta.get("prazo", ""),
-                alerta.get("percentual", ""),
+                QTableWidgetItem(str(alerta.get("id", ""))),
+                QTableWidgetItem(str(alerta.get("urgente", "Não"))),
+                QTableWidgetItem(str(alerta.get("status", ""))),
+                QTableWidgetItem(str(alerta.get("timing", ""))),
+                QTableWidgetItem(str(alerta.get("prioridade", ""))),
+                QTableWidgetItem(str(alerta.get("data_registro", ""))),
+                QTableWidgetItem(str(alerta.get("prazo", ""))),
+                QTableWidgetItem(str(alerta.get("projeto", ""))),
+                self._elided_item(str(alerta.get("descricao", ""))),
+                self._elided_item(str(alerta.get("comentario", ""))),
+                QTableWidgetItem(str(alerta.get("numero_controle", ""))),
+                QTableWidgetItem(str(alerta.get("percentual", ""))),
+                QTableWidgetItem(str(alerta.get("responsavel", ""))),
+                QTableWidgetItem(str(alerta.get("reportar", ""))),
+                QTableWidgetItem(str(alerta.get("nome", ""))),
+                QTableWidgetItem(str(alerta.get("time_funcao", ""))),
             ]
-            for col, value in enumerate(values):
-                self.alerts_table.setItem(row, col, QTableWidgetItem(str(value)))
-
-            detail = self.alerts_table.rowCount()
-            self.alerts_table.insertRow(detail)
-            detail_text = (
-                f"Data de registro: {alerta.get('data_registro', '')} | Projeto: {alerta.get('projeto', '')} | "
-                f"Descrição: {alerta.get('descricao', '')} | Comentário: {alerta.get('comentario', '')} | "
-                f"Número de controle: {alerta.get('numero_controle', '')} | Responsável: {alerta.get('responsavel', '')} | "
-                f"Reportar?: {alerta.get('reportar', '')} | Nome: {alerta.get('nome', '')} | Time/Função: {alerta.get('time_funcao', '')}"
-            )
-            item = QTableWidgetItem(detail_text)
-            self.alerts_table.setItem(detail, 0, item)
-            self.alerts_table.setSpan(detail, 0, 1, self.alerts_table.columnCount())
+            prazo_tooltip = str(alerta.get("prazo_tooltip", "")).strip()
+            if prazo_tooltip:
+                values[6].setToolTip(prazo_tooltip)
+            for col, item in enumerate(values):
+                self.alerts_table.setItem(row, col, item)

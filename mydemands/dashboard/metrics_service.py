@@ -72,6 +72,8 @@ class DashboardMetricsService:
             prazo_raw = str(row.get("Prazo") or "")
             timing = str(row.get("Timing") or "").strip().lower()
             demand_id = str(row.get("ID") or "")
+            urgente_raw = str(row.get("É Urgente") or row.get("Urgente") or "").strip().lower()
+            urgente = urgente_raw in {"sim", "true", "1", "x", "yes"}
 
             por_status[status] = por_status.get(status, 0) + 1
             if prioridade in por_prioridade:
@@ -97,16 +99,24 @@ class DashboardMetricsService:
 
             prazos = parse_prazos_list(prazo_raw)
             if status not in {"Concluído", "Cancelado"} and prazos:
-                min_prazo = min(prazos)
+                ordered_prazos = sorted(prazos)
+                min_prazo = ordered_prazos[0]
+                prazo_display = (
+                    min_prazo.strftime("%d/%m/%Y") if len(ordered_prazos) == 1 else f"{len(ordered_prazos)} prazos"
+                )
+                prazo_tooltip = " | ".join(p.strftime("%d/%m/%Y") for p in ordered_prazos)
                 if min_prazo < today:
                     em_atraso += 1
                     alertas.append(
                         {
                             "id": demand_id,
+                            "urgente": "Sim" if urgente else "Não",
                             "status": status,
                             "timing": str(row.get("Timing") or "").strip(),
                             "prioridade": prioridade,
-                            "prazo": min_prazo.strftime("%d/%m/%Y"),
+                            "prazo": prazo_display,
+                            "prazo_tooltip": prazo_tooltip,
+                            "prazo_sort": min_prazo.isoformat(),
                             "percentual": str(row.get("% Conclusão") or ""),
                             "data_registro": str(row.get("Data de Registro") or "").strip(),
                             "projeto": projeto,
@@ -118,16 +128,20 @@ class DashboardMetricsService:
                             "nome": str(row.get("Nome") or "").strip(),
                             "time_funcao": str(row.get("Time/Função") or "").strip(),
                             "badge": "Atrasada",
+                            "urgente_ordem": 0 if urgente else 1,
                         }
                     )
                 elif min_prazo == today:
                     alertas.append(
                         {
                             "id": demand_id,
+                            "urgente": "Sim" if urgente else "Não",
                             "status": status,
                             "timing": str(row.get("Timing") or "").strip(),
                             "prioridade": prioridade,
-                            "prazo": min_prazo.strftime("%d/%m/%Y"),
+                            "prazo": prazo_display,
+                            "prazo_tooltip": prazo_tooltip,
+                            "prazo_sort": min_prazo.isoformat(),
                             "percentual": str(row.get("% Conclusão") or ""),
                             "data_registro": str(row.get("Data de Registro") or "").strip(),
                             "projeto": projeto,
@@ -139,16 +153,20 @@ class DashboardMetricsService:
                             "nome": str(row.get("Nome") or "").strip(),
                             "time_funcao": str(row.get("Time/Função") or "").strip(),
                             "badge": "Prazo hoje",
+                            "urgente_ordem": 0 if urgente else 1,
                         }
                     )
                 elif min_prazo == tomorrow:
                     alertas.append(
                         {
                             "id": demand_id,
+                            "urgente": "Sim" if urgente else "Não",
                             "status": status,
                             "timing": str(row.get("Timing") or "").strip(),
                             "prioridade": prioridade,
-                            "prazo": min_prazo.strftime("%d/%m/%Y"),
+                            "prazo": prazo_display,
+                            "prazo_tooltip": prazo_tooltip,
+                            "prazo_sort": min_prazo.isoformat(),
                             "percentual": str(row.get("% Conclusão") or ""),
                             "data_registro": str(row.get("Data de Registro") or "").strip(),
                             "projeto": projeto,
@@ -160,6 +178,7 @@ class DashboardMetricsService:
                             "nome": str(row.get("Nome") or "").strip(),
                             "time_funcao": str(row.get("Time/Função") or "").strip(),
                             "badge": "Vencimento próximo",
+                            "urgente_ordem": 0 if urgente else 1,
                         }
                     )
 
@@ -188,8 +207,9 @@ class DashboardMetricsService:
             alertas=sorted(
                 alertas,
                 key=lambda x: (
+                    x.get("urgente_ordem", 1),
                     {"Atrasada": 0, "Prazo hoje": 1, "Vencimento próximo": 2}.get(x["badge"], 3),
-                    x["prazo"],
+                    x.get("prazo_sort", ""),
                     x["id"],
                 ),
             ),

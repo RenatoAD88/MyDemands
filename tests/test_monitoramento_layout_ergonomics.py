@@ -3,7 +3,7 @@ import pytest
 qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
 
 from mydemands.dashboard.metrics_service import DashboardMetrics
-from mydemands.dashboard.view import MonitoramentoView
+from mydemands.dashboard.view import MonitoramentoView, TimingBarsWidget
 
 QApplication = qtwidgets.QApplication
 QLabel = qtwidgets.QLabel
@@ -39,55 +39,73 @@ def test_cards_keep_minimum_height_with_zero_values():
 
     assert view._cards["big_numbers"].minimumHeight() >= 110
     assert view._cards["progresso"].minimumHeight() >= 110
+    assert view._cards["graficos"].minimumHeight() >= 300
     assert view.progress_bar.value() == 0
     assert view.progress_percent_label.text() == "0%"
 
 
-def test_layout_does_not_collapse_without_data():
+def test_por_status_section_removed_and_grouped_cards_side_by_side():
+    _app()
+    view = MonitoramentoView()
+
+    section_titles = [lbl.text().lower() for lbl in view.findChildren(QLabel) if lbl.objectName() == "sectionTitle"]
+    assert "por status" not in section_titles
+    assert "status gerais" in section_titles
+    assert "por prioridade" in section_titles
+
+    assert view.status_gerais_card.minimumHeight() == view.priority_card.minimumHeight()
+
+
+def test_prioridade_uses_donut_with_expected_colors_and_placeholder():
     _app()
     view = MonitoramentoView()
     view.update_metrics(_empty_metrics())
 
-    assert view._cards["graficos"].minimumHeight() >= 280
-    assert view._cards["alertas"].minimumHeight() >= 100
-    assert view.progress_subtitle.text() == "0 de 0 demandas concluídas"
+    assert view.priority_donut.empty_placeholder == "Sem dados suficientes"
+    assert view.priority_donut.colors["Alta"] == "#EF4444"
+    assert view.priority_donut.colors["Média"] == "#FACC15"
+    assert view.priority_donut.colors["Baixa"] == "#22C55E"
+    assert "Alta:" in view.priority_legend.text()
 
 
-def test_empty_dataset_shows_placeholders():
+def test_status_gerais_uses_expected_palette():
+    _app()
+    view = MonitoramentoView()
+
+    assert TimingBarsWidget.COLOR_MAP["Dentro do prazo"] == "#1E3A8A"
+    assert TimingBarsWidget.COLOR_MAP["Concluído antes do prazo"] == "#1D4ED8"
+    assert TimingBarsWidget.COLOR_MAP["Concluído no prazo"] == "#3B82F6"
+    assert TimingBarsWidget.COLOR_MAP["Concluída com atraso"] == "#93C5FD"
+    assert TimingBarsWidget.COLOR_MAP["Em atraso"] == "#EF4444"
+    assert view.status_gerais_bars.min_bar_height >= 2
+
+
+def test_alertas_columns_order_and_empty_state():
     _app()
     view = MonitoramentoView()
     view.update_metrics(_empty_metrics())
 
-    assert view.donut.empty_placeholder == "Sem dados suficientes"
-    assert view.bars.empty_placeholder == "Sem dados suficientes"
-    assert view.legend_status.text() == "Sem dados"
-
-    placeholders = [
-        lbl.text()
-        for lbl in view.findChildren(QLabel)
-        if lbl.objectName() == "metricPlaceholder"
+    assert view.alerts_empty.text() == "Nenhuma demanda com alerta de prazo."
+    headers = [view.alerts_table.horizontalHeaderItem(i).text() for i in range(view.alerts_table.columnCount())]
+    assert headers == [
+        "ID",
+        "É Urgente",
+        "Status",
+        "Timing",
+        "Prioridade",
+        "Data de Registro",
+        "Prazo",
+        "Projeto",
+        "Descrição",
+        "Comentário",
+        "Num Controle",
+        "% Conclusão",
+        "Responsável",
+        "Reportar?",
+        "Nome",
+        "Time/Função",
     ]
-    assert "Sem demandas atrasadas, para hoje ou com vencimento próximo." in placeholders
-
-
-def test_typography_hierarchy_is_applied_in_stylesheet():
-    _app()
-    view = MonitoramentoView()
-    qss = view.styleSheet()
-
-    assert "QLabel#metricTitle" in qss
-    assert "QLabel#sectionTitle" in qss
-    assert "QLabel#metricValue" in qss
-    assert "font-size: 32px" in qss
-    assert "QLabel#progressPercent" in qss
-
-
-def test_big_numbers_order_and_status_gerais_section():
-    _app()
-    view = MonitoramentoView()
-    expected = ["Total de Demandas", "Não iniciado", "Em andamento", "Bloqueado", "Requer revisão", "Cancelado", "Concluído"]
-    assert list(view.big_number_labels.keys()) == expected
-    assert "status_gerais" in view._cards
+    assert "Ações" not in headers
 
 
 def test_monitoramento_has_no_decorative_icons_in_headers():

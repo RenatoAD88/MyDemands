@@ -5,7 +5,7 @@ import os
 from typing import List
 
 
-DEFAULT_ORDER = ["big_numbers", "status_gerais", "progresso", "graficos", "alertas"]
+DEFAULT_ORDER = ["big_numbers", "progresso", "graficos", "alertas"]
 
 
 class LayoutPersistenceService:
