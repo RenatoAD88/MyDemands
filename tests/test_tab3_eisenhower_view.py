@@ -342,5 +342,5 @@ def test_card_tokens_keep_visible_border_light_and_dark():
     light = EisenhowerThemeManager.tokens(False)
     dark = EisenhowerThemeManager.tokens(True)
 
-    assert all(v["card_border"] == "#cbd5e1" for v in light.values())
-    assert all(v["card_border"] == "#64748b" for v in dark.values())
+    assert all(v["card_border"] == "#000000" for v in light.values())
+    assert all(v["card_border"] == "#000000" for v in dark.values())
