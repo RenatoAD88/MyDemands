@@ -16,7 +16,7 @@ def test_status_color_maps_known_states():
     assert status_color("Não iniciada") == (255, 228, 230)
     assert status_color("Não Iniciado") == (255, 228, 230)
     assert status_color("Requer revisão") == (237, 233, 254)
-    assert status_color("Em espera") == (255, 243, 205)
+    assert status_color("Bloqueado") == (255, 243, 205)
 
 
 def test_timing_color_maps_delay_and_default():

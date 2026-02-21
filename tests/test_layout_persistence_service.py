@@ -4,7 +4,7 @@ from mydemands.dashboard.layout_persistence_service import LayoutPersistenceServ
 def test_layout_persistence_restores_after_restart(tmp_path):
     service = LayoutPersistenceService(str(tmp_path))
     user = "ana@empresa.com"
-    order = ["alertas", "graficos", "progresso", "big_numbers"]
+    order = ["alertas", "graficos", "progresso", "status_gerais", "big_numbers"]
 
     service.save(user, order)
 

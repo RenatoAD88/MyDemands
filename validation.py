@@ -11,7 +11,7 @@ class ValidationError(Exception):
 STATUS_OPTIONS = [
     "Não iniciada",
     "Em andamento",
-    "Em espera",
+    "Bloqueado",
     "Requer revisão",
     "Concluído",
     "Cancelado",  # compatibilidade
@@ -101,6 +101,8 @@ def _canonicalize_from_allowed(allowed: List[str], value: str) -> Optional[str]:
         return m[key]
     if v.casefold() == "media" and "Média" in allowed:
         return "Média"
+    if v.casefold() == "em espera" and "Bloqueado" in allowed:
+        return "Bloqueado"
     return None
 
 

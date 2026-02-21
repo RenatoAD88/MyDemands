@@ -18,7 +18,7 @@ def test_delete_by_line_removes_record(tmp_path):
         "Prioridade": "Média",
         "Prazo": "06/02/2026",
         "Data de Registro": "01/02/2026",
-        "Status": "Em espera",
+        "Status": "Bloqueado",
         "Responsável": "R",
     })
 

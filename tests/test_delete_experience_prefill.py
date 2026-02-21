@@ -237,7 +237,7 @@ def test_context_menu_delete_keeps_multi_selection_and_routes_to_delete_flow(tmp
             "Prioridade": "Média",
             "Prazo": today,
             "Data de Registro": today,
-            "Status": "Em espera",
+            "Status": "Bloqueado",
             "Responsável": "Bia",
         }
     )
