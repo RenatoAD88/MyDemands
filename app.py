@@ -2656,7 +2656,7 @@ class MainWindow(QMainWindow):
         return wrapper
 
     def show_general_information(self):
-        version = build_version_code(previous_version_number=235)
+        version = build_version_code(previous_version_number=250)
         dialog = QDialog(self)
         dialog.setWindowTitle("Informações gerais")
 
