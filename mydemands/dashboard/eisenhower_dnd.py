@@ -5,10 +5,10 @@ from typing import Any, Callable, Dict
 
 class EisenhowerDnDController:
     QUADRANT_TO_FIELDS = {
-        "q1": {"É Urgente?": "Sim", "Prioridade": "Alta"},
-        "q2": {"É Urgente?": "Sim", "Prioridade": "Baixa"},
-        "q3": {"É Urgente?": "Não", "Prioridade": "Média"},
-        "q4": {"É Urgente?": "Não", "Prioridade": "Baixa"},
+        "q1": {"É Urgente?": "Sim", "Prioridade": "Alta", "Timing": "Em Atraso"},
+        "q2": {"É Urgente?": "Sim", "Prioridade": "Baixa", "Timing": "Em Atraso"},
+        "q3": {"É Urgente?": "Não", "Prioridade": "Média", "Timing": "Dentro do Prazo"},
+        "q4": {"É Urgente?": "Não", "Prioridade": "Baixa", "Timing": "Dentro do Prazo"},
     }
 
     def __init__(self, move_executor: Callable[[Dict[str, Any], Dict[str, str]], None] | None):

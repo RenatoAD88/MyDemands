@@ -36,7 +36,7 @@ class DemandMiniCard(QWidget):
         self._on_context_menu = on_context_menu
         self.setObjectName("eisenhowerDemandCard")
         self.setCursor(Qt.PointingHandCursor)
-        self.setMinimumHeight(96)
+        self.setMinimumHeight(112)
         self.setProperty("selected", False)
         self.setProperty("dragging", False)
 
@@ -67,11 +67,12 @@ class DemandMiniCard(QWidget):
         desc_label.setToolTip((row.get("Descrição") or "Sem descrição").strip())
 
         info = QLabel(
-            f"Prioridade: {(row.get('Prioridade') or 'Média')}  |  "
-            f"Timing: {(row.get('Timing') or 'Sem prazo')}  |  "
+            f"Prioridade: {(row.get('Prioridade') or 'Média')}\n"
+            f"Timing: {(row.get('Timing') or 'Sem prazo')}\n"
             f"Urgente: {(row.get('É Urgente?') or 'Não')}"
         )
         info.setObjectName("eisenhowerMetaInfo")
+        info.setWordWrap(True)
 
         layout.addLayout(top_row)
         layout.addWidget(desc_label)
@@ -149,7 +150,7 @@ class QuadrantListWidget(QListWidget):
     def add_row(self, row: Dict[str, Any]) -> None:
         item = QListWidgetItem()
         item.setData(Qt.UserRole, row)
-        item.setSizeHint(QSize(0, 96))
+        item.setSizeHint(QSize(0, 112))
         self.addItem(item)
         self.setItemWidget(item, DemandMiniCard(row, self._on_card_click, self._on_card_double_click, self._on_card_context_menu))
 
@@ -268,7 +269,7 @@ class EisenhowerView(QWidget):
                 f"QWidget#eisenhowerDemandCard[selected='true'] {{border: 2px solid {color_tokens[quadrant.key]['accent']};}}"
                 "QWidget#eisenhowerDemandCard[dragging='true'] {opacity: 0.75;}"
                 "QLabel#eisenhowerStatusBadge {font-size: 10px; border-radius: 8px; padding: 1px 6px; background: rgba(128,128,128,0.25);}"
-                "QLabel#eisenhowerMetaInfo {font-size: 11px; color: palette(mid);}"
+                "QLabel#eisenhowerMetaInfo {font-size: 11px; color: palette(mid); line-height: 1.25;}"
                 f"QLabel#eisenhowerQuadrantTitle {{color: {color_tokens[quadrant.key]['label_color']};}}"
             )
             if self._dnd_controller:

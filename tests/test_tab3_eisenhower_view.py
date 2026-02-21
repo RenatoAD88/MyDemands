@@ -161,7 +161,13 @@ def test_eisenhower_minicard_applies_multiline_elide():
     q3_list = view.findChild(qtwidgets.QListWidget, "q3_list")
     card = q3_list.itemWidget(q3_list.item(0))
     description_label = card.findChild(qtwidgets.QLabel, "eisenhowerDescription")
+    info_label = card.findChild(qtwidgets.QLabel, "eisenhowerMetaInfo")
     assert description_label is not None
+    assert info_label is not None
+    assert "Prioridade:" in info_label.text()
+    assert "Timing:" in info_label.text()
+    assert "Urgente:" in info_label.text()
+    assert "|" not in info_label.text()
     assert "…" in description_label.text() or "..." in description_label.text()
     assert card.minimumHeight() >= 90
     margins = card.layout().contentsMargins()
@@ -286,7 +292,7 @@ def test_dnd_controller_mappings_and_persistence_call(tmp_path):
     controller.handle_move("q1", "q2", row)
     controller.handle_move("q2", "q3", row)
 
-    assert calls[0] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Alta"})
-    assert calls[1] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Baixa"})
-    assert calls[2] == (row_id, {"É Urgente?": "Não", "Prioridade": "Média"})
+    assert calls[0] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Alta", "Timing": "Em Atraso"})
+    assert calls[1] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Baixa", "Timing": "Em Atraso"})
+    assert calls[2] == (row_id, {"É Urgente?": "Não", "Prioridade": "Média", "Timing": "Dentro do Prazo"})
     win.close()
