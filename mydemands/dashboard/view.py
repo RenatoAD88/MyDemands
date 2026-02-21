@@ -6,20 +6,22 @@ from typing import Dict, List
 from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
-    QHeaderView,
+    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QListWidget,
     QListWidgetItem,
     QProgressBar,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
+from mydemands.dashboard.demandas_schema_registry import DemandasSchemaRegistry
+from mydemands.dashboard.grid_preferences import GridPreferencesService
+from mydemands.dashboard.grid_widgets import BaseGridView, ColumnConfigDialog
 from mydemands.dashboard.metrics_service import DashboardMetrics
 
 
@@ -131,27 +133,15 @@ class TimingBarsWidget(QWidget):
 class MonitoramentoView(QWidget):
     order_changed = Signal(list)
 
-    ALERT_COLUMNS = [
-        "ID",
-        "É Urgente",
-        "Status",
-        "Timing",
-        "Prioridade",
-        "Data de Registro",
-        "Prazo",
-        "Projeto",
-        "Descrição",
-        "Comentário",
-        "Num Controle",
-        "% Conclusão",
-        "Responsável",
-        "Reportar?",
-        "Nome",
-        "Time/Função",
-    ]
+    ALERTAS_TABLE_KEY = "monitoring_alertas_atrasos_grid"
+    ALERTAS_DEFAULT_VISIBLE = ["id", "urgente", "status", "timing", "prioridade", "prazo", "projeto", "percentual", "responsavel"]
 
-    def __init__(self) -> None:
+    def __init__(self, *, user_id: str = "anonimo", preferences_service: GridPreferencesService | None = None) -> None:
         super().__init__()
+        self._user_id = user_id or "anonimo"
+        self._schema_registry = DemandasSchemaRegistry()
+        self._grid_preferences_service = preferences_service
+        self._alertas_preferences: Dict = self._schema_registry.default_table_preferences(self.ALERTAS_DEFAULT_VISIBLE)
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(8)
@@ -171,6 +161,13 @@ class MonitoramentoView(QWidget):
 
         self._cards: Dict[str, QFrame] = {}
         self._build_blocks()
+        if self._grid_preferences_service is not None:
+            self._alertas_preferences = self._grid_preferences_service.load_table_preferences(
+                self._user_id,
+                self.ALERTAS_TABLE_KEY,
+                self.ALERTAS_DEFAULT_VISIBLE,
+            )
+        self.alerts_table.apply_preferences(self._alertas_preferences)
         self.apply_theme("light")
 
     def _build_blocks(self) -> None:
@@ -305,16 +302,18 @@ class MonitoramentoView(QWidget):
     def _build_alerts_block(self) -> QFrame:
         frame = QFrame(); frame.setProperty("dashboardCard", True); frame.setMinimumHeight(170)
         l = QVBoxLayout(frame); l.setContentsMargins(16, 16, 16, 16); l.setSpacing(8)
-        l.addLayout(self._section_header("Alertas de Prazo"))
-        self.alerts_table = QTableWidget(0, len(self.ALERT_COLUMNS))
-        self.alerts_table.setHorizontalHeaderLabels(self.ALERT_COLUMNS)
-        self.alerts_table.verticalHeader().setVisible(False)
-        self.alerts_table.setWordWrap(True)
-        header = self.alerts_table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        header.setStretchLastSection(True)
+        header_row = self._section_header("Alertas de atrasos")
+        self.alerts_config_button = QPushButton("Configurar colunas")
+        self.alerts_restore_button = QPushButton("Restaurar padrão")
+        self.alerts_config_button.clicked.connect(self._open_column_config_dialog)
+        self.alerts_restore_button.clicked.connect(self._restore_alertas_defaults)
+        header_row.addWidget(self.alerts_config_button)
+        header_row.addWidget(self.alerts_restore_button)
+        l.addLayout(header_row)
+        self.alerts_table = BaseGridView(self._schema_registry.demand_columns())
+        self.alerts_table.preferences_changed.connect(self._persist_alertas_preferences)
         l.addWidget(self.alerts_table)
-        self.alerts_empty = QLabel("Nenhuma demanda com alerta de prazo.")
+        self.alerts_empty = QLabel("Nenhuma demanda em atraso.")
         self.alerts_empty.setObjectName("metricPlaceholder")
         self.alerts_empty.setAlignment(Qt.AlignCenter)
         l.addWidget(self.alerts_empty)
@@ -325,49 +324,52 @@ class MonitoramentoView(QWidget):
         legend_parts = [f"{label}: <b>{int(by_priority.get(label, 0))}</b>" for label in order]
         self.priority_legend.setText("   ".join(legend_parts))
 
-    def _elided_item(self, text: str, max_chars: int = 36) -> QTableWidgetItem:
-        raw = str(text or "")
-        display = raw if len(raw) <= max_chars else f"{raw[: max_chars - 3]}..."
-        item = QTableWidgetItem(display)
-        item.setToolTip(raw)
-        return item
-
     def _render_alertas(self, alertas: List[Dict[str, str]]) -> None:
-        self.alerts_table.setRowCount(0)
+        atraso_only = [a for a in alertas if str(a.get("timing") or "").strip().lower() == "em atraso"]
         if not alertas:
+            self.alerts_table.setVisible(False)
+            self.alerts_empty.setVisible(True)
+            return
+
+        if not atraso_only:
             self.alerts_table.setVisible(False)
             self.alerts_empty.setVisible(True)
             return
 
         self.alerts_table.setVisible(True)
         self.alerts_empty.setVisible(False)
+        self.alerts_table.set_rows(atraso_only)
 
-        for alerta in alertas:
-            row = self.alerts_table.rowCount()
-            self.alerts_table.insertRow(row)
-            values = [
-                QTableWidgetItem(str(alerta.get("id", ""))),
-                QTableWidgetItem(str(alerta.get("urgente", "Não"))),
-                QTableWidgetItem(str(alerta.get("status", ""))),
-                QTableWidgetItem(str(alerta.get("timing", ""))),
-                QTableWidgetItem(str(alerta.get("prioridade", ""))),
-                QTableWidgetItem(str(alerta.get("data_registro", ""))),
-                QTableWidgetItem(str(alerta.get("prazo", ""))),
-                QTableWidgetItem(str(alerta.get("projeto", ""))),
-                self._elided_item(str(alerta.get("descricao", ""))),
-                self._elided_item(str(alerta.get("comentario", ""))),
-                QTableWidgetItem(str(alerta.get("numero_controle", ""))),
-                QTableWidgetItem(str(alerta.get("percentual", ""))),
-                QTableWidgetItem(str(alerta.get("responsavel", ""))),
-                QTableWidgetItem(str(alerta.get("reportar", ""))),
-                QTableWidgetItem(str(alerta.get("nome", ""))),
-                QTableWidgetItem(str(alerta.get("time_funcao", ""))),
-            ]
-            prazo_tooltip = str(alerta.get("prazo_tooltip", "")).strip()
-            if prazo_tooltip:
-                values[6].setToolTip(prazo_tooltip)
-            for col, item in enumerate(values):
-                self.alerts_table.setItem(row, col, item)
+    def _persist_alertas_preferences(self, table_prefs: Dict) -> None:
+        self._alertas_preferences = table_prefs
+        if self._grid_preferences_service is not None:
+            self._alertas_preferences = self._grid_preferences_service.save_table_preferences(
+                self._user_id,
+                self.ALERTAS_TABLE_KEY,
+                table_prefs,
+            )
 
-        self.alerts_table.resizeColumnsToContents()
-        self.alerts_table.resizeRowsToContents()
+    def _restore_alertas_defaults(self) -> None:
+        if self._grid_preferences_service is not None:
+            self._alertas_preferences = self._grid_preferences_service.reset_table_preferences(
+                self._user_id,
+                self.ALERTAS_TABLE_KEY,
+                self.ALERTAS_DEFAULT_VISIBLE,
+            )
+        else:
+            self._alertas_preferences = self._schema_registry.default_table_preferences(self.ALERTAS_DEFAULT_VISIBLE)
+        self.alerts_table.apply_preferences(self._alertas_preferences)
+
+    def _open_column_config_dialog(self) -> None:
+        selected = [c.get("id") for c in self._alertas_preferences.get("columns", []) if c.get("visible")]
+        dialog = ColumnConfigDialog(self._schema_registry.demand_columns(), [str(x) for x in selected if x], self)
+        result = dialog.exec()
+        if result == QDialog.Rejected:
+            self._restore_alertas_defaults()
+            return
+        selected_ids = set(dialog.selected_column_ids())
+        updated = self.alerts_table.extract_preferences()
+        for col in updated.get("columns", []):
+            col["visible"] = col.get("id") in selected_ids
+        self._persist_alertas_preferences(updated)
+        self.alerts_table.apply_preferences(self._alertas_preferences)
