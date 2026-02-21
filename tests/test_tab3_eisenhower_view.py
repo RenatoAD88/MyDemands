@@ -5,6 +5,10 @@ qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponív
 from app import MainWindow
 from csv_store import CsvStore
 
+from mydemands.dashboard.eisenhower import EisenhowerView
+from mydemands.dashboard.eisenhower_dnd import EisenhowerDnDController
+
+
 QApplication = qtwidgets.QApplication
 QDialog = qtwidgets.QDialog
 
@@ -109,4 +113,75 @@ def test_eisenhower_hides_concluded_and_cancelled(tmp_path):
     all_ids = {r.get("_id") for rows in grouped.values() for r in rows}
     assert open_id in all_ids
     assert len(all_ids) == 1
+    win.close()
+
+
+def test_tab3_uses_segmented_view_selector_without_visualizacao_label(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    win = MainWindow(store)
+
+    assert win.t3_view_default_btn.text() == "Visão Padrão"
+    assert win.t3_view_eisenhower_btn.text() == "Visão Eisenhower"
+
+    tab_labels = [lbl.text() for lbl in win.tabs.widget(1).findChildren(qtwidgets.QLabel)]
+    assert all("Visualização" not in text for text in tab_labels)
+    win.close()
+
+
+def test_eisenhower_columns_expose_expected_color_accent():
+    _get_app()
+    view = EisenhowerView(lambda *_: None)
+
+    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q1").property("accent")
+    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q2").property("accent")
+    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q3").property("accent")
+    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q4").property("accent")
+
+
+def test_eisenhower_minicard_applies_multiline_elide():
+    _get_app()
+    view = EisenhowerView(lambda *_: None)
+    rows = [{
+        "_id": "1",
+        "ID": "1",
+        "Descrição": "X" * 240,
+        "Status": "Em andamento",
+        "Prioridade": "Alta",
+        "Timing": "Sem prazo",
+        "É Urgente?": "Não",
+    }]
+    view.set_rows(rows)
+
+    q3_list = view.findChild(qtwidgets.QListWidget, "q3_list")
+    card = q3_list.itemWidget(q3_list.item(0))
+    description_label = card.findChild(qtwidgets.QLabel, "eisenhowerDescription")
+    assert description_label is not None
+    assert "…" in description_label.text() or "..." in description_label.text()
+    assert card.minimumHeight() >= 90
+
+
+def test_dnd_controller_mappings_and_persistence_call(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store, Prioridade="Baixa", **{"É Urgente?": "Não"})
+    win = MainWindow(store)
+
+    calls = []
+
+    class _SpyService:
+        def update(self, demand_id, changes):
+            calls.append((demand_id, changes))
+
+    win._demand_update_service = _SpyService()
+    row = store.get(row_id).data | {"_id": row_id}
+    controller = EisenhowerDnDController(win._move_demand_from_eisenhower)
+
+    controller.handle_move("q4", "q1", row)
+    controller.handle_move("q1", "q2", row)
+    controller.handle_move("q2", "q3", row)
+
+    assert calls[0] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Alta"})
+    assert calls[1] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Baixa"})
+    assert calls[2] == (row_id, {"É Urgente?": "Não", "Prioridade": "Média"})
     win.close()
