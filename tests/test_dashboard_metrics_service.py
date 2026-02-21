@@ -24,7 +24,7 @@ def test_metrics_calculation_counts_and_alerts():
 
     rows = [
         _row("1", Status="Concluído", Prioridade="Alta", Timing="Concluída no Prazo"),
-        _row("2", Status="Em andamento", Prioridade="Média", Prazo=today, Timing="Dentro do Prazo"),
+        _row("2", Status="Em andamento", Prioridade="Média", Prazo=today, Timing="Dentro do Prazo", **{"É Urgente": "Sim"}),
         _row("3", Status="Bloqueado", Prioridade="Baixa", Prazo=yesterday, Timing="Em Atraso"),
         _row("4", Status="Não iniciada", Prioridade="Baixa", Prazo=tomorrow, Timing="Concluída antes do Prazo"),
     ]
@@ -43,7 +43,8 @@ def test_metrics_calculation_counts_and_alerts():
     assert metrics.status_gerais["Concluído antes do prazo"] == 1
     assert metrics.status_gerais["Concluído no prazo"] == 1
     assert metrics.status_gerais["Em atraso"] == 1
-    assert [a["badge"] for a in metrics.alertas] == ["Atrasada", "Prazo hoje", "Vencimento próximo"]
+    assert metrics.alertas[0]["urgente"] == "Sim"
+    assert [a["badge"] for a in metrics.alertas] == ["Prazo hoje", "Atrasada", "Vencimento próximo"]
 
 
 def test_metrics_cache_returns_same_object_for_same_fingerprint():
