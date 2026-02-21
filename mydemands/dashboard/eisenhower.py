@@ -36,7 +36,7 @@ class DemandMiniCard(QWidget):
         self._on_context_menu = on_context_menu
         self.setObjectName("eisenhowerDemandCard")
         self.setCursor(Qt.PointingHandCursor)
-        self.setMinimumHeight(116)
+        self.setMinimumHeight(128)
         self.setProperty("selected", False)
         self.setProperty("dragging", False)
 
@@ -75,7 +75,13 @@ class DemandMiniCard(QWidget):
             meta_parts.append(f"Projeto: {row.get('Projeto')}")
         if (row.get("Prazo") or "").strip():
             meta_parts.append(f"Prazo: {row.get('Prazo')}")
-        info = QLabel(" • ".join(meta_parts) or "Sem metadados")
+        if not meta_parts:
+            meta_parts = [
+                f"Prioridade: {row.get('Prioridade') or 'Média'}",
+                f"Timing: {row.get('Timing') or 'Sem prazo'}",
+                f"Urgente: {row.get('É Urgente?') or 'Não'}",
+            ]
+        info = QLabel(" • ".join(meta_parts))
         info.setObjectName("eisenhowerMetaInfo")
         info.setWordWrap(False)
 
@@ -287,18 +293,20 @@ class EisenhowerView(QWidget):
                 f"QListWidget#{quadrant.key}_list {{"
                 f"border: 1px solid {color_tokens[quadrant.key]['border']};"
                 f"border-top: 4px solid {color_tokens[quadrant.key]['accent']};"
-                f"border-radius: 10px; background: {color_tokens[quadrant.key]['background']}; padding: 8px;}}"
+                f"border-radius: 12px; background: {color_tokens[quadrant.key]['background']}; padding: 10px;}}"
                 f"QListWidget#{quadrant.key}_list[dragover='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragover_background']};}}"
-                f"QWidget#eisenhowerDemandCard {{border: 1px solid {color_tokens[quadrant.key]['card_border']}; border-radius: 10px;"
+                f"QListWidget::item {{margin: 0 0 8px 0;}}"
+                f"QWidget#eisenhowerDemandCard {{border: 1px solid {color_tokens[quadrant.key]['card_border']}; border-radius: 12px;"
                 f" background: {color_tokens[quadrant.key]['card_background']}; margin-bottom: 10px;}}"
                 f"QWidget#eisenhowerDemandCard:hover {{border-color: {color_tokens[quadrant.key]['hover_border']}; background: {color_tokens[quadrant.key]['hover_background']};}}"
                 f"QWidget#eisenhowerDemandCard[selected='true'] {{border: 2px solid {color_tokens[quadrant.key]['accent']};}}"
                 f"QWidget#eisenhowerDemandCard[dragging='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragging_background']};}}"
-                "QLabel#eisenhowerDemandId {font-weight: 700;}"
-                "QLabel#eisenhowerStatusBadge {font-size: 10px; border-radius: 8px; padding: 1px 6px; background: rgba(128,128,128,0.25);}"
-                f"QLabel#eisenhowerDescription {{font-size: 12px; color: {color_tokens[quadrant.key]['text_primary']};}}"
-                f"QLabel#eisenhowerMetaInfo {{font-size: 11px; color: {color_tokens[quadrant.key]['text_secondary']};}}"
-                f"QLabel#eisenhowerQuadrantTitle {{color: {color_tokens[quadrant.key]['label_color']}; font-weight: 700;}}"
+                f"QLabel#eisenhowerDemandId {{font-size: 13px; font-weight: 700; color: {color_tokens[quadrant.key]['text_primary']};}}"
+                "QLabel#eisenhowerStatusBadge {font-size: 11px; font-weight: 600; border-radius: 8px; padding: 2px 8px; background: rgba(128,128,128,0.30);}"
+                f"QLabel#eisenhowerDescription {{font-size: 13px; font-weight: 600; color: {color_tokens[quadrant.key]['text_primary']};}}"
+                f"QLabel#eisenhowerMetaInfo {{font-size: 12px; color: {color_tokens[quadrant.key]['text_secondary']};}}"
+                f"QLabel#eisenhowerQuadrantTitle {{color: {color_tokens[quadrant.key]['label_color']}; font-size: 14px; font-weight: 700;}}"
+                f"QLabel#{quadrant.key}_count {{color: {color_tokens[quadrant.key]['text_primary']}; font-size: 14px; font-weight: 700;}}"
             )
             self._columns_lists[quadrant.key] = list_widget
 
@@ -323,16 +331,16 @@ class EisenhowerView(QWidget):
                 key: {
                     "accent": accent,
                     "border": "#334155",
-                    "background": "#0f172a",
-                    "dragover_background": "#111f36",
-                    "card_background": "#1e293b",
-                    "card_border": "#475569",
+                    "background": "#0b1730",
+                    "dragover_background": "#15284a",
+                    "card_background": "#24344d",
+                    "card_border": "#64748b",
                     "hover_border": accent,
-                    "hover_background": "#243246",
-                    "dragging_background": "#243246",
+                    "hover_background": "#2b3f5d",
+                    "dragging_background": "#2b3f5d",
                     "label_color": "#f8fafc",
                     "text_primary": "#f8fafc",
-                    "text_secondary": "#cbd5e1",
+                    "text_secondary": "#dbe7f5",
                 }
                 for key, accent in base.items()
             }

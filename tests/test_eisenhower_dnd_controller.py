@@ -6,7 +6,9 @@ def test_quadrant_mapping_payloads():
 
     assert controller.build_payload_for_target("q1") == {"É Urgente?": "Sim", "Prioridade": "Alta"}
     assert controller.build_payload_for_target("q2") == {"É Urgente?": "Sim", "Prioridade": "Baixa"}
-    assert controller.build_payload_for_target("q3") == {"É Urgente?": "Não", "Prioridade": "Média"}
+    assert controller.build_payload_for_target("q3", {"Prioridade": "Alta"}) == {"É Urgente?": "Não", "Prioridade": "Alta"}
+    assert controller.build_payload_for_target("q3", {"Prioridade": "Média"}) == {"É Urgente?": "Não", "Prioridade": "Média"}
+    assert controller.build_payload_for_target("q3", {"Prioridade": "Baixa"}) == {"É Urgente?": "Não", "Prioridade": "Média"}
     assert controller.build_payload_for_target("q4") == {"É Urgente?": "Não", "Prioridade": "Baixa"}
 
 
