@@ -26,6 +26,8 @@ def _empty_metrics() -> DashboardMetrics:
         canceladas=0,
         por_status={},
         por_prioridade={"Alta": 0, "Média": 0, "Baixa": 0},
+        status_gerais={"Dentro do prazo": 0, "Concluído antes do prazo": 0, "Concluído no prazo": 0, "Concluída com atraso": 0, "Em atraso": 0},
+        big_numbers={"Total de Demandas": 0, "Não iniciado": 0, "Em andamento": 0, "Bloqueado": 0, "Requer revisão": 0, "Cancelado": 0, "Concluído": 0},
         alertas=[],
     )
 
@@ -48,7 +50,7 @@ def test_layout_does_not_collapse_without_data():
 
     assert view._cards["graficos"].minimumHeight() >= 280
     assert view._cards["alertas"].minimumHeight() >= 100
-    assert view.done_subtitle.text() == "Nenhuma demanda concluída ainda"
+    assert view.progress_subtitle.text() == "0 de 0 demandas concluídas"
 
 
 def test_empty_dataset_shows_placeholders():
@@ -78,3 +80,20 @@ def test_typography_hierarchy_is_applied_in_stylesheet():
     assert "QLabel#metricValue" in qss
     assert "font-size: 32px" in qss
     assert "QLabel#progressPercent" in qss
+
+
+def test_big_numbers_order_and_status_gerais_section():
+    _app()
+    view = MonitoramentoView()
+    expected = ["Total de Demandas", "Não iniciado", "Em andamento", "Bloqueado", "Requer revisão", "Cancelado", "Concluído"]
+    assert list(view.big_number_labels.keys()) == expected
+    assert "status_gerais" in view._cards
+
+
+def test_monitoramento_has_no_decorative_icons_in_headers():
+    _app()
+    view = MonitoramentoView()
+    section_titles = [lbl.text() for lbl in view.findChildren(QLabel) if lbl.objectName() == "sectionTitle"]
+    assert "Dados Gerais" in section_titles
+    assert "Status Gerais" in section_titles
+    assert all("◉" not in s and "◎" not in s and "▤" not in s for s in section_titles)

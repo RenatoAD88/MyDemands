@@ -16,7 +16,7 @@ class InMemoryLayout(LayoutPersistenceService):
         self.saved = {}
 
     def load(self, user_email: str):
-        return self.saved.get(user_email, ["big_numbers", "progresso", "graficos", "alertas"])
+        return self.saved.get(user_email, ["big_numbers", "status_gerais", "progresso", "graficos", "alertas"])
 
     def save(self, user_email: str, order):
         self.saved[user_email] = list(order)

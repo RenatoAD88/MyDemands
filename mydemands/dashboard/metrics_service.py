@@ -17,11 +17,30 @@ class DashboardMetrics:
     canceladas: int
     por_status: Dict[str, int]
     por_prioridade: Dict[str, int]
+    status_gerais: Dict[str, int]
+    big_numbers: Dict[str, int]
     alertas: List[Dict[str, str]]
 
 
 class DashboardMetricsService:
     """Calcula indicadores com cache simples baseado no fingerprint das demandas."""
+
+    STATUS_ORDER = [
+        "Não iniciada",
+        "Em andamento",
+        "Bloqueado",
+        "Requer revisão",
+        "Cancelado",
+        "Concluído",
+    ]
+
+    STATUS_GERAIS_ORDER = [
+        "Dentro do prazo",
+        "Concluído antes do prazo",
+        "Concluído no prazo",
+        "Concluída com atraso",
+        "Em atraso",
+    ]
 
     def __init__(self) -> None:
         self._last_fingerprint: Tuple[Any, ...] | None = None
@@ -38,8 +57,9 @@ class DashboardMetricsService:
         em_andamento = 0
         canceladas = 0
         em_atraso = 0
-        por_status: Dict[str, int] = {}
+        por_status: Dict[str, int] = {status: 0 for status in self.STATUS_ORDER}
         por_prioridade: Dict[str, int] = {"Alta": 0, "Média": 0, "Baixa": 0}
+        status_gerais: Dict[str, int] = {label: 0 for label in self.STATUS_GERAIS_ORDER}
         alertas: List[Dict[str, str]] = []
         today = date.today()
         tomorrow = today.fromordinal(today.toordinal() + 1)
@@ -50,6 +70,7 @@ class DashboardMetricsService:
             projeto = str(row.get("Projeto") or "").strip()
             descricao = str(row.get("Descrição") or "").strip() or "Sem descrição"
             prazo_raw = str(row.get("Prazo") or "")
+            timing = str(row.get("Timing") or "").strip().lower()
             demand_id = str(row.get("ID") or "")
 
             por_status[status] = por_status.get(status, 0) + 1
@@ -63,6 +84,17 @@ class DashboardMetricsService:
             if status == "Cancelado":
                 canceladas += 1
 
+            if "dentro do prazo" in timing:
+                status_gerais["Dentro do prazo"] += 1
+            elif "concluída antes" in timing:
+                status_gerais["Concluído antes do prazo"] += 1
+            elif "concluída no prazo" in timing:
+                status_gerais["Concluído no prazo"] += 1
+            elif "concluída com atraso" in timing:
+                status_gerais["Concluída com atraso"] += 1
+            elif "em atraso" in timing:
+                status_gerais["Em atraso"] += 1
+
             prazos = parse_prazos_list(prazo_raw)
             if status not in {"Concluído", "Cancelado"} and prazos:
                 min_prazo = min(prazos)
@@ -71,8 +103,20 @@ class DashboardMetricsService:
                     alertas.append(
                         {
                             "id": demand_id,
-                            "titulo": f"{projeto} — {descricao}" if projeto else descricao,
+                            "status": status,
+                            "timing": str(row.get("Timing") or "").strip(),
+                            "prioridade": prioridade,
                             "prazo": min_prazo.strftime("%d/%m/%Y"),
+                            "percentual": str(row.get("% Conclusão") or ""),
+                            "data_registro": str(row.get("Data de Registro") or "").strip(),
+                            "projeto": projeto,
+                            "descricao": descricao,
+                            "comentario": str(row.get("Comentário") or "").strip(),
+                            "numero_controle": str(row.get("ID Azure") or "").strip(),
+                            "responsavel": str(row.get("Responsável") or "").strip(),
+                            "reportar": str(row.get("Reportar?") or "").strip(),
+                            "nome": str(row.get("Nome") or "").strip(),
+                            "time_funcao": str(row.get("Time/Função") or "").strip(),
                             "badge": "Atrasada",
                         }
                     )
@@ -80,8 +124,20 @@ class DashboardMetricsService:
                     alertas.append(
                         {
                             "id": demand_id,
-                            "titulo": f"{projeto} — {descricao}" if projeto else descricao,
+                            "status": status,
+                            "timing": str(row.get("Timing") or "").strip(),
+                            "prioridade": prioridade,
                             "prazo": min_prazo.strftime("%d/%m/%Y"),
+                            "percentual": str(row.get("% Conclusão") or ""),
+                            "data_registro": str(row.get("Data de Registro") or "").strip(),
+                            "projeto": projeto,
+                            "descricao": descricao,
+                            "comentario": str(row.get("Comentário") or "").strip(),
+                            "numero_controle": str(row.get("ID Azure") or "").strip(),
+                            "responsavel": str(row.get("Responsável") or "").strip(),
+                            "reportar": str(row.get("Reportar?") or "").strip(),
+                            "nome": str(row.get("Nome") or "").strip(),
+                            "time_funcao": str(row.get("Time/Função") or "").strip(),
                             "badge": "Prazo hoje",
                         }
                     )
@@ -89,13 +145,35 @@ class DashboardMetricsService:
                     alertas.append(
                         {
                             "id": demand_id,
-                            "titulo": f"{projeto} — {descricao}" if projeto else descricao,
+                            "status": status,
+                            "timing": str(row.get("Timing") or "").strip(),
+                            "prioridade": prioridade,
                             "prazo": min_prazo.strftime("%d/%m/%Y"),
+                            "percentual": str(row.get("% Conclusão") or ""),
+                            "data_registro": str(row.get("Data de Registro") or "").strip(),
+                            "projeto": projeto,
+                            "descricao": descricao,
+                            "comentario": str(row.get("Comentário") or "").strip(),
+                            "numero_controle": str(row.get("ID Azure") or "").strip(),
+                            "responsavel": str(row.get("Responsável") or "").strip(),
+                            "reportar": str(row.get("Reportar?") or "").strip(),
+                            "nome": str(row.get("Nome") or "").strip(),
+                            "time_funcao": str(row.get("Time/Função") or "").strip(),
                             "badge": "Vencimento próximo",
                         }
                     )
 
         percentual = int(round((concluidas / total) * 100)) if total else 0
+        big_numbers = {
+            "Total de Demandas": total,
+            "Não iniciado": por_status.get("Não iniciada", 0),
+            "Em andamento": por_status.get("Em andamento", 0),
+            "Bloqueado": por_status.get("Bloqueado", 0),
+            "Requer revisão": por_status.get("Requer revisão", 0),
+            "Cancelado": por_status.get("Cancelado", 0),
+            "Concluído": por_status.get("Concluído", 0),
+        }
+
         metrics = DashboardMetrics(
             total_demandas=total,
             concluidas=concluidas,
@@ -105,6 +183,8 @@ class DashboardMetricsService:
             canceladas=canceladas,
             por_status=por_status,
             por_prioridade=por_prioridade,
+            status_gerais=status_gerais,
+            big_numbers=big_numbers,
             alertas=sorted(
                 alertas,
                 key=lambda x: (
@@ -130,6 +210,8 @@ class DashboardMetricsService:
                     str(row.get("Prazo") or ""),
                     str(row.get("Projeto") or ""),
                     str(row.get("Descrição") or ""),
+                    str(row.get("Timing") or ""),
+                    str(row.get("% Conclusão") or ""),
                 )
             )
         ordered.sort()

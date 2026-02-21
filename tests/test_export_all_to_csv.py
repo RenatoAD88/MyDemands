@@ -21,7 +21,7 @@ def test_export_all_to_csv_exports_existing_demands(tmp_path):
         "Prioridade": "Baixa",
         "Prazo": "10/02/2026",
         "Data de Registro": "02/02/2026",
-        "Status": "Em espera",
+        "Status": "Bloqueado",
         "Responsável": "Bruno",
     })
 

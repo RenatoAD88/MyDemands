@@ -198,7 +198,7 @@ MAX_TEXT_COL_WIDTH_PX = 600
 STATUS_EDIT_OPTIONS = [
     "Não iniciada",
     "Em andamento",
-    "Em espera",
+    "Bloqueado",
     "Requer revisão",
     "Cancelado",
     "Concluído",
@@ -206,7 +206,7 @@ STATUS_EDIT_OPTIONS = [
 TAB3_STATUS_FILTER_OPTIONS = [
     "Não Iniciado",
     "Em Andamento",
-    "Em Espera",
+    "Bloqueado",
     "Requer Revisão",
     "Cancelado",
     "Concluído",
@@ -2071,7 +2071,7 @@ class MainWindow(QMainWindow):
                     return
                 payload["Data Conclusão"] = ""
                 payload["% Conclusão"] = pct
-            elif previous_status == "Não iniciada" and new_value in ("Em andamento", "Em espera", "Requer revisão"):
+            elif previous_status == "Não iniciada" and new_value in ("Em andamento", "Bloqueado", "Requer revisão"):
                 pct = self._prompt_percent_after_not_started()
                 if pct is None:
                     self.refresh_all()

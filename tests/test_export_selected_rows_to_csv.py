@@ -21,7 +21,7 @@ def test_export_rows_to_csv_exports_only_selected_rows(tmp_path):
         "Prioridade": "Média",
         "Prazo": "06/02/2026",
         "Data de Registro": "02/02/2026",
-        "Status": "Em espera",
+        "Status": "Bloqueado",
         "Responsável": "Bia",
     })
     id_3 = store.add({

@@ -23,10 +23,10 @@ def test_metrics_calculation_counts_and_alerts():
     yesterday = (date.today() - timedelta(days=1)).strftime("%d/%m/%Y")
 
     rows = [
-        _row("1", Status="Concluído", Prioridade="Alta"),
-        _row("2", Status="Em andamento", Prioridade="Média", Prazo=today),
-        _row("3", Status="Em espera", Prioridade="Baixa", Prazo=yesterday),
-        _row("4", Status="Não iniciada", Prioridade="Baixa", Prazo=tomorrow),
+        _row("1", Status="Concluído", Prioridade="Alta", Timing="Concluída no Prazo"),
+        _row("2", Status="Em andamento", Prioridade="Média", Prazo=today, Timing="Dentro do Prazo"),
+        _row("3", Status="Bloqueado", Prioridade="Baixa", Prazo=yesterday, Timing="Em Atraso"),
+        _row("4", Status="Não iniciada", Prioridade="Baixa", Prazo=tomorrow, Timing="Concluída antes do Prazo"),
     ]
     service = DashboardMetricsService()
     metrics = service.calculate(rows)
@@ -38,6 +38,11 @@ def test_metrics_calculation_counts_and_alerts():
     assert metrics.em_atraso == 1
     assert metrics.canceladas == 0
     assert metrics.por_prioridade == {"Alta": 1, "Média": 1, "Baixa": 2}
+    assert metrics.big_numbers["Bloqueado"] == 1
+    assert metrics.status_gerais["Dentro do prazo"] == 1
+    assert metrics.status_gerais["Concluído antes do prazo"] == 1
+    assert metrics.status_gerais["Concluído no prazo"] == 1
+    assert metrics.status_gerais["Em atraso"] == 1
     assert [a["badge"] for a in metrics.alertas] == ["Atrasada", "Prazo hoje", "Vencimento próximo"]
 
 
