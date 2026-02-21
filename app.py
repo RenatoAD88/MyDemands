@@ -22,7 +22,7 @@ if "--self-test" in sys.argv or "--self-test-crypto" in sys.argv:
 
     raise SystemExit(run_crypto_self_test())
 
-from PySide6.QtCore import Qt, QDate, QSize, QTimer, QUrl
+from PySide6.QtCore import Qt, QDate, QSize, QTimer, QUrl, QPoint
 from PySide6.QtGui import QColor, QIcon, QKeyEvent, QDesktopServices, QPixmap, QPainter, QFont, QPalette
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
@@ -3294,6 +3294,7 @@ class MainWindow(QMainWindow):
             self._open_demand_from_eisenhower_card,
             on_move_card=self._move_demand_from_eisenhower,
         )
+        self.t3_eisenhower_view.context_action_requested.connect(self._handle_eisenhower_context_action)
         self.t3_views_stack = QStackedWidget()
         self.t3_views_stack.addWidget(self.t3_table)
         self.t3_views_stack.addWidget(self.t3_eisenhower_view)
@@ -3494,6 +3495,75 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Erro ao mover demanda", str(ex))
             return
         self.refresh_tab3()
+
+
+    def _handle_eisenhower_context_action(self, action: str, payload: Dict[str, Any]) -> None:
+        if action != "open" or not isinstance(payload, dict):
+            return
+        row = dict(payload)
+        global_pos = row.pop("_context_pos", None)
+        if not isinstance(global_pos, QPoint):
+            return
+        _id = str(row.get("_id") or "")
+        if not _id:
+            return
+
+        menu = QMenu(self)
+        edit_action = menu.addAction("Editar")
+        duplicate_action = menu.addAction("Duplicar")
+        delete_action = menu.addAction("Excluir")
+        picked = menu.exec(global_pos)
+        if picked is edit_action:
+            self._open_demand_from_eisenhower_card(row)
+            return
+        if picked is duplicate_action:
+            self._duplicate_demand_from_row(row)
+            return
+        if picked is delete_action:
+            self._delete_demand_from_row(row)
+            return
+
+    def _duplicate_demand_from_row(self, row: Dict[str, Any]) -> None:
+        _id = str(row.get("_id") or "")
+        if not _id:
+            return
+        source = self.store.get(_id)
+        if not source:
+            return
+
+        row_data = dict(source.data)
+        previous_status = (row_data.get("Status") or "").strip()
+        was_concluded = previous_status in ("Concluído", "Cancelado")
+        row_data["Status"] = ""
+        row_data["Data Conclusão"] = ""
+        row_data["% Conclusão"] = ""
+
+        dlg = NewDemandDialog(self, initial_data=row_data, ai_attach=self._attach_ai_widget, context_provider=lambda field: self._ai_context_provider(_id, field))
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        try:
+            new_row_id = self.store.add(dlg.payload())
+        except ValidationError as ve:
+            QMessageBox.warning(self, "Validação", str(ve))
+            return
+
+        self.refresh_all()
+        if new_row_id and was_concluded:
+            self._show_duplicate_success_modal(self._resolve_demand_number(new_row_id))
+
+    def _delete_demand_from_row(self, row: Dict[str, Any]) -> None:
+        _id = str(row.get("_id") or "")
+        if not _id:
+            return
+        table = self.t3_table
+        table.clearSelection()
+        for row_idx in range(table.rowCount()):
+            item = table.item(row_idx, 0)
+            if item is not None and str(item.data(Qt.UserRole) or "") == _id:
+                table.selectRow(row_idx)
+                break
+        self._delete_selected_demands_from_table(table)
 
     def _open_demand_from_eisenhower_card(self, row: Dict[str, Any]) -> None:
         _id = str(row.get("_id") or "")

@@ -1,6 +1,8 @@
 import pytest
 
 qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
+qttest = pytest.importorskip("PySide6.QtTest", reason="QtTest indisponível no ambiente de teste", exc_type=ImportError)
+qtcore = pytest.importorskip("PySide6.QtCore", reason="QtCore indisponível no ambiente de teste", exc_type=ImportError)
 
 from app import MainWindow
 from csv_store import CsvStore
@@ -11,6 +13,9 @@ from mydemands.dashboard.eisenhower_dnd import EisenhowerDnDController
 
 QApplication = qtwidgets.QApplication
 QDialog = qtwidgets.QDialog
+Qt = qtcore.Qt
+QPoint = qtcore.QPoint
+QTest = qttest.QTest
 
 
 def _get_app():
@@ -159,6 +164,106 @@ def test_eisenhower_minicard_applies_multiline_elide():
     assert description_label is not None
     assert "…" in description_label.text() or "..." in description_label.text()
     assert card.minimumHeight() >= 90
+    margins = card.layout().contentsMargins()
+    assert margins.left() >= 12
+    assert margins.right() >= 12
+
+
+def test_single_click_selects_without_opening_modal(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    _add_pending(store)
+    win = MainWindow(store)
+    win._set_tab3_view_mode("eisenhower")
+    win.refresh_tab3()
+
+    calls = []
+    monkeypatch.setattr(win, "_open_demand_from_eisenhower_card", lambda row: calls.append(row))
+    q3_list = win.t3_eisenhower_view.findChild(qtwidgets.QListWidget, "q3_list")
+    card = q3_list.itemWidget(q3_list.item(0))
+
+    QTest.mouseClick(card, Qt.LeftButton)
+
+    assert calls == []
+    assert card.property("selected") is True
+    win.close()
+
+
+def test_double_click_opens_modal(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    _add_pending(store)
+    win = MainWindow(store)
+    win._set_tab3_view_mode("eisenhower")
+    win.refresh_tab3()
+
+    calls = []
+    monkeypatch.setattr(win, "_open_demand_from_eisenhower_card", lambda row: calls.append(row.get("_id")))
+    q3_list = win.t3_eisenhower_view.findChild(qtwidgets.QListWidget, "q3_list")
+    card = q3_list.itemWidget(q3_list.item(0))
+
+    QTest.mouseDClick(card, Qt.LeftButton)
+
+    assert len(calls) == 1
+    win.close()
+
+
+def test_context_menu_contains_expected_actions(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    _add_pending(store)
+    win = MainWindow(store)
+    win._set_tab3_view_mode("eisenhower")
+    win.refresh_tab3()
+
+    captured = {}
+
+    def _fake_exec(menu, *_):
+        captured["actions"] = [a.text() for a in menu.actions()]
+        return None
+
+    monkeypatch.setattr(qtwidgets.QMenu, "exec", _fake_exec)
+
+    q3_list = win.t3_eisenhower_view.findChild(qtwidgets.QListWidget, "q3_list")
+    card = q3_list.itemWidget(q3_list.item(0))
+    QTest.mouseClick(card, Qt.RightButton, pos=card.rect().center())
+
+    assert captured["actions"] == ["Editar", "Duplicar", "Excluir"]
+    win.close()
+
+
+def test_click_outside_clears_selection(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    _add_pending(store)
+    win = MainWindow(store)
+    win._set_tab3_view_mode("eisenhower")
+    win.refresh_tab3()
+
+    q3_list = win.t3_eisenhower_view.findChild(qtwidgets.QListWidget, "q3_list")
+    card = q3_list.itemWidget(q3_list.item(0))
+    QTest.mouseClick(card, Qt.LeftButton)
+    assert card.property("selected") is True
+
+    QTest.mouseClick(q3_list.viewport(), Qt.LeftButton, pos=QPoint(q3_list.viewport().width() - 2, q3_list.viewport().height() - 2))
+
+    assert card.property("selected") is False
+    win.close()
+
+
+def test_dark_mode_label_forces_white_text():
+    _get_app()
+    tokens = EisenhowerView._build_color_tokens(True)
+    assert all(v["label_color"] == "#FFFFFF" for v in tokens.values())
+
+
+def test_minicard_styles_include_spacing_and_padding():
+    _get_app()
+    view = EisenhowerView(lambda *_: None)
+    q1_list = view.findChild(qtwidgets.QListWidget, "q1_list")
+    sheet = q1_list.styleSheet()
+    assert "margin-bottom: 10px" in sheet
+    assert "padding: 8px" in sheet
 
 
 def test_dnd_controller_mappings_and_persistence_call(tmp_path):
