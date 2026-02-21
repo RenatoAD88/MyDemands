@@ -3482,19 +3482,20 @@ class MainWindow(QMainWindow):
             self.t3_eisenhower_view.set_rows(filtered)
         self._save_preferences()
 
-    def _move_demand_from_eisenhower(self, row: Dict[str, Any], changes: Dict[str, Any]) -> None:
+    def _move_demand_from_eisenhower(self, row: Dict[str, Any], changes: Dict[str, Any]) -> bool:
         _id = str(row.get("_id") or "")
         if not _id:
-            return
+            return False
         try:
             self._demand_update_service.update(_id, changes)
         except ValidationError as ve:
             QMessageBox.warning(self, "Movimentação bloqueada", str(ve))
-            return
+            return False
         except Exception as ex:
             QMessageBox.warning(self, "Erro ao mover demanda", str(ex))
-            return
+            return False
         self.refresh_tab3()
+        return True
 
 
     def _handle_eisenhower_context_action(self, action: str, payload: Dict[str, Any]) -> None:
