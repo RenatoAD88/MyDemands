@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QDialog, QFormLayout,
     QDateEdit, QLineEdit, QTextEdit, QPlainTextEdit, QComboBox,
     QListWidget, QListWidgetItem, QGroupBox, QAbstractItemView,
-    QMenu, QScrollArea, QCheckBox, QSystemTrayIcon, QRadioButton, QStackedWidget
+    QMenu, QScrollArea, QCheckBox, QSystemTrayIcon, QStackedWidget
 )
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QStyledItemDelegate
@@ -84,6 +84,7 @@ from mydemands.dashboard import (
 from mydemands.dashboard.grid_preferences import GridPreferencesService, LocalJsonPreferencesStore
 from mydemands.dashboard.view import MonitoramentoView
 from mydemands.dashboard.eisenhower import EisenhowerView
+from mydemands.dashboard.demand_update_service import DemandUpdateService
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
@@ -2149,8 +2150,8 @@ class MainWindow(QMainWindow):
             self.t3_prioridade.setCurrentText(str(self._prefs.get("t3_prioridade", "") or ""))
             self.t3_responsavel.setText(str(self._prefs.get("t3_responsavel", "") or ""))
             mode = str(((self._prefs.get("preferences") or {}).get("view") or {}).get("consultar_pendentes", "default") or "default")
-            self.t3_view_default.setChecked(mode != "eisenhower")
-            self.t3_view_eisenhower.setChecked(mode == "eisenhower")
+            self.t3_view_default_btn.setChecked(mode != "eisenhower")
+            self.t3_view_eisenhower_btn.setChecked(mode == "eisenhower")
             self._set_tab3_view_mode(mode)
 
             tab_order = self._prefs.get("tab_order")
@@ -3210,11 +3211,22 @@ class MainWindow(QMainWindow):
     def _init_tab3(self):
         tab = QWidget()
         self.t3_view_mode = "default"
-        self.t3_view_default = QRadioButton("Padrão")
-        self.t3_view_eisenhower = QRadioButton("Matriz Eisenhower")
-        self.t3_view_default.setChecked(True)
-        self.t3_view_default.toggled.connect(lambda checked: checked and self._set_tab3_view_mode("default"))
-        self.t3_view_eisenhower.toggled.connect(lambda checked: checked and self._set_tab3_view_mode("eisenhower"))
+        self._demand_update_service = DemandUpdateService(self.store.update, self.deadline_scheduler.check_now)
+        self.t3_view_default_btn = QPushButton("Visão Padrão")
+        self.t3_view_default_btn.setCheckable(True)
+        self.t3_view_eisenhower_btn = QPushButton("Visão Eisenhower")
+        self.t3_view_eisenhower_btn.setCheckable(True)
+        self.t3_view_default_btn.setChecked(True)
+        self.t3_view_default_btn.clicked.connect(lambda: self._set_tab3_view_mode("default"))
+        self.t3_view_eisenhower_btn.clicked.connect(lambda: self._set_tab3_view_mode("eisenhower"))
+        segmented_style = (
+            "QPushButton {border: 1px solid palette(mid); padding: 6px 12px; background: transparent;}"
+            "QPushButton:checked {background: palette(highlight); color: palette(highlighted-text); font-weight: 600;}"
+            "QPushButton:first-child {border-top-left-radius: 14px; border-bottom-left-radius: 14px; border-right: 0;}"
+            "QPushButton:last-child {border-top-right-radius: 14px; border-bottom-right-radius: 14px;}"
+        )
+        self.t3_view_default_btn.setStyleSheet(segmented_style)
+        self.t3_view_eisenhower_btn.setStyleSheet(segmented_style)
 
         self.t3_search = QLineEdit()
         self.t3_search.setPlaceholderText("Buscar por projeto, descrição, comentário, núm. controle, responsável, nome e time/função")
@@ -3245,9 +3257,13 @@ class MainWindow(QMainWindow):
         clear_prazo_btn.clicked.connect(lambda: self.t3_prazo.setDate(self.t3_prazo.minimumDate()))
 
         filters = QHBoxLayout()
-        filters.addWidget(QLabel("Visualização:"))
-        filters.addWidget(self.t3_view_default)
-        filters.addWidget(self.t3_view_eisenhower)
+        view_selector = QWidget()
+        view_selector_layout = QHBoxLayout(view_selector)
+        view_selector_layout.setContentsMargins(0, 0, 0, 0)
+        view_selector_layout.setSpacing(0)
+        view_selector_layout.addWidget(self.t3_view_default_btn)
+        view_selector_layout.addWidget(self.t3_view_eisenhower_btn)
+        filters.addWidget(view_selector)
         filters.addWidget(QLabel("Prazo:"))
         filters.addWidget(self.t3_prazo)
         filters.addWidget(clear_prazo_btn)
@@ -3274,7 +3290,10 @@ class MainWindow(QMainWindow):
         cards.addWidget(self.t3_pending_card)
         cards.addStretch()
 
-        self.t3_eisenhower_view = EisenhowerView(self._open_demand_from_eisenhower_card)
+        self.t3_eisenhower_view = EisenhowerView(
+            self._open_demand_from_eisenhower_card,
+            on_move_card=self._move_demand_from_eisenhower,
+        )
         self.t3_views_stack = QStackedWidget()
         self.t3_views_stack.addWidget(self.t3_table)
         self.t3_views_stack.addWidget(self.t3_eisenhower_view)
@@ -3292,6 +3311,9 @@ class MainWindow(QMainWindow):
         self.t3_view_mode = normalized
         if hasattr(self, "t3_views_stack"):
             self.t3_views_stack.setCurrentIndex(1 if normalized == "eisenhower" else 0)
+        if hasattr(self, "t3_view_default_btn") and hasattr(self, "t3_view_eisenhower_btn"):
+            self.t3_view_default_btn.setChecked(normalized != "eisenhower")
+            self.t3_view_eisenhower_btn.setChecked(normalized == "eisenhower")
         self._save_preferences()
 
     def _init_tab4(self):
@@ -3458,6 +3480,20 @@ class MainWindow(QMainWindow):
         if hasattr(self, "t3_eisenhower_view"):
             self.t3_eisenhower_view.set_rows(filtered)
         self._save_preferences()
+
+    def _move_demand_from_eisenhower(self, row: Dict[str, Any], changes: Dict[str, Any]) -> None:
+        _id = str(row.get("_id") or "")
+        if not _id:
+            return
+        try:
+            self._demand_update_service.update(_id, changes)
+        except ValidationError as ve:
+            QMessageBox.warning(self, "Movimentação bloqueada", str(ve))
+            return
+        except Exception as ex:
+            QMessageBox.warning(self, "Erro ao mover demanda", str(ex))
+            return
+        self.refresh_tab3()
 
     def _open_demand_from_eisenhower_card(self, row: Dict[str, Any]) -> None:
         _id = str(row.get("_id") or "")
