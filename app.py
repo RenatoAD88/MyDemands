@@ -81,6 +81,7 @@ from mydemands.dashboard import (
     LayoutPersistenceService,
     MonitoramentoController,
 )
+from mydemands.dashboard.grid_preferences import GridPreferencesService, LocalJsonPreferencesStore
 from mydemands.dashboard.view import MonitoramentoView
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
@@ -3310,7 +3311,11 @@ class MainWindow(QMainWindow):
         self._clear_tab4_filters()
 
     def _init_tab_monitoramento(self):
-        self.monitoramento_view = MonitoramentoView()
+        preferences_service = GridPreferencesService(LocalJsonPreferencesStore(self.store.base_dir))
+        self.monitoramento_view = MonitoramentoView(
+            user_id=(self.logged_user_email or "anonimo"),
+            preferences_service=preferences_service,
+        )
         self.monitoramento_controller = MonitoramentoController(
             store=self.store,
             metrics_service=DashboardMetricsService(),

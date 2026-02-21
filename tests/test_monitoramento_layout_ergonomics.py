@@ -85,7 +85,7 @@ def test_alertas_columns_order_and_empty_state():
     view = MonitoramentoView()
     view.update_metrics(_empty_metrics())
 
-    assert view.alerts_empty.text() == "Nenhuma demanda com alerta de prazo."
+    assert view.alerts_empty.text() == "Nenhuma demanda em atraso."
     headers = [view.alerts_table.horizontalHeaderItem(i).text() for i in range(view.alerts_table.columnCount())]
     assert headers == [
         "ID",
@@ -106,6 +106,8 @@ def test_alertas_columns_order_and_empty_state():
         "Time/Função",
     ]
     assert "Ações" not in headers
+    assert view.alerts_config_button.text() == "Configurar colunas"
+    assert view.alerts_restore_button.text() == "Restaurar padrão"
 
 
 def test_monitoramento_has_no_decorative_icons_in_headers():
@@ -122,5 +124,5 @@ def test_alertas_table_resizes_columns_to_content():
     view = MonitoramentoView()
 
     header = view.alerts_table.horizontalHeader()
-    assert header.sectionResizeMode(0) == qtwidgets.QHeaderView.ResizeToContents
+    assert header.sectionResizeMode(0) == qtwidgets.QHeaderView.Interactive
     assert header.stretchLastSection() is True
