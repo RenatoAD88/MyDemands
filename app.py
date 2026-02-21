@@ -389,13 +389,24 @@ def _percent_label_to_decimal(label: str) -> str:
 
 
 class ColumnComboDelegate(QStyledItemDelegate):
-    def __init__(self, parent=None, column_to_options: Dict[int, List[str]] | None = None):
+    def __init__(self, parent=None, column_to_options: Dict[int, List[str]] | None = None, *, table_key: str = ""):
         super().__init__(parent)
         self.column_to_options = column_to_options or {}
         self.progress_column = VISIBLE_COLUMNS.index("% Conclusão")
+        self.table_key = table_key
+        self.prazo_column = VISIBLE_COLUMNS.index("Prazo")
+        self.conclusion_column = VISIBLE_COLUMNS.index("Data Conclusão")
 
     def createEditor(self, parent, option, index):
         col = index.column()
+        if self.table_key == "t3" and col in {self.prazo_column, self.conclusion_column}:
+            date_edit = QDateEdit(parent)
+            date_edit.setCalendarPopup(True)
+            date_edit.setDisplayFormat(DATE_FMT_QT)
+            date_edit.setMinimumDate(QDate(1900, 1, 1))
+            if col == self.conclusion_column:
+                date_edit.setSpecialValueText("Sem data")
+            return date_edit
         if col in self.column_to_options:
             combo = QComboBox(parent)
             combo.setEditable(False)
@@ -412,6 +423,14 @@ class ColumnComboDelegate(QStyledItemDelegate):
 
     def setEditorData(self, editor, index):
         col = index.column()
+        if self.table_key == "t3" and col in {self.prazo_column, self.conclusion_column} and isinstance(editor, QDateEdit):
+            current = (index.data(Qt.EditRole) or "").strip().replace("*", "")
+            parsed = _try_parse_date_br(current)
+            if parsed:
+                editor.setDate(QDate(parsed.year, parsed.month, parsed.day))
+            else:
+                editor.setDate(editor.minimumDate() if col == self.conclusion_column else QDate.currentDate())
+            return
         if col in self.column_to_options and isinstance(editor, QComboBox):
             current = (index.data(Qt.EditRole) or "").strip()
             items = self.column_to_options[col]
@@ -426,6 +445,12 @@ class ColumnComboDelegate(QStyledItemDelegate):
 
     def setModelData(self, editor, model, index):
         col = index.column()
+        if self.table_key == "t3" and col in {self.prazo_column, self.conclusion_column} and isinstance(editor, QDateEdit):
+            if col == self.conclusion_column and editor.date() == editor.minimumDate():
+                model.setData(index, "", Qt.EditRole)
+            else:
+                model.setData(index, editor.date().toString(DATE_FMT_QT), Qt.EditRole)
+            return
         if col in self.column_to_options and isinstance(editor, QComboBox):
             model.setData(index, editor.currentText(), Qt.EditRole)
             return
@@ -1677,7 +1702,7 @@ class MainWindow(QMainWindow):
         if table_key in {"t1", "t3", "t4", "t4_cancelled"}:
             table.setContextMenuPolicy(Qt.CustomContextMenu)
             table.customContextMenuRequested.connect(self._open_demand_context_menu)
-        if table_key in {"t4", "t4_cancelled"}:
+        if table_key in {"t3", "t4", "t4_cancelled"}:
             table.setEditTriggers(
                 QAbstractItemView.DoubleClicked
                 | QAbstractItemView.EditKeyPressed
@@ -1692,7 +1717,7 @@ class MainWindow(QMainWindow):
         # ✅ % Conclusão vira combo
         col_map[VISIBLE_COLUMNS.index("% Conclusão")] = PERCENT_COMBO_OPTIONS
 
-        table.setItemDelegate(ColumnComboDelegate(table, col_map))
+        table.setItemDelegate(ColumnComboDelegate(table, col_map, table_key=table_key))
         table.setAlternatingRowColors(True)
         table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         table.verticalHeader().setVisible(False)
@@ -1774,6 +1799,8 @@ class MainWindow(QMainWindow):
             it.setTextAlignment(Qt.AlignCenter)
 
         is_editable = colname not in NON_EDITABLE
+        if table_key == "t3" and colname in {"Prazo", "Data Conclusão"}:
+            is_editable = True
         if table_key in {"t4", "t4_cancelled"}:
             is_editable = is_editable and colname in TAB4_EDITABLE_COLUMNS
 
@@ -1781,6 +1808,7 @@ class MainWindow(QMainWindow):
             it.setFlags(it.flags() & ~Qt.ItemIsEditable)
 
         it.setData(Qt.UserRole, _id)
+        it.setData(Qt.UserRole + 2, text or "")
 
         # guarda valor anterior do status
         if colname == "Status":
@@ -1828,6 +1856,27 @@ class MainWindow(QMainWindow):
 
     def _clear_sort(self, table_key: str):
         self._table_sort_state[table_key] = None
+
+    def _flash_cell_by_id(self, table_key: str, _id: str, col_name: str) -> None:
+        table = self._resolve_table_for_key(table_key)
+        if not isinstance(table, QTableWidget) or col_name not in VISIBLE_COLUMNS:
+            return
+        col_idx = VISIBLE_COLUMNS.index(col_name)
+        for r in range(table.rowCount()):
+            cell = table.item(r, col_idx)
+            if cell is None or str(cell.data(Qt.UserRole) or "") != str(_id):
+                continue
+            original_bg = cell.background()
+            cell.setBackground(QColor(187, 247, 208))
+
+            def _restore() -> None:
+                try:
+                    cell.setBackground(original_bg)
+                except RuntimeError:
+                    return
+
+            QTimer.singleShot(700, _restore)
+            return
 
     def _prompt_conclusao_date_required(self) -> Optional[str]:
         dlg = DatePickDialog(self, "Data de Conclusão", "Selecione a data de conclusão:", allow_clear=False)
@@ -2008,10 +2057,32 @@ class MainWindow(QMainWindow):
             self.refresh_all()
             return
 
+        new_value = (item.text() or "").strip()
+
+        if table_key == "t3" and col_name in {"Prazo", "Data Conclusão"}:
+            previous_value = (item.data(Qt.UserRole + 2) or "").strip()
+            row_status = (table.item(item.row(), VISIBLE_COLUMNS.index("Status")).text() if table and table.item(item.row(), VISIBLE_COLUMNS.index("Status")) else "").strip()
+            if row_status == "Cancelado":
+                item.setText(previous_value)
+                QMessageBox.information(self, "Edição bloqueada", "Demandas canceladas não permitem edição de datas.")
+                return
+
+            try:
+                payload = {col_name: new_value}
+                if col_name == "Data Conclusão" and not new_value:
+                    payload = {"Data Conclusão": ""}
+                self.store.update(_id, payload)
+                self.deadline_scheduler.check_now()
+                self.refresh_all()
+                self._flash_cell_by_id("t3", _id, col_name)
+            except ValidationError as ve:
+                item.setText(previous_value)
+                QMessageBox.information(self, "Validação", str(ve))
+            return
+
         if col_name in NON_EDITABLE:
             return
 
-        new_value = (item.text() or "").strip()
 
         # Status -> Concluído: exige data conclusão e força % 100
         if col_name == "Status" and new_value == "Concluído":
@@ -3787,6 +3858,15 @@ class MainWindow(QMainWindow):
                 return self.t4_cancelled_table
             return self.t4_table
         return None
+
+    def _resolve_table_for_key(self, table_key: str) -> Optional[QTableWidget]:
+        mapping = {
+            "t1": self.t1_table,
+            "t3": self.t3_table,
+            "t4": self.t4_table,
+            "t4_cancelled": self.t4_cancelled_table,
+        }
+        return mapping.get(table_key)
 
     def closeEvent(self, event):
         if self._is_logging_off:
