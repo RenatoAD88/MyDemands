@@ -7,7 +7,7 @@ qtcore = pytest.importorskip("PySide6.QtCore", reason="QtCore indisponível no a
 from app import MainWindow
 from csv_store import CsvStore
 
-from mydemands.dashboard.eisenhower import EisenhowerView
+from mydemands.dashboard.eisenhower import EisenhowerThemeManager, EisenhowerView
 from mydemands.dashboard.eisenhower_dnd import EisenhowerDnDController
 
 
@@ -259,8 +259,8 @@ def test_click_outside_clears_selection(tmp_path):
 
 def test_dark_mode_label_forces_white_text():
     _get_app()
-    tokens = EisenhowerView._build_color_tokens(True)
-    assert all(v["label_color"] == "#f8fafc" for v in tokens.values())
+    tokens = EisenhowerThemeManager.tokens(True)
+    assert all(v["column_header"] == "#e2e8f0" for v in tokens.values())
 
 
 def test_minicard_styles_include_spacing_and_padding():
@@ -268,8 +268,8 @@ def test_minicard_styles_include_spacing_and_padding():
     view = EisenhowerView(lambda *_: None)
     q1_list = view.findChild(qtwidgets.QListWidget, "q1_list")
     sheet = q1_list.styleSheet()
-    assert "margin-bottom: 10px" in sheet
-    assert "padding: 10px" in sheet
+    assert "margin: 2px 0 10px 0" in sheet
+    assert "padding: 8px" in sheet
 
 
 def test_dnd_controller_mappings_and_persistence_call(tmp_path):
@@ -339,8 +339,8 @@ def test_move_failure_returns_false_for_visual_rollback(tmp_path, monkeypatch):
 
 
 def test_card_tokens_keep_visible_border_light_and_dark():
-    light = EisenhowerView._build_color_tokens(False)
-    dark = EisenhowerView._build_color_tokens(True)
+    light = EisenhowerThemeManager.tokens(False)
+    dark = EisenhowerThemeManager.tokens(True)
 
-    assert all(v["card_border"] == "#D0D7E2" for v in light.values())
-    assert all(v["card_border"] == "#475569" for v in dark.values())
+    assert all(v["card_border"] == "#cbd5e1" for v in light.values())
+    assert all(v["card_border"] == "#64748b" for v in dark.values())

@@ -21,6 +21,52 @@ from mydemands.dashboard.eisenhower_classifier import QUADRANTS, EisenhowerClass
 from mydemands.dashboard.eisenhower_dnd import EisenhowerDnDController
 
 
+class EisenhowerThemeManager:
+    @staticmethod
+    def tokens(is_dark: bool) -> Dict[str, Dict[str, str]]:
+        base = {
+            "q1": "#ff6b6b" if is_dark else "#d73a49",
+            "q2": "#ffd166" if is_dark else "#bf8700",
+            "q3": "#62d48f" if is_dark else "#2da44e",
+            "q4": "#72b7ff" if is_dark else "#1f6feb",
+        }
+        if is_dark:
+            return {
+                key: {
+                    "accent": accent,
+                    "column_border": "#3b4d66",
+                    "column_background": "#0f172a",
+                    "column_header": "#e2e8f0",
+                    "dragover_background": "#16233a",
+                    "card_background": "#1e293b",
+                    "card_border": "#64748b",
+                    "hover_border": "#94a3b8",
+                    "hover_background": "#26344b",
+                    "dragging_background": "#2c3b54",
+                    "text_primary": "#f8fafc",
+                    "text_secondary": "#cbd5e1",
+                }
+                for key, accent in base.items()
+            }
+        return {
+            key: {
+                "accent": accent,
+                "column_border": "#d0d7e2",
+                "column_background": "#f8fafc",
+                "column_header": "#1f2937",
+                "dragover_background": "#eff6ff",
+                "card_background": "#ffffff",
+                "card_border": "#cbd5e1",
+                "hover_border": "#94a3b8",
+                "hover_background": "#f8fafc",
+                "dragging_background": "#eef2ff",
+                "text_primary": "#0f172a",
+                "text_secondary": "#475569",
+            }
+            for key, accent in base.items()
+        }
+
+
 class DemandMiniCard(QWidget):
     def __init__(
         self,
@@ -259,12 +305,13 @@ class EisenhowerView(QWidget):
 
         palette = QApplication.palette()
         is_dark = palette.color(QPalette.Window).lightness() < 128
-        color_tokens = self._build_color_tokens(is_dark)
+        color_tokens = EisenhowerThemeManager.tokens(is_dark)
 
         for quadrant in QUADRANTS:
             column = QFrame()
             column.setObjectName(f"eisenhowerColumn_{quadrant.key}")
             column.setProperty("accent", color_tokens[quadrant.key]["accent"])
+            column.setProperty("columnBorder", color_tokens[quadrant.key]["column_border"])
             column.setFrameShape(QFrame.StyledPanel)
             column_layout = QVBoxLayout(column)
             column_layout.setContentsMargins(8, 8, 8, 8)
@@ -291,13 +338,13 @@ class EisenhowerView(QWidget):
             list_widget.viewport().installEventFilter(self)
             list_widget.setStyleSheet(
                 f"QListWidget#{quadrant.key}_list {{"
-                f"border: 1px solid {color_tokens[quadrant.key]['border']};"
+                f"border: 1px solid {color_tokens[quadrant.key]['column_border']};"
                 f"border-top: 4px solid {color_tokens[quadrant.key]['accent']};"
-                f"border-radius: 12px; background: {color_tokens[quadrant.key]['background']}; padding: 10px;}}"
+                f"border-radius: 12px; background: {color_tokens[quadrant.key]['column_background']}; padding: 8px;}}"
                 f"QListWidget#{quadrant.key}_list[dragover='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragover_background']};}}"
-                f"QListWidget::item {{margin: 0 0 8px 0;}}"
-                f"QWidget#eisenhowerDemandCard {{border: 1px solid {color_tokens[quadrant.key]['card_border']}; border-radius: 12px;"
-                f" background: {color_tokens[quadrant.key]['card_background']}; margin-bottom: 10px;}}"
+                f"QListWidget::item {{margin: 0 0 10px 0;}}"
+                f"QWidget#eisenhowerDemandCard {{border: 1px solid {color_tokens[quadrant.key]['card_border']}; border-left: 3px solid {color_tokens[quadrant.key]['accent']}; border-radius: 12px;"
+                f" background: {color_tokens[quadrant.key]['card_background']}; margin: 2px 0 10px 0;}}"
                 f"QWidget#eisenhowerDemandCard:hover {{border-color: {color_tokens[quadrant.key]['hover_border']}; background: {color_tokens[quadrant.key]['hover_background']};}}"
                 f"QWidget#eisenhowerDemandCard[selected='true'] {{border: 2px solid {color_tokens[quadrant.key]['accent']};}}"
                 f"QWidget#eisenhowerDemandCard[dragging='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragging_background']};}}"
@@ -305,7 +352,7 @@ class EisenhowerView(QWidget):
                 "QLabel#eisenhowerStatusBadge {font-size: 11px; font-weight: 600; border-radius: 8px; padding: 2px 8px; background: rgba(128,128,128,0.30);}"
                 f"QLabel#eisenhowerDescription {{font-size: 13px; font-weight: 600; color: {color_tokens[quadrant.key]['text_primary']};}}"
                 f"QLabel#eisenhowerMetaInfo {{font-size: 12px; color: {color_tokens[quadrant.key]['text_secondary']};}}"
-                f"QLabel#eisenhowerQuadrantTitle {{color: {color_tokens[quadrant.key]['label_color']}; font-size: 14px; font-weight: 700;}}"
+                f"QLabel#eisenhowerQuadrantTitle {{color: {color_tokens[quadrant.key]['column_header']}; font-size: 14px; font-weight: 700;}}"
                 f"QLabel#{quadrant.key}_count {{color: {color_tokens[quadrant.key]['text_primary']}; font-size: 14px; font-weight: 700;}}"
             )
             self._columns_lists[quadrant.key] = list_widget
@@ -317,50 +364,6 @@ class EisenhowerView(QWidget):
             column_layout.addLayout(header)
             column_layout.addWidget(scroll)
             root.addWidget(column, 1)
-
-    @staticmethod
-    def _build_color_tokens(is_dark: bool) -> Dict[str, Dict[str, str]]:
-        base = {
-            "q1": "#ff6b6b" if is_dark else "#d73a49",
-            "q2": "#ffd166" if is_dark else "#bf8700",
-            "q3": "#62d48f" if is_dark else "#2da44e",
-            "q4": "#72b7ff" if is_dark else "#1f6feb",
-        }
-        if is_dark:
-            return {
-                key: {
-                    "accent": accent,
-                    "border": "#334155",
-                    "background": "#0b1730",
-                    "dragover_background": "#15284a",
-                    "card_background": "#24344d",
-                    "card_border": "#64748b",
-                    "hover_border": accent,
-                    "hover_background": "#2b3f5d",
-                    "dragging_background": "#2b3f5d",
-                    "label_color": "#f8fafc",
-                    "text_primary": "#f8fafc",
-                    "text_secondary": "#dbe7f5",
-                }
-                for key, accent in base.items()
-            }
-        return {
-            key: {
-                "accent": accent,
-                "border": "#D0D7E2",
-                "background": "#F7F9FC",
-                "dragover_background": "#EFF4FB",
-                "card_background": "#FFFFFF",
-                "card_border": "#D0D7E2",
-                "hover_border": accent,
-                "hover_background": "#F8FAFF",
-                "dragging_background": "#EEF3FD",
-                "label_color": "#1f2937",
-                "text_primary": "#111827",
-                "text_secondary": "#6b7280",
-            }
-            for key, accent in base.items()
-        }
 
     def _handle_move_request(self, source_quadrant: str, target_quadrant: str, row: Dict[str, Any]) -> bool:
         if not self._dnd_controller:
