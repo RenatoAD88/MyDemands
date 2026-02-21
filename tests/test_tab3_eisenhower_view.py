@@ -260,7 +260,7 @@ def test_click_outside_clears_selection(tmp_path):
 def test_dark_mode_label_forces_white_text():
     _get_app()
     tokens = EisenhowerView._build_color_tokens(True)
-    assert all(v["label_color"] == "#FFFFFF" for v in tokens.values())
+    assert all(v["label_color"] == "#f8fafc" for v in tokens.values())
 
 
 def test_minicard_styles_include_spacing_and_padding():
@@ -292,7 +292,52 @@ def test_dnd_controller_mappings_and_persistence_call(tmp_path):
     controller.handle_move("q1", "q2", row)
     controller.handle_move("q2", "q3", row)
 
-    assert calls[0] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Alta", "Timing": "Em Atraso"})
-    assert calls[1] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Baixa", "Timing": "Em Atraso"})
-    assert calls[2] == (row_id, {"É Urgente?": "Não", "Prioridade": "Média", "Timing": "Dentro do Prazo"})
+    assert calls[0] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Alta"})
+    assert calls[1] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Baixa"})
+    assert calls[2] == (row_id, {"É Urgente?": "Não", "Prioridade": "Média"})
     win.close()
+
+
+def test_move_from_q4_to_q1_updates_fields_and_refreshes(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store, Prioridade="Baixa", **{"É Urgente?": "Não"})
+    win = MainWindow(store)
+    win._set_tab3_view_mode("eisenhower")
+    win.refresh_tab3()
+
+    row = store.get(row_id).data | {"_id": row_id}
+    assert win._move_demand_from_eisenhower(row, {"É Urgente?": "Sim", "Prioridade": "Alta"}) is True
+
+    updated = store.get(row_id).data
+    assert updated.get("É Urgente?") == "Sim"
+    assert updated.get("Prioridade") == "Alta"
+    win.close()
+
+
+def test_move_failure_returns_false_for_visual_rollback(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store)
+    win = MainWindow(store)
+
+    class _FailingService:
+        def update(self, *_args, **_kwargs):
+            raise RuntimeError("boom")
+
+    win._demand_update_service = _FailingService()
+    warnings = []
+    monkeypatch.setattr("app.QMessageBox.warning", lambda *_: warnings.append(True))
+
+    row = store.get(row_id).data | {"_id": row_id}
+    assert win._move_demand_from_eisenhower(row, {"É Urgente?": "Sim", "Prioridade": "Alta"}) is False
+    assert warnings
+    win.close()
+
+
+def test_card_tokens_keep_visible_border_light_and_dark():
+    light = EisenhowerView._build_color_tokens(False)
+    dark = EisenhowerView._build_color_tokens(True)
+
+    assert all(v["card_border"] == "#D0D7E2" for v in light.values())
+    assert all(v["card_border"] == "#475569" for v in dark.values())
