@@ -105,8 +105,17 @@ class TimingBarsWidget(QWidget):
         self.data = {k: 0 for k in self.order}
         self.min_bar_height = 3
         self.min_column_width = 116
-        self.label_height = 52
+        self.label_height = 56
+        self.footer_min_height = 58
+        self.label_top_gap = 3
+        self.bottom_padding = 8
+        self.value_gap = 18
+        self.bar_area_ratio = 0.9
+        self.label_font_size = 11
+        self.label_text_flags = Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap
         self._last_column_width = 0
+        self._last_label_rects: Dict[str, QRect] = {}
+        self._last_bar_rects: Dict[str, QRect] = {}
         self.setMinimumHeight(260)
 
     def _column_width(self, available_width: int) -> int:
@@ -119,25 +128,35 @@ class TimingBarsWidget(QWidget):
     def paintEvent(self, _event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        rect = self.rect().adjusted(14, 16, -14, -30)
+        rect = self.rect().adjusted(14, 14, -14, -10)
         max_value = max(max(self.data.values()), 1)
         col_w = self._column_width(rect.width())
         self._last_column_width = col_w
         chart_w = col_w * len(self.order)
         start_x = rect.left() + max((rect.width() - chart_w) // 2, 0)
+        footer_height = max(self.label_height, self.footer_min_height)
+        bar_available_height = max(0, int((rect.height() - (footer_height + self.value_gap + self.label_top_gap)) * self.bar_area_ratio))
+        label_font = QFont(self.font())
+        label_font.setPointSize(self.label_font_size)
+        self._last_label_rects = {}
+        self._last_bar_rects = {}
         for idx, label in enumerate(self.order):
             value = self.data.get(label, 0)
-            proportional = int((rect.height() - (self.label_height + 12)) * (value / max_value))
+            proportional = int(bar_available_height * (value / max_value))
             bar_h = max(proportional, self.min_bar_height)
             x = start_x + idx * col_w + int(col_w * 0.25)
-            y = rect.bottom() - bar_h - 20
+            y = rect.bottom() - self.bottom_padding - footer_height - self.label_top_gap - bar_h
             bar_w = int(col_w * 0.5)
+            self._last_bar_rects[label] = QRect(x, y, bar_w, bar_h)
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(self.COLOR_MAP[label]))
             painter.drawRoundedRect(x, y, bar_w, bar_h, 6, 6)
             painter.setPen(self.palette().text().color())
-            painter.drawText(QRect(start_x + idx * col_w, y - 20, col_w, 18), Qt.AlignHCenter, str(value))
-            painter.drawText(QRect(start_x + idx * col_w, rect.bottom() + 4, col_w, self.label_height), Qt.AlignHCenter | Qt.TextWordWrap, label)
+            painter.drawText(QRect(start_x + idx * col_w, y - self.value_gap, col_w, 16), Qt.AlignHCenter, str(value))
+            label_rect = QRect(start_x + idx * col_w, rect.bottom() - footer_height - self.bottom_padding + 1, col_w, footer_height)
+            self._last_label_rects[label] = label_rect
+            painter.setFont(label_font)
+            painter.drawText(label_rect, self.label_text_flags, label)
 
 
 class MonitoramentoView(QWidget):
