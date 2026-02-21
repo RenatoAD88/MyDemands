@@ -83,8 +83,56 @@ def test_status_gerais_labels_render_full_text_with_wrap_support():
         "Concluída com atraso",
         "Em atraso",
     ]
-    assert bars.label_height >= 52
+    assert bars.label_height >= 56
+    assert bars.footer_min_height >= bars.label_height
     assert bars.min_column_width >= 110
+    assert bars.label_text_flags & qtcore.Qt.TextWordWrap
+
+
+def test_status_gerais_labels_have_reserved_footer_without_elide_or_crop():
+    _app()
+    view = MonitoramentoView()
+    bars = view.status_gerais_bars
+    bars.resize(760, 260)
+    bars.show()
+    _app().processEvents()
+
+    assert bars.height() >= bars.minimumHeight()
+    assert bars.label_font_size <= 11
+
+    font = bars.font()
+    font.setPointSize(bars.label_font_size)
+    metrics = qtwidgets.QFontMetrics(font)
+    expected_multiline_height = metrics.boundingRect(
+        qtcore.QRect(0, 0, bars.min_column_width, 400),
+        bars.label_text_flags,
+        "Concluído antes do prazo",
+    ).height()
+    assert expected_multiline_height <= bars.footer_min_height
+
+    bars.set_data(
+        {
+            "Dentro do prazo": 9,
+            "Concluído antes do prazo": 7,
+            "Concluído no prazo": 5,
+            "Concluída com atraso": 3,
+            "Em atraso": 1,
+        }
+    )
+    bars.repaint()
+    _app().processEvents()
+
+    assert set(bars._last_label_rects.keys()) == set(bars.order)
+    for label in bars.order:
+        rect = bars._last_label_rects[label]
+        assert rect.bottom() <= bars.rect().adjusted(14, 14, -14, -10).bottom()
+
+        wrapped_height = metrics.boundingRect(
+            qtcore.QRect(0, 0, rect.width(), 400),
+            bars.label_text_flags,
+            label,
+        ).height()
+        assert wrapped_height <= rect.height()
 
 
 def test_por_prioridade_uses_reduced_scale_for_chart():
