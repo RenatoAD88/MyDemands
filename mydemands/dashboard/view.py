@@ -6,6 +6,7 @@ from typing import Dict, List
 from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
+    QHeaderView,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -302,13 +303,16 @@ class MonitoramentoView(QWidget):
         return frame
 
     def _build_alerts_block(self) -> QFrame:
-        frame = QFrame(); frame.setProperty("dashboardCard", True); frame.setMinimumHeight(280)
+        frame = QFrame(); frame.setProperty("dashboardCard", True); frame.setMinimumHeight(170)
         l = QVBoxLayout(frame); l.setContentsMargins(16, 16, 16, 16); l.setSpacing(8)
         l.addLayout(self._section_header("Alertas de Prazo"))
         self.alerts_table = QTableWidget(0, len(self.ALERT_COLUMNS))
         self.alerts_table.setHorizontalHeaderLabels(self.ALERT_COLUMNS)
         self.alerts_table.verticalHeader().setVisible(False)
         self.alerts_table.setWordWrap(True)
+        header = self.alerts_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        header.setStretchLastSection(True)
         l.addWidget(self.alerts_table)
         self.alerts_empty = QLabel("Nenhuma demanda com alerta de prazo.")
         self.alerts_empty.setObjectName("metricPlaceholder")
@@ -364,3 +368,6 @@ class MonitoramentoView(QWidget):
                 values[6].setToolTip(prazo_tooltip)
             for col, item in enumerate(values):
                 self.alerts_table.setItem(row, col, item)
+
+        self.alerts_table.resizeColumnsToContents()
+        self.alerts_table.resizeRowsToContents()

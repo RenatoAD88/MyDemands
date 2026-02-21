@@ -115,3 +115,12 @@ def test_monitoramento_has_no_decorative_icons_in_headers():
     assert "Dados Gerais" in section_titles
     assert "Status Gerais" in section_titles
     assert all("◉" not in s and "◎" not in s and "▤" not in s for s in section_titles)
+
+
+def test_alertas_table_resizes_columns_to_content():
+    _app()
+    view = MonitoramentoView()
+
+    header = view.alerts_table.horizontalHeader()
+    assert header.sectionResizeMode(0) == qtwidgets.QHeaderView.ResizeToContents
+    assert header.stretchLastSection() is True
