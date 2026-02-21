@@ -34,6 +34,7 @@ class DonutChartWidget(QWidget):
         self.empty_placeholder = "Sem dados suficientes"
         self.empty_color = "#64748B"
         self.value_color = QColor("black")
+        self.chart_scale = 0.9
         self.setMinimumHeight(260)
 
     def set_data(self, data: Dict[str, int]) -> None:
@@ -48,7 +49,7 @@ class DonutChartWidget(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         total = sum(self.data.values())
         rect = self.rect().adjusted(24, 16, -24, -16)
-        size = min(rect.width(), rect.height())
+        size = int(min(rect.width(), rect.height()) * self.chart_scale)
         pie_rect = rect
         pie_rect.setWidth(size)
         pie_rect.setHeight(size)
@@ -103,7 +104,13 @@ class TimingBarsWidget(QWidget):
         self.order = ["Dentro do prazo", "Concluído antes do prazo", "Concluído no prazo", "Concluída com atraso", "Em atraso"]
         self.data = {k: 0 for k in self.order}
         self.min_bar_height = 3
+        self.min_column_width = 116
+        self.label_height = 52
+        self._last_column_width = 0
         self.setMinimumHeight(260)
+
+    def _column_width(self, available_width: int) -> int:
+        return max(available_width // len(self.order), self.min_column_width)
 
     def set_data(self, data: Dict[str, int]) -> None:
         self.data = {k: int(data.get(k, 0)) for k in self.order}
@@ -112,22 +119,25 @@ class TimingBarsWidget(QWidget):
     def paintEvent(self, _event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        rect = self.rect().adjusted(20, 16, -20, -26)
+        rect = self.rect().adjusted(14, 16, -14, -30)
         max_value = max(max(self.data.values()), 1)
-        col_w = rect.width() // len(self.order)
+        col_w = self._column_width(rect.width())
+        self._last_column_width = col_w
+        chart_w = col_w * len(self.order)
+        start_x = rect.left() + max((rect.width() - chart_w) // 2, 0)
         for idx, label in enumerate(self.order):
             value = self.data.get(label, 0)
-            proportional = int((rect.height() - 44) * (value / max_value))
+            proportional = int((rect.height() - (self.label_height + 12)) * (value / max_value))
             bar_h = max(proportional, self.min_bar_height)
-            x = rect.left() + idx * col_w + int(col_w * 0.25)
+            x = start_x + idx * col_w + int(col_w * 0.25)
             y = rect.bottom() - bar_h - 20
             bar_w = int(col_w * 0.5)
             painter.setPen(Qt.NoPen)
             painter.setBrush(QColor(self.COLOR_MAP[label]))
             painter.drawRoundedRect(x, y, bar_w, bar_h, 6, 6)
             painter.setPen(self.palette().text().color())
-            painter.drawText(QRect(rect.left() + idx * col_w, y - 20, col_w, 18), Qt.AlignHCenter, str(value))
-            painter.drawText(QRect(rect.left() + idx * col_w, rect.bottom() + 4, col_w, 34), Qt.AlignHCenter | Qt.TextWordWrap, label)
+            painter.drawText(QRect(start_x + idx * col_w, y - 20, col_w, 18), Qt.AlignHCenter, str(value))
+            painter.drawText(QRect(start_x + idx * col_w, rect.bottom() + 4, col_w, self.label_height), Qt.AlignHCenter | Qt.TextWordWrap, label)
 
 
 class MonitoramentoView(QWidget):
@@ -290,8 +300,11 @@ class MonitoramentoView(QWidget):
         )
         self.priority_legend = QLabel("")
         self.priority_legend.setObjectName("metricSubtitle")
-        lp.addWidget(self.priority_donut)
-        lp.addWidget(self.priority_legend)
+        self.priority_legend.setAlignment(Qt.AlignCenter)
+        lp.addStretch(1)
+        lp.addWidget(self.priority_donut, 0, Qt.AlignCenter)
+        lp.addWidget(self.priority_legend, 0, Qt.AlignHCenter)
+        lp.addStretch(1)
 
         l.addWidget(self.status_gerais_card, 0, 0)
         l.addWidget(self.priority_card, 0, 1)

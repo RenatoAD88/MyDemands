@@ -1,6 +1,7 @@
 import pytest
 
 qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
+qtcore = pytest.importorskip("PySide6.QtCore", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
 
 from mydemands.dashboard.metrics_service import DashboardMetrics
 from mydemands.dashboard.view import MonitoramentoView, TimingBarsWidget
@@ -66,6 +67,41 @@ def test_prioridade_uses_donut_with_expected_colors_and_placeholder():
     assert view.priority_donut.colors["Média"] == "#FACC15"
     assert view.priority_donut.colors["Baixa"] == "#22C55E"
     assert "Alta:" in view.priority_legend.text()
+
+
+
+
+def test_status_gerais_labels_render_full_text_with_wrap_support():
+    _app()
+    view = MonitoramentoView()
+
+    bars = view.status_gerais_bars
+    assert bars.order == [
+        "Dentro do prazo",
+        "Concluído antes do prazo",
+        "Concluído no prazo",
+        "Concluída com atraso",
+        "Em atraso",
+    ]
+    assert bars.label_height >= 52
+    assert bars.min_column_width >= 110
+
+
+def test_por_prioridade_uses_reduced_scale_for_chart():
+    _app()
+    view = MonitoramentoView()
+
+    assert view.priority_donut.chart_scale == pytest.approx(0.9)
+
+
+def test_por_prioridade_keeps_donut_and_legend_centered():
+    _app()
+    view = MonitoramentoView()
+
+    layout = view.priority_card.layout()
+    assert layout.itemAt(2).spacerItem() is not None
+    assert layout.itemAt(5).spacerItem() is not None
+    assert view.priority_legend.alignment() == qtcore.Qt.AlignCenter
 
 
 def test_status_gerais_uses_expected_palette():
