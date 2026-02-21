@@ -269,7 +269,7 @@ def test_minicard_styles_include_spacing_and_padding():
     q1_list = view.findChild(qtwidgets.QListWidget, "q1_list")
     sheet = q1_list.styleSheet()
     assert "margin-bottom: 10px" in sheet
-    assert "padding: 8px" in sheet
+    assert "padding: 10px" in sheet
 
 
 def test_dnd_controller_mappings_and_persistence_call(tmp_path):
@@ -295,6 +295,9 @@ def test_dnd_controller_mappings_and_persistence_call(tmp_path):
     assert calls[0] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Alta"})
     assert calls[1] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Baixa"})
     assert calls[2] == (row_id, {"É Urgente?": "Não", "Prioridade": "Média"})
+
+    controller.handle_move("q1", "q3", row | {"Prioridade": "Alta"})
+    assert calls[3] == (row_id, {"É Urgente?": "Não", "Prioridade": "Alta"})
     win.close()
 
 
