@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
     QDialog, QFormLayout,
     QDateEdit, QLineEdit, QTextEdit, QPlainTextEdit, QComboBox,
     QListWidget, QListWidgetItem, QGroupBox, QAbstractItemView,
-    QMenu, QScrollArea, QCheckBox, QSystemTrayIcon, QRadioButton
+    QMenu, QScrollArea, QCheckBox, QSystemTrayIcon, QRadioButton, QStackedWidget
 )
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QStyledItemDelegate
@@ -83,6 +83,7 @@ from mydemands.dashboard import (
 )
 from mydemands.dashboard.grid_preferences import GridPreferencesService, LocalJsonPreferencesStore
 from mydemands.dashboard.view import MonitoramentoView
+from mydemands.dashboard.eisenhower import EisenhowerView
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
@@ -1353,6 +1354,7 @@ class MainWindow(QMainWindow):
             "t1": None,
             "t3": None,
             "t4": None,
+            "t3_eisenhower": None,
         }
 
         # Mantido para compatibilidade de código/testes, mas a tab não é mais exibida.
@@ -2146,6 +2148,10 @@ class MainWindow(QMainWindow):
             self.t3_status.setCurrentText(str(saved_status or ""))
             self.t3_prioridade.setCurrentText(str(self._prefs.get("t3_prioridade", "") or ""))
             self.t3_responsavel.setText(str(self._prefs.get("t3_responsavel", "") or ""))
+            mode = str(((self._prefs.get("preferences") or {}).get("view") or {}).get("consultar_pendentes", "default") or "default")
+            self.t3_view_default.setChecked(mode != "eisenhower")
+            self.t3_view_eisenhower.setChecked(mode == "eisenhower")
+            self._set_tab3_view_mode(mode)
 
             tab_order = self._prefs.get("tab_order")
             if isinstance(tab_order, list):
@@ -2168,6 +2174,11 @@ class MainWindow(QMainWindow):
             "t3_status": self.t3_status.currentText(),
             "t3_prioridade": self.t3_prioridade.currentText(),
             "t3_responsavel": self.t3_responsavel.text(),
+            "preferences": {
+                "view": {
+                    "consultar_pendentes": self.t3_view_mode,
+                }
+            },
             "tab_order": [self.tabs.tabText(i) for i in range(self.tabs.count())],
             "table_column_widths": self._collect_table_column_widths(),
         }
@@ -3198,6 +3209,13 @@ class MainWindow(QMainWindow):
     # Tabs
     def _init_tab3(self):
         tab = QWidget()
+        self.t3_view_mode = "default"
+        self.t3_view_default = QRadioButton("Padrão")
+        self.t3_view_eisenhower = QRadioButton("Matriz Eisenhower")
+        self.t3_view_default.setChecked(True)
+        self.t3_view_default.toggled.connect(lambda checked: checked and self._set_tab3_view_mode("default"))
+        self.t3_view_eisenhower.toggled.connect(lambda checked: checked and self._set_tab3_view_mode("eisenhower"))
+
         self.t3_search = QLineEdit()
         self.t3_search.setPlaceholderText("Buscar por projeto, descrição, comentário, núm. controle, responsável, nome e time/função")
         self.t3_status = QComboBox()
@@ -3227,6 +3245,9 @@ class MainWindow(QMainWindow):
         clear_prazo_btn.clicked.connect(lambda: self.t3_prazo.setDate(self.t3_prazo.minimumDate()))
 
         filters = QHBoxLayout()
+        filters.addWidget(QLabel("Visualização:"))
+        filters.addWidget(self.t3_view_default)
+        filters.addWidget(self.t3_view_eisenhower)
         filters.addWidget(QLabel("Prazo:"))
         filters.addWidget(self.t3_prazo)
         filters.addWidget(clear_prazo_btn)
@@ -3253,12 +3274,25 @@ class MainWindow(QMainWindow):
         cards.addWidget(self.t3_pending_card)
         cards.addStretch()
 
+        self.t3_eisenhower_view = EisenhowerView(self._open_demand_from_eisenhower_card)
+        self.t3_views_stack = QStackedWidget()
+        self.t3_views_stack.addWidget(self.t3_table)
+        self.t3_views_stack.addWidget(self.t3_eisenhower_view)
+
         layout = QVBoxLayout()
         layout.addLayout(filters)
         layout.addLayout(cards)
-        layout.addWidget(self.t3_table)
+        layout.addWidget(self.t3_views_stack)
         tab.setLayout(layout)
         self.tabs.addTab(tab, "Consultar Demandas Pendentes")
+
+
+    def _set_tab3_view_mode(self, mode: str):
+        normalized = "eisenhower" if mode == "eisenhower" else "default"
+        self.t3_view_mode = normalized
+        if hasattr(self, "t3_views_stack"):
+            self.t3_views_stack.setCurrentIndex(1 if normalized == "eisenhower" else 0)
+        self._save_preferences()
 
     def _init_tab4(self):
         tab = QWidget()
@@ -3421,7 +3455,35 @@ class MainWindow(QMainWindow):
             f"Em atraso: {counts['delayed']}"
         )
         self._fill(self.t3_table, filtered)
+        if hasattr(self, "t3_eisenhower_view"):
+            self.t3_eisenhower_view.set_rows(filtered)
         self._save_preferences()
+
+    def _open_demand_from_eisenhower_card(self, row: Dict[str, Any]) -> None:
+        _id = str(row.get("_id") or "")
+        if not _id:
+            return
+        source = self.store.get(_id)
+        if not source:
+            return
+
+        dialog = NewDemandDialog(
+            self,
+            initial_data=source.data,
+            ai_attach=self._attach_ai_widget,
+            context_provider=lambda field: self._ai_context_provider(_id, field),
+        )
+        dialog.setWindowTitle("Editar demanda")
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        try:
+            self.store.update(_id, dialog.payload())
+            self.deadline_scheduler.check_now()
+        except ValidationError as ve:
+            QMessageBox.warning(self, "Validação", str(ve))
+            return
+        self.refresh_all()
 
     def refresh_tab4(self):
         s = qdate_to_date(self.t4_start.date())

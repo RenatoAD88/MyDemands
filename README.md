@@ -83,3 +83,16 @@ IA_CACHE_ENABLED=true
 - **Testar conexão** usa os valores atuais da modal (mesmo sem salvar) e **não** persiste em arquivo.
 - O fluxo **Redigir com IA** respeita `AI_ENABLED` e o `AI_PROVIDER` salvo.
 - Para Hugging Face, a integração usa chamadas HTTP via `requests` no endpoint Chat Completions do router.
+
+## Matriz de Eisenhower (Consultar Demandas Pendentes)
+- A tab **Consultar Demandas Pendentes** possui alternância de visualização: **Padrão** e **Matriz Eisenhower**.
+- A preferência é persistida em `ui_prefs.json` na chave `preferences.view.consultar_pendentes`.
+- Classificação automática:
+  - **Urgente** = `É Urgente? == Sim` **ou** `Timing` em atraso **ou** prazo contendo a data atual.
+  - **Importante** = prioridade `Alta` ou `Média` (vazio/inválido cai para `Média`).
+  - Quadrantes:
+    - Q1: Importante + Urgente
+    - Q2: Não importante + Urgente
+    - Q3: Importante + Não urgente
+    - Q4: Não importante + Não urgente
+- Apenas status pendentes/ativos entram na matriz (`Não iniciada`, `Em andamento`, `Bloqueado`, `Requer revisão`).
