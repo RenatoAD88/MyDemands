@@ -8,6 +8,7 @@ qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponív
 import app as app_module
 from app import MainWindow
 from csv_store import CsvStore
+from mydemands.dashboard.eisenhower_classifier import parse_eisenhower_column_map
 
 QApplication = qtwidgets.QApplication
 QDialog = qtwidgets.QDialog
@@ -202,6 +203,53 @@ def test_new_demand_shows_created_id_message(tmp_path, monkeypatch):
 
     assert captured["title"] == "Nova demanda"
     assert captured["text"] == "Demanda criada com sucesso.\nID: 1"
+
+    win.close()
+
+
+def test_new_pending_demand_gets_initial_eisenhower_column_and_becomes_visible_in_selected_view(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+
+    class FakeNewDemandDialog:
+        def __init__(self, parent, initial_data=None):
+            self._payload = {
+                "Projeto": "Projeto Novo",
+                "Descrição": "Demanda recém-criada",
+                "Prioridade": "Alta",
+                "Prazo": date.today().strftime("%d/%m/%Y"),
+                "Data de Registro": date.today().strftime("%d/%m/%Y"),
+                "Status": "Em andamento",
+                "Data Conclusão": "",
+                "Responsável": "Ana",
+                "% Conclusão": "0",
+                "É Urgente?": "Sim",
+            }
+
+        def exec(self):
+            return QDialog.Accepted
+
+        def payload(self):
+            return self._payload
+
+    monkeypatch.setattr(app_module, "NewDemandDialog", FakeNewDemandDialog)
+    monkeypatch.setattr(app_module.QMessageBox, "information", lambda *args, **kwargs: None)
+
+    win = MainWindow(store)
+    win._set_tab3_view_mode("eisenhower")
+    win.t3_search.setText("nao-vai-encontrar")
+    win.refresh_tab3()
+
+    win.new_demand()
+
+    assert win.t3_search.text() == ""
+    assert win.t3_table.rowCount() == 1
+
+    created = store.build_view()[0]
+    user_id = win.logged_user_email or "anonimo"
+    assigned_map = parse_eisenhower_column_map(created.get("eisenhower_column"))
+    assert assigned_map.get(user_id) == "q1"
+    assert any(r.get("_id") == created.get("_id") for r in win.t3_eisenhower_view.last_groups["q1"])
 
     win.close()
 
