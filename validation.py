@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Dict, List, Optional
 
 
@@ -20,7 +20,7 @@ STATUS_OPTIONS = [
 PRIORIDADE_OPTIONS = ["Alta", "Média", "Baixa"]
 YESNO = ["Sim", "Não"]
 
-REQUIRED_ON_CREATE = {"Descrição", "Prioridade", "Prazo", "Data de Registro", "Status", "Responsável", "Projeto"}
+REQUIRED_ON_CREATE = {"Descrição", "Prioridade", "Status", "Responsável", "Projeto"}
 REQUIRED_ON_UPDATE = {"Descrição", "Prioridade", "Prazo", "Data de Registro", "Status", "Responsável", "Projeto"}
 
 DATE_COLUMNS = {"Data de Registro", "Data Conclusão"}
@@ -138,6 +138,9 @@ def validate_payload(payload: Dict[str, str], *, mode: str) -> Dict[str, str]:
         raise ValueError("mode inválido")
 
     if mode == "create":
+        if not (payload.get("Data de Registro") or "").strip():
+            payload = dict(payload)
+            payload["Data de Registro"] = date.today().strftime("%d/%m/%Y")
         for req in REQUIRED_ON_CREATE:
             if not (payload.get(req) or "").strip():
                 raise ValidationError(f"Campo obrigatório: {req}.")
@@ -162,4 +165,52 @@ def validate_payload(payload: Dict[str, str], *, mode: str) -> Dict[str, str]:
         else:
             normalized[k] = validate_text(v)
 
+    DemandValidationService.validate(normalized)
+
     return normalized
+
+
+class DemandValidationService:
+    PRAZO_LT_REGISTRO_MSG = "O prazo não pode ser anterior à data de registro. Ajuste o prazo ou a data de registro."
+    CONCLUSAO_LT_REGISTRO_MSG = "A data de conclusão não pode ser anterior à data de registro. Ajuste a data de conclusão ou a data de registro."
+    CONCLUIDO_SEM_CONCLUSAO_MSG = "Para marcar como Concluído, informe a data de conclusão."
+    CANCELADO_COM_CONCLUSAO_MSG = "Demandas canceladas não devem possuir data de conclusão."
+
+    @staticmethod
+    def _parse_date_safe(value: str, field: str) -> Optional[datetime]:
+        parsed = parse_ddmmyyyy_strict(value)
+        if parsed is None:
+            raise ValidationError(f"{field} inválida: '{(value or '').strip()}'. Use DD/MM/AAAA.")
+        if not parsed:
+            return None
+        return datetime.strptime(parsed, "%d/%m/%Y")
+
+    @staticmethod
+    def _parse_prazo_dates(value: str) -> List[datetime]:
+        normalized = normalize_prazo_text(value or "")
+        out: List[datetime] = []
+        for part in [x.strip() for x in normalized.split(",") if x.strip()]:
+            out.append(datetime.strptime(part, "%d/%m/%Y"))
+        return out
+
+    @classmethod
+    def validate(cls, payload: Dict[str, str]) -> None:
+        registro = cls._parse_date_safe(payload.get("Data de Registro", ""), "Data de Registro")
+        if registro is None:
+            raise ValidationError("Campo obrigatório: Data de Registro.")
+
+        conclusao = cls._parse_date_safe(payload.get("Data Conclusão", ""), "Data Conclusão")
+        status = (payload.get("Status") or "").strip()
+        prazo_dates = cls._parse_prazo_dates(payload.get("Prazo", ""))
+
+        if prazo_dates and min(prazo_dates) < registro:
+            raise ValidationError(cls.PRAZO_LT_REGISTRO_MSG)
+
+        if conclusao and conclusao < registro:
+            raise ValidationError(cls.CONCLUSAO_LT_REGISTRO_MSG)
+
+        if status == "Concluído" and not conclusao:
+            raise ValidationError(cls.CONCLUIDO_SEM_CONCLUSAO_MSG)
+
+        if status == "Cancelado" and conclusao:
+            raise ValidationError(cls.CANCELADO_COM_CONCLUSAO_MSG)
