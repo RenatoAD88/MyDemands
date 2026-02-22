@@ -400,10 +400,11 @@ class ColumnComboDelegate(QStyledItemDelegate):
         self.table_key = table_key
         self.prazo_column = VISIBLE_COLUMNS.index("Prazo")
         self.conclusion_column = VISIBLE_COLUMNS.index("Data Conclusão")
+        self.registration_column = VISIBLE_COLUMNS.index("Data de Registro")
 
     def createEditor(self, parent, option, index):
         col = index.column()
-        if self.table_key == "t3" and col in {self.prazo_column, self.conclusion_column}:
+        if self.table_key == "t3" and col in {self.prazo_column, self.conclusion_column, self.registration_column}:
             date_edit = QDateEdit(parent)
             date_edit.setCalendarPopup(True)
             date_edit.setDisplayFormat(DATE_FMT_QT)
@@ -427,7 +428,7 @@ class ColumnComboDelegate(QStyledItemDelegate):
 
     def setEditorData(self, editor, index):
         col = index.column()
-        if self.table_key == "t3" and col in {self.prazo_column, self.conclusion_column} and isinstance(editor, QDateEdit):
+        if self.table_key == "t3" and col in {self.prazo_column, self.conclusion_column, self.registration_column} and isinstance(editor, QDateEdit):
             current = (index.data(Qt.EditRole) or "").strip().replace("*", "")
             parsed = _try_parse_date_br(current)
             if parsed:
@@ -449,7 +450,7 @@ class ColumnComboDelegate(QStyledItemDelegate):
 
     def setModelData(self, editor, model, index):
         col = index.column()
-        if self.table_key == "t3" and col in {self.prazo_column, self.conclusion_column} and isinstance(editor, QDateEdit):
+        if self.table_key == "t3" and col in {self.prazo_column, self.conclusion_column, self.registration_column} and isinstance(editor, QDateEdit):
             if col == self.conclusion_column and editor.date() == editor.minimumDate():
                 model.setData(index, "", Qt.EditRole)
             else:

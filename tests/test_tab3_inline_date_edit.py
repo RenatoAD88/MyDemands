@@ -105,3 +105,21 @@ def test_inline_data_registro_edit_persists(tmp_path):
     updated = store.get(row_id).data
     assert updated["Data de Registro"] == "03/02/2026"
     win.close()
+
+
+def test_inline_data_registro_uses_date_picker_editor(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    _add_pending(store)
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    model = win.t3_table.model()
+    idx = model.index(0, VISIBLE_COLUMNS.index("Data de Registro"))
+    delegate = win.t3_table.itemDelegate()
+    editor = delegate.createEditor(win.t3_table, None, idx)
+
+    assert editor is not None
+    assert editor.metaObject().className() == "QDateEdit"
+    assert editor.calendarPopup() is True
+    win.close()
