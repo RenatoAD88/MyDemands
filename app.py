@@ -2546,6 +2546,8 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, "monitoramento_view") and self.monitoramento_view is not None:
             self.monitoramento_view.apply_theme(_theme)
+        if hasattr(self, "t3_eisenhower_view") and self.t3_eisenhower_view is not None:
+            self.t3_eisenhower_view.apply_theme(_theme)
 
     def open_master_settings(self):
         if self.logged_user_role != "master" or self.email_service is None:
@@ -3370,6 +3372,7 @@ class MainWindow(QMainWindow):
             on_move_card=self._move_demand_from_eisenhower,
             user_id=(self.logged_user_email or "anonimo"),
         )
+        self.t3_eisenhower_view.apply_theme(self.theme_service.current_theme() if self.theme_service else "light")
         self.t3_eisenhower_view.context_action_requested.connect(self._handle_eisenhower_context_action)
         self.t3_views_stack = QStackedWidget()
         self.t3_views_stack.addWidget(self.t3_table)

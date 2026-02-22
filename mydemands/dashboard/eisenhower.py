@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List
 
 from PySide6.QtCore import QEvent, QPoint, QSize, Qt, Signal
-from PySide6.QtGui import QDrag, QFontMetrics, QPalette
+from PySide6.QtGui import QDrag, QFontMetrics
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -45,9 +45,10 @@ class EisenhowerThemeManager:
                 "column_header": text_primary,
                 "dragover_background": drag_bg,
                 "card_background": card_bg,
-                "card_border": "#475569" if is_dark else "#dbe3f0",
+                # Mantém contorno visível permanentemente (sem depender de hover).
+                "card_border": accent,
                 "hover_border": accent,
-                "hover_background": drag_bg,
+                "hover_background": "#1f314f" if is_dark else "#f8faff",
                 "dragging_background": drag_bg,
                 "text_primary": text_primary,
                 "text_secondary": text_secondary,
@@ -275,12 +276,11 @@ class EisenhowerView(QWidget):
         self.last_groups: Dict[str, List[Dict[str, Any]]] = {q.key: [] for q in QUADRANTS}
         self._columns_lists: Dict[str, QuadrantListWidget] = {}
         self._selected_card_widget: DemandMiniCard | None = None
+        self._is_dark = False
         root = QHBoxLayout(self)
         root.setSpacing(12)
 
-        palette = QApplication.palette()
-        is_dark = palette.color(QPalette.Window).lightness() < 128
-        color_tokens = EisenhowerThemeManager.tokens(is_dark)
+        color_tokens = EisenhowerThemeManager.tokens(self._is_dark)
 
         for quadrant in QUADRANTS:
             column = QFrame()
@@ -338,6 +338,35 @@ class EisenhowerView(QWidget):
             column_layout.addLayout(header)
             column_layout.addWidget(scroll)
             root.addWidget(column, 1)
+
+        self.apply_theme("light")
+
+    def apply_theme(self, theme_name: str) -> None:
+        self._is_dark = (theme_name or "light").strip().lower() == "dark"
+        color_tokens = EisenhowerThemeManager.tokens(self._is_dark)
+
+        for quadrant in QUADRANTS:
+            list_widget = self._columns_lists.get(quadrant.key)
+            if list_widget is None:
+                continue
+            list_widget.setStyleSheet(
+                f"QListWidget#{quadrant.key}_list {{"
+                f"border: 1px solid {color_tokens[quadrant.key]['column_border']};"
+                f"border-top: 4px solid {color_tokens[quadrant.key]['accent']};"
+                f"border-radius: 12px; background: {color_tokens[quadrant.key]['column_background']}; padding: 8px;}}"
+                f"QListWidget#{quadrant.key}_list[dragover='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragover_background']};}}"
+                f"QListWidget::item {{margin: 0 0 8px 0;}}"
+                f"QWidget#eisenhowerDemandCard {{border: 1px solid {color_tokens[quadrant.key]['card_border']}; border-left: 3px solid {color_tokens[quadrant.key]['accent']}; border-radius: 10px;"
+                f" background: {color_tokens[quadrant.key]['card_background']}; margin: 2px 0 8px 0;}}"
+                f"QWidget#eisenhowerDemandCard:hover {{border-color: {color_tokens[quadrant.key]['hover_border']}; background: {color_tokens[quadrant.key]['hover_background']};}}"
+                f"QWidget#eisenhowerDemandCard[selected='true'] {{border: 2px solid {color_tokens[quadrant.key]['accent']};}}"
+                f"QWidget#eisenhowerDemandCard[dragging='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragging_background']};}}"
+                f"QLabel#eisenhowerDemandId {{font-size: 13px; font-weight: 700; color: {color_tokens[quadrant.key]['text_primary']};}}"
+                f"QLabel#eisenhowerDescription {{font-size: 13px; font-weight: 650; color: {color_tokens[quadrant.key]['text_primary']};}}"
+                f"QLabel#eisenhowerMetaInfo {{font-size: 12px; color: {color_tokens[quadrant.key]['text_secondary']};}}"
+                f"QLabel#eisenhowerQuadrantTitle {{color: {color_tokens[quadrant.key]['column_header']}; font-size: 13px; font-weight: 700;}}"
+                f"QLabel#{quadrant.key}_count {{color: {color_tokens[quadrant.key]['text_primary']}; font-size: 13px; font-weight: 700;}}"
+            )
 
     def _handle_move_request(self, source_quadrant: str, target_quadrant: str, row: Dict[str, Any]) -> bool:
         if not self._dnd_controller:
