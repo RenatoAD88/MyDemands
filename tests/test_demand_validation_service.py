@@ -1,4 +1,3 @@
-import validation
 from validation import validate_payload
 
 
@@ -18,11 +17,7 @@ def _base_payload(**extra):
     return payload
 
 
-def test_feature_flag_off_por_padrao():
-    assert validation.ENABLE_DATE_VALIDATIONS is False
-
-
-def test_validacoes_globais_noop_quando_flag_off_para_create():
+def test_create_mantem_comportamento_legado_sem_consistencia_global_de_datas():
     out = validate_payload(
         _base_payload(
             Prazo="31/01/2026",
