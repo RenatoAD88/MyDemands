@@ -1883,6 +1883,25 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(700, _restore)
             return
 
+
+    def _flash_invalid_cell(self, item: QTableWidgetItem) -> None:
+        if item is None:
+            return
+        original_bg = item.background()
+        item.setBackground(QColor(254, 226, 226))
+        table = item.tableWidget()
+        if isinstance(table, QTableWidget):
+            table.setCurrentItem(item)
+            table.editItem(item)
+
+        def _restore() -> None:
+            try:
+                item.setBackground(original_bg)
+            except RuntimeError:
+                return
+
+        QTimer.singleShot(1000, _restore)
+
     def _prompt_conclusao_date_required(self) -> Optional[str]:
         dlg = DatePickDialog(self, "Data de Conclusão", "Selecione a data de conclusão:", allow_clear=False)
         if dlg.exec() == QDialog.Accepted:
@@ -2082,6 +2101,7 @@ class MainWindow(QMainWindow):
                 self._flash_cell_by_id("t3", _id, col_name)
             except ValidationError as ve:
                 item.setText(previous_value)
+                self._flash_invalid_cell(item)
                 QMessageBox.information(self, "Validação", str(ve))
             return
 

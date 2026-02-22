@@ -197,7 +197,7 @@ class QuadrantListWidget(QListWidget):
         self.setAlternatingRowColors(False)
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setDefaultDropAction(Qt.MoveAction)
-        self.setSpacing(14)
+        self.setSpacing(20)
         self.setFrameShape(QFrame.NoFrame)
 
     def add_row(self, row: Dict[str, Any], target_index: int | None = None) -> None:
@@ -370,10 +370,8 @@ class EisenhowerView(QWidget):
             f"QListWidget#{key}_list[dragover='true'] {{"
             f"border: 2px dashed {t['accent']}; border-radius: 12px; background: {t['dragover_background']};"
             f"}}"
-            "QListWidget::item {margin: 0 0 16px 0;}"
             f"QFrame#eisenhowerDemandCard {{"
             f"border: 1px solid {t['card_border']}; border-radius: 14px; background: {t['card_background']};"
-            f"margin: 0 0 6px 0;"
             f"}}"
             f"QFrame#eisenhowerDemandCard:hover {{border-color: {t['accent']};}}"
             f"QFrame#eisenhowerDemandCard[selected='true'] {{border: {t['card_select_outline'].format(accent=t['accent'])};}}"

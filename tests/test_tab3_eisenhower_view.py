@@ -182,6 +182,7 @@ def test_eisenhower_card_uses_required_information_and_layout():
     margins = card.layout().contentsMargins()
     assert margins.left() >= 16
     assert margins.right() >= 16
+    assert q3_list.spacing() == 20
 
 
 def test_eisenhower_light_mode_uses_contrasting_card_text_and_border():

@@ -728,6 +728,7 @@ class CsvStore:
         imported_rows: List[DemandRow] = []
         imported_used_ids = set()
         imported_next_id = 1
+        import_errors: List[str] = []
         for i, row in enumerate(reader, start=2):
             payload = {
                 "É Urgente?": (row.get("É Urgente?") or "").strip(),
@@ -757,7 +758,8 @@ class CsvStore:
                     normalized.get("Data Conclusão", ""),
                 )
             except ValidationError as e:
-                raise ValidationError(f"Erro na linha {i}: {e}") from e
+                import_errors.append(f"Erro na linha {i}: {e}")
+                continue
 
             new_id = str(uuid.uuid4())
             data = {c: "" for c in CSV_COLUMNS}
@@ -780,6 +782,10 @@ class CsvStore:
                     continue
                 data[c] = normalized.get(c, "")
             imported_rows.append(DemandRow(_id=new_id, data=data))
+
+        if import_errors:
+            raise ValidationError("Importação contém linhas inválidas\n" + "\n".join(import_errors))
+
         return imported_rows
 
     def replace_with_rows(self, imported_rows: List[DemandRow]) -> int:
