@@ -107,6 +107,26 @@ def test_inline_data_registro_edit_persists(tmp_path):
     win.close()
 
 
+def test_inline_data_registro_datepicker_abre_no_mes_ano_corrente(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    _add_pending(store, **{"Data de Registro": "01/01/2024"})
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    model = win.t3_table.model()
+    idx = model.index(0, VISIBLE_COLUMNS.index("Data de Registro"))
+    delegate = win.t3_table.itemDelegate()
+    editor = delegate.createEditor(win.t3_table, None, idx)
+    delegate.setEditorData(editor, idx)
+
+    calendar = editor.calendarWidget()
+    today = editor.date().currentDate()
+    assert calendar.yearShown() == today.year()
+    assert calendar.monthShown() == today.month()
+    win.close()
+
+
 def test_inline_data_registro_uses_date_picker_editor(tmp_path):
     _get_app()
     store = CsvStore(str(tmp_path))

@@ -165,7 +165,11 @@ def validate_payload(payload: Dict[str, str], *, mode: str) -> Dict[str, str]:
         else:
             normalized[k] = validate_text(v)
 
-    DemandValidationService.validate(normalized)
+    # Regras de consistência entre colunas exigem o payload completo.
+    # Em updates incrementais (edição inline por célula), essa validação
+    # acontece posteriormente com os dados mesclados no store.
+    if mode == "create":
+        DemandValidationService.validate(normalized)
 
     return normalized
 

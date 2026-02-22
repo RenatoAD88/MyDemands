@@ -460,3 +460,10 @@ def test_eisenhower_column_persists_per_user(tmp_path):
     grouped_a = user_a_reloaded.t3_eisenhower_view.last_groups
     assert any(r.get("_id") == row_id for r in grouped_a["q1"])
     user_a_reloaded.close()
+
+
+def test_eisenhower_reduz_espacamento_vertical_entre_cards():
+    _get_app()
+    view = EisenhowerView(lambda *_: None)
+    q1_list = view.findChild(qtwidgets.QListWidget, "q1_list")
+    assert q1_list.spacing() == 8

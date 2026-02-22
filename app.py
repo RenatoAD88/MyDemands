@@ -409,6 +409,7 @@ class ColumnComboDelegate(QStyledItemDelegate):
             date_edit.setCalendarPopup(True)
             date_edit.setDisplayFormat(DATE_FMT_QT)
             date_edit.setMinimumDate(QDate(1900, 1, 1))
+            date_edit.calendarWidget().setCurrentPage(QDate.currentDate().year(), QDate.currentDate().month())
             if col == self.conclusion_column:
                 date_edit.setSpecialValueText("Sem data")
             return date_edit
@@ -590,13 +591,14 @@ class BaseModalDialog(QDialog):
 
 
 class DatePickDialog(BaseModalDialog):
-    def __init__(self, parent: QWidget, title: str, label: str, allow_clear: bool = False):
+    def __init__(self, parent: QWidget, title: str, label: str, allow_clear: bool = False, initial_date: QDate | None = None):
         super().__init__(parent)
         self.setWindowTitle(title)
 
-        self.date_edit = QDateEdit(QDate.currentDate())
+        self.date_edit = QDateEdit(initial_date or QDate.currentDate())
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat(DATE_FMT_QT)
+        self.date_edit.calendarWidget().setCurrentPage(QDate.currentDate().year(), QDate.currentDate().month())
 
         self._cleared = False
 
@@ -2021,7 +2023,9 @@ class MainWindow(QMainWindow):
         # Data de Registro / Data Conclusão (picker)
         if col_name in ("Data de Registro", "Data Conclusão"):
             allow_clear = (col_name == "Data Conclusão")
-            dlg = DatePickDialog(self, col_name, f"Selecione {col_name.lower()}:", allow_clear=allow_clear)
+            current_date = _try_parse_date_br((it.text() or "").replace("*", "").strip())
+            initial_qdate = QDate(current_date.year, current_date.month, current_date.day) if current_date else QDate.currentDate()
+            dlg = DatePickDialog(self, col_name, f"Selecione {col_name.lower()}:", allow_clear=allow_clear, initial_date=initial_qdate)
             if dlg.exec() != QDialog.Accepted:
                 return
 

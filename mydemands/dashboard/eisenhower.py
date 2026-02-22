@@ -197,7 +197,7 @@ class QuadrantListWidget(QListWidget):
         self.setAlternatingRowColors(False)
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setDefaultDropAction(Qt.MoveAction)
-        self.setSpacing(20)
+        self.setSpacing(8)
         self.setFrameShape(QFrame.NoFrame)
 
     def add_row(self, row: Dict[str, Any], target_index: int | None = None) -> None:

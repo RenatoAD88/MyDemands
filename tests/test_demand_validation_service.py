@@ -42,3 +42,8 @@ def test_cancelado_com_data_conclusao_bloqueia():
 def test_prazo_vazio_e_permitido():
     out = validate_payload(_base_payload(Prazo=""), mode="create")
     assert out["Prazo"] == ""
+
+
+def test_update_parcial_nao_exige_data_registro_no_payload():
+    out = validate_payload({"Prazo": "11/02/2026"}, mode="update")
+    assert out["Prazo"] == "11/02/2026"
