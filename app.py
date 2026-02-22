@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 
 import mydemands.resources_rc  # noqa: F401
 
@@ -98,6 +99,9 @@ DATE_FMT_QT = "dd/MM/yyyy"
 PRAZO_TODAY_BG = (255, 249, 196)  # amarelo claro
 BACKUP_DIRNAME = "bkp"
 BACKUP_PREFIX = "BKP_RAD"
+logger = logging.getLogger(__name__)
+
+
 def debug_msg(title: str, text: str):
     if DEBUG_MODE:
         QMessageBox.information(None, title, text)
@@ -1381,6 +1385,7 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(icon_path))
 
         self._filling = False
+        self._is_updating_inline = False
         self._restoring_prefs = False
         self._resizing_columns = False
         self._tab3_auto_filter_reset_done = False
@@ -1844,6 +1849,8 @@ class MainWindow(QMainWindow):
 
     def _fill(self, table: QTableWidget, rows: List[Dict[str, Any]]):
         self._filling = True
+        previous_block_state = table.signalsBlocked()
+        table.blockSignals(True)
         try:
             table.setRowCount(0)
             for row in rows:
@@ -1853,6 +1860,7 @@ class MainWindow(QMainWindow):
                 for c, col in enumerate(VISIBLE_COLUMNS):
                     self._set_item(table, r, c, str(row.get(col, "") or ""), _id)
         finally:
+            table.blockSignals(previous_block_state)
             self._filling = False
 
         table_key = str(table.property("tableSortKey") or "")
@@ -2071,7 +2079,7 @@ class MainWindow(QMainWindow):
             return
 
     def _on_item_changed(self, item: QTableWidgetItem):
-        if self._filling:
+        if self._filling or self._is_updating_inline:
             return
 
         _id = item.data(Qt.UserRole)
@@ -2087,19 +2095,44 @@ class MainWindow(QMainWindow):
             return
 
         new_value = (item.text() or "").strip()
+        old_value = str(item.data(Qt.UserRole + 2) or "")
+        logger.debug(
+            "Inline edit started demand_id=%s field=%s old_value=%r new_value=%r table=%s",
+            _id,
+            col_name,
+            old_value,
+            new_value,
+            table_key,
+        )
 
         if table_key == "t3" and col_name in {"Prazo", "Data Conclusão", "Data de Registro"}:
+            normalized_value = self._normalize_inline_value(col_name, new_value, allow_empty=(col_name == "Data Conclusão"))
+            if normalized_value is None and col_name != "Data Conclusão":
+                self._revert_inline_item(item, old_value)
+                QMessageBox.information(self, "Validação", f"Valor inválido para {col_name}.")
+                return
             try:
-                payload = {col_name: new_value}
+                payload = {col_name: self._to_store_value(col_name, normalized_value)}
                 if col_name == "Data Conclusão" and not new_value:
                     payload = {"Data Conclusão": ""}
-                self.store.update(_id, payload)
-                self.deadline_scheduler.check_now()
-                self.refresh_all()
+                logger.debug(
+                    "Inline normalized demand_id=%s field=%s normalized=%r type=%s",
+                    _id,
+                    col_name,
+                    normalized_value,
+                    type(normalized_value).__name__,
+                )
+                self._persist_inline_edit(_id, payload)
+                self._apply_inline_edit_result(table_key, _id, col_name)
                 self._flash_cell_by_id("t3", _id, col_name)
             except ValidationError as ve:
                 self._flash_invalid_cell(item)
+                self._revert_inline_item(item, old_value)
                 QMessageBox.information(self, "Validação", str(ve))
+            except Exception:
+                self._flash_invalid_cell(item)
+                self._revert_inline_item(item, old_value)
+                QMessageBox.warning(self, "Erro ao salvar", "Não foi possível salvar a alteração inline.")
             return
 
 
@@ -2219,16 +2252,88 @@ class MainWindow(QMainWindow):
             return
 
         # default: salva campo normal
+        save_ok = False
         try:
-            self.store.update(_id, {col_name: new_value})
+            normalized_value = self._normalize_inline_value(col_name, new_value, allow_empty=True)
+            payload_value = self._to_store_value(col_name, normalized_value)
+            logger.debug(
+                "Inline normalized demand_id=%s field=%s normalized=%r type=%s",
+                _id,
+                col_name,
+                normalized_value,
+                type(normalized_value).__name__,
+            )
+            self._persist_inline_edit(_id, {col_name: payload_value})
+            save_ok = True
         except ValidationError as ve:
+            self._revert_inline_item(item, old_value)
             QMessageBox.warning(self, "Validação", str(ve))
         except Exception as e:
+            self._revert_inline_item(item, old_value)
             self.emit_error_notification(str(e))
+            logger.exception("Erro ao salvar inline demand_id=%s field=%s", _id, col_name)
             debug_msg("Erro ao salvar", str(e))
-        self.refresh_all()
+        if save_ok:
+            self._apply_inline_edit_result(table_key, _id, col_name)
         if col_name in {"Descrição", "Comentário"}:
             self._normalize_text_columns_widths()
+
+    def _persist_inline_edit(self, demand_id: str, payload: Dict[str, Any]) -> None:
+        logger.debug("Persist inline edit demand_id=%s payload=%s", demand_id, payload)
+        try:
+            self._demand_update_service.update(demand_id, payload)
+            logger.debug("Persist inline edit demand_id=%s result=ok", demand_id)
+        except Exception:
+            logger.exception("Persist inline edit demand_id=%s result=error", demand_id)
+            raise
+
+    def _revert_inline_item(self, item: QTableWidgetItem, previous_text: str) -> None:
+        table = item.tableWidget()
+        self._is_updating_inline = True
+        previous_block_state = table.signalsBlocked() if table is not None else False
+        if table is not None:
+            table.blockSignals(True)
+        try:
+            item.setText(previous_text)
+            item.setData(Qt.UserRole + 2, previous_text)
+        finally:
+            if table is not None:
+                table.blockSignals(previous_block_state)
+            self._is_updating_inline = False
+
+    def _normalize_inline_value(self, col_name: str, raw_value: str, allow_empty: bool = False) -> Any:
+        value = (raw_value or "").strip()
+        if not value:
+            return "" if allow_empty else None
+        if col_name in {"Data de Registro", "Data Conclusão"}:
+            parsed = _try_parse_date_br(value)
+            return parsed
+        return value
+
+    def _to_store_value(self, col_name: str, normalized: Any) -> str:
+        if normalized is None:
+            return ""
+        if isinstance(normalized, date):
+            return normalized.strftime("%d/%m/%Y")
+        return str(normalized)
+
+    def _apply_inline_edit_result(self, table_key: str, demand_id: str, field_name: str) -> None:
+        table = self._resolve_table_for_key(table_key)
+        before_rows = table.rowCount() if isinstance(table, QTableWidget) else 0
+        logger.debug("Inline refresh start table=%s before_rows=%s", table_key, before_rows)
+        try:
+            if table_key == "t3":
+                self.refresh_tab3()
+            elif table_key in {"t4", "t4_cancelled"}:
+                self.refresh_tab4()
+            else:
+                self.refresh_all()
+        except Exception:
+            logger.exception("Inline refresh failed table=%s demand_id=%s field=%s", table_key, demand_id, field_name)
+            QMessageBox.warning(self, "Erro ao atualizar", "Não foi possível atualizar a lista após a edição.")
+            return
+        after_rows = table.rowCount() if isinstance(table, QTableWidget) else 0
+        logger.debug("Inline refresh done table=%s after_rows=%s", table_key, after_rows)
 
     def _restore_preferences(self):
         self._restoring_prefs = True
@@ -3547,6 +3652,7 @@ class MainWindow(QMainWindow):
         self.monitoramento_view.apply_theme(self.theme_service.current_theme() if self.theme_service else "light")
 
     def refresh_tab3(self):
+        snapshot_rows = self._snapshot_table_rows(self.t3_table)
         rows = self.store.tab_pending_all()
         if self._ensure_eisenhower_user_columns(rows):
             rows = self.store.tab_pending_all()
@@ -3584,10 +3690,33 @@ class MainWindow(QMainWindow):
             f"Dentro do prazo: {counts['inside_deadline']} - "
             f"Em atraso: {counts['delayed']}"
         )
-        self._fill(self.t3_table, filtered)
+        try:
+            self._fill(self.t3_table, filtered)
+        except Exception:
+            logger.exception("Falha ao preencher tabela de pendências; restaurando snapshot")
+            self._restore_table_rows(self.t3_table, snapshot_rows)
+            QMessageBox.warning(self, "Erro ao atualizar", "Falha ao atualizar demandas pendentes. Estado anterior mantido.")
+            return
         if hasattr(self, "t3_eisenhower_view"):
             self.t3_eisenhower_view.set_rows(filtered)
         self._save_preferences()
+
+    def _snapshot_table_rows(self, table: QTableWidget) -> List[Dict[str, str]]:
+        snapshot: List[Dict[str, str]] = []
+        for r in range(table.rowCount()):
+            row_payload: Dict[str, str] = {}
+            for c, col_name in enumerate(VISIBLE_COLUMNS):
+                cell = table.item(r, c)
+                row_payload[col_name] = cell.text() if cell else ""
+                if c == 0 and cell is not None:
+                    row_payload["_id"] = str(cell.data(Qt.UserRole) or "")
+            snapshot.append(row_payload)
+        return snapshot
+
+    def _restore_table_rows(self, table: QTableWidget, rows: List[Dict[str, str]]) -> None:
+        if not rows:
+            return
+        self._fill(table, rows)
 
     def _apply_initial_eisenhower_suggestion(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         prepared = dict(payload or {})
