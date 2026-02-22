@@ -46,7 +46,7 @@ def test_dark_theme_status_timing_prazo_foreground_uses_dynamic_palette(tmp_path
             _assert_column_foreground_not_black(win, table_key, column_name)
 
 
-def test_dark_theme_prazo_non_today_is_white_and_today_is_black(tmp_path):
+def test_dark_theme_prazo_values_follow_theme_palette(tmp_path):
     app = _app()
     theme = ThemeService(app)
     store = CsvStore(str(tmp_path))
@@ -71,4 +71,4 @@ def test_dark_theme_prazo_non_today_is_white_and_today_is_black(tmp_path):
     win._set_item(table, row_today, col, today_str, "2")
     today_item = table.item(row_today, col)
     assert today_item is not None
-    assert today_item.foreground().color() == QColor(0, 0, 0)
+    assert today_item.foreground().color() == QColor(255, 255, 255)

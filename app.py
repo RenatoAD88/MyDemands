@@ -114,8 +114,6 @@ def get_dynamic_text_color() -> QColor:
 
 
 def get_deadline_text_color(theme_name: str, is_due_today: bool) -> QColor:
-    if is_due_today:
-        return QColor(0, 0, 0)
     if (theme_name or "light").strip().lower() == "dark":
         return QColor(255, 255, 255)
     return QColor(0, 0, 0)

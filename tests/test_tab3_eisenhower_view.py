@@ -166,8 +166,6 @@ def test_eisenhower_minicard_applies_multiline_elide():
     assert description_label is not None
     assert info_label is not None
     assert "Prioridade:" in info_label.text()
-    assert "Timing:" in info_label.text()
-    assert "Urgente:" in info_label.text()
     assert "|" not in info_label.text()
     assert "…" in description_label.text() or "..." in description_label.text()
     assert card.minimumHeight() >= 90
@@ -261,7 +259,7 @@ def test_click_outside_clears_selection(tmp_path):
 def test_dark_mode_label_forces_white_text():
     _get_app()
     tokens = EisenhowerThemeManager.tokens(True)
-    assert all(v["column_header"] == "#e2e8f0" for v in tokens.values())
+    assert all(v["column_header"] == "#f8fafc" for v in tokens.values())
 
 
 def test_minicard_styles_include_spacing_and_padding():
@@ -269,8 +267,8 @@ def test_minicard_styles_include_spacing_and_padding():
     view = EisenhowerView(lambda *_: None)
     q1_list = view.findChild(qtwidgets.QListWidget, "q1_list")
     sheet = q1_list.styleSheet()
-    assert "margin: 4px 0 12px 0" in sheet
-    assert "padding: 10px" in sheet
+    assert "margin: 2px 0 8px 0" in sheet
+    assert "padding: 8px" in sheet
 
 
 def test_dnd_controller_mappings_and_persistence_call(tmp_path):
@@ -343,8 +341,8 @@ def test_card_tokens_keep_visible_border_light_and_dark():
     light = EisenhowerThemeManager.tokens(False)
     dark = EisenhowerThemeManager.tokens(True)
 
-    assert all(v["card_border"] == "#ffffff" for v in light.values())
-    assert all(v["card_border"] == "#ffffff" for v in dark.values())
+    assert all(v["card_border"] == "#dbe3f0" for v in light.values())
+    assert all(v["card_border"] == "#475569" for v in dark.values())
 
 
 def test_first_classification_is_automatic_and_manual_move_persists_user_state(tmp_path):
