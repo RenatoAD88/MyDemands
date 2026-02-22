@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QProgressBar,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -31,11 +32,16 @@ class PieChartWidget(QWidget):
         self.labels_order = labels_order or []
         self.data: Dict[str, int] = {}
         self.colors = colors or {}
-        self.empty_placeholder = "Sem dados"
+        self.empty_placeholder = "Sem dados suficientes"
         self.empty_color = "#64748B"
-        self.value_color = QColor("black")
-        self.chart_scale = 0.9
+        self.value_color = QColor("#111827")
+        self.bg_color = QColor("#FFFFFF")
+        self.center_color = QColor("#FFFFFF")
+        self.label_font_size = 11
+        self.hole_ratio = 0.60
+        self.chart_scale = 0.78
         self.setMinimumHeight(260)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     def set_data(self, data: Dict[str, int]) -> None:
         if self.labels_order:
@@ -44,48 +50,79 @@ class PieChartWidget(QWidget):
             self.data = {str(k): int(v) for k, v in data.items()}
         self.update()
 
+    def set_theme(self, dark: bool) -> None:
+        self.value_color = QColor("#F8FAFC") if dark else QColor("#111827")
+        self.bg_color = QColor("#1E293B") if dark else QColor("#FFFFFF")
+        self.center_color = QColor("#111827") if dark else QColor("#FFFFFF")
+        self.update()
+
+    def percentages(self) -> Dict[str, int]:
+        total = sum(self.data.values())
+        if total <= 0:
+            return {label: 0 for label in self.labels_order}
+        return {label: int(round((int(self.data.get(label, 0)) / total) * 100)) for label in self.labels_order}
+
+    def label_text(self, label: str) -> str:
+        value = int(self.data.get(label, 0))
+        pct = self.percentages().get(label, 0)
+        return f"{value} – {pct}%"
+
     def paintEvent(self, _event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         total = sum(self.data.values())
-        rect = self.rect().adjusted(24, 16, -24, -16)
+        rect = self.rect().adjusted(20, 12, -20, -12)
         size = int(min(rect.width(), rect.height()) * self.chart_scale)
         pie_rect = rect
         pie_rect.setWidth(size)
         pie_rect.setHeight(size)
         pie_rect.moveLeft(rect.left() + (rect.width() - size) // 2)
         pie_rect.moveTop(rect.top() + (rect.height() - size) // 2)
-        start_angle = 0
+        start_angle = 90 * 16
+        label_font = QFont(self.font())
+        label_font.setPointSize(self.label_font_size)
+        label_font.setWeight(QFont.DemiBold)
+        painter.setFont(label_font)
         if total <= 0:
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor("#CBD5E1"))
+            painter.setBrush(QColor("#CBD5E1") if self.bg_color.lightness() > 120 else QColor("#334155"))
             painter.drawEllipse(pie_rect)
             painter.setPen(QColor(self.empty_color))
             painter.drawText(self.rect(), Qt.AlignCenter, self.empty_placeholder)
         else:
+            label_rects: List[QRect] = []
+            percentages = self.percentages()
             for idx, (label, value) in enumerate(self.data.items()):
                 if value <= 0:
                     continue
                 span = int(5760 * (value / total))
                 fill = self.colors.get(label, ["#6366F1", "#10B981", "#F59E0B"][idx % 3])
-                painter.setPen(QPen(QColor("#F8FAFC"), 2))
+                painter.setPen(QPen(self.bg_color, 2))
                 painter.setBrush(QColor(fill))
-                painter.drawPie(pie_rect, start_angle, span)
+                painter.drawPie(pie_rect, start_angle, -span)
                 mid_angle = start_angle + span / 2
                 radius = pie_rect.width() / 2
                 center_x = pie_rect.center().x()
                 center_y = pie_rect.center().y()
-                label_radius = radius * 1.1
-                x = int(center_x + label_radius * math.cos(-mid_angle / 16 * math.pi / 180))
-                y = int(center_y + label_radius * math.sin(-mid_angle / 16 * math.pi / 180))
-                percent = int(round((value / total) * 100))
-                value_font = QFont(self.font())
-                value_font.setPointSize(10)
-                value_font.setWeight(QFont.Bold)
-                painter.setFont(value_font)
+                label_radius = radius * 1.33
+                x = int(center_x + label_radius * math.cos(mid_angle / 16 * math.pi / 180))
+                y = int(center_y - label_radius * math.sin(mid_angle / 16 * math.pi / 180))
                 painter.setPen(self.value_color)
-                painter.drawText(QRect(x - 36, y - 12, 72, 24), Qt.AlignCenter, f"{value} ({percent}%)")
-                start_angle += span
+                text = f"{value} – {percentages.get(label, 0)}%"
+                text_rect = QRect(x - 56, y - 14, 112, 28)
+                while any(text_rect.intersects(existing) for existing in label_rects):
+                    y += 14
+                    text_rect.moveTop(y - 14)
+                painter.drawText(text_rect, Qt.AlignCenter, text)
+                label_rects.append(text_rect)
+                start_angle -= span
+
+            inner_size = int(pie_rect.width() * self.hole_ratio)
+            inner_rect = QRect(0, 0, inner_size, inner_size)
+            inner_rect.moveCenter(pie_rect.center())
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(self.center_color)
+            painter.drawEllipse(inner_rect)
 
 
 class TimingBarsWidget(QWidget):
@@ -229,13 +266,12 @@ class MonitoramentoView(QWidget):
         self.progress_subtitle.setText(f"{metrics.concluidas} de {metrics.total_demandas} demandas concluídas")
         self.priority_pie.set_data(metrics.por_prioridade)
         self.status_gerais_bars.set_data(metrics.status_gerais)
-        self._render_priority_legenda(metrics.por_prioridade)
         self._render_alertas(metrics.alertas)
 
     def apply_theme(self, theme_name: str) -> None:
         dark = (theme_name or "light").lower() == "dark"
         text = "#E2E8F0" if dark else "#0F172A"
-        self.priority_pie.value_color = QColor("white") if dark else QColor("black")
+        self.priority_pie.set_theme(dark)
         self.setStyleSheet(
             f"""
             MonitoramentoView, QListWidget {{ background: {'#0F172A' if dark else '#F7F9FC'}; color: {text}; }}
@@ -310,14 +346,30 @@ class MonitoramentoView(QWidget):
 
         self.priority_card = QFrame(); self.priority_card.setProperty("dashboardCard", True); self.priority_card.setMinimumHeight(300)
         lp = QVBoxLayout(self.priority_card); lp.setContentsMargins(16, 16, 16, 16); lp.setSpacing(10)
-        lp.addLayout(self._section_header("Por prioridade"))
+        lp.addLayout(self._section_header("POR PRIORIDADE"))
         self.priority_pie = PieChartWidget(
             labels_order=["Alta", "Média", "Baixa"],
-            colors={"Alta": "#EF4444", "Média": "#FACC15", "Baixa": "#22C55E"},
+            colors={"Alta": "#E53935", "Média": "#F4B400", "Baixa": "#43A047"},
         )
-        self.priority_legend = QLabel("")
-        self.priority_legend.setObjectName("metricSubtitle")
-        self.priority_legend.setAlignment(Qt.AlignCenter)
+        self.priority_legend = QWidget()
+        legend_layout = QHBoxLayout(self.priority_legend)
+        legend_layout.setContentsMargins(0, 4, 0, 0)
+        legend_layout.setSpacing(14)
+        legend_layout.setAlignment(Qt.AlignHCenter)
+        self.priority_legend_labels: Dict[str, QLabel] = {}
+        for label, color in [("Alta", "#E53935"), ("Média", "#F4B400"), ("Baixa", "#43A047")]:
+            item = QWidget()
+            item_layout = QHBoxLayout(item)
+            item_layout.setContentsMargins(0, 0, 0, 0)
+            item_layout.setSpacing(5)
+            bullet = QLabel("■")
+            bullet.setStyleSheet(f"color: {color}; font-size: 9px;")
+            text = QLabel(label)
+            text.setObjectName("metricSubtitle")
+            self.priority_legend_labels[label] = text
+            item_layout.addWidget(bullet)
+            item_layout.addWidget(text)
+            legend_layout.addWidget(item)
         lp.addStretch(1)
         lp.addWidget(self.priority_pie, 0, Qt.AlignCenter)
         lp.addWidget(self.priority_legend, 0, Qt.AlignHCenter)
@@ -348,15 +400,6 @@ class MonitoramentoView(QWidget):
         self.alerts_empty.setAlignment(Qt.AlignCenter)
         l.addWidget(self.alerts_empty)
         return frame
-
-    def _render_priority_legenda(self, by_priority: Dict[str, int]) -> None:
-        order = ["Alta", "Média", "Baixa"]
-        total = max(sum(int(by_priority.get(label, 0)) for label in order), 1)
-        legend_parts = [
-            f"{label}: <b>{int(by_priority.get(label, 0))}</b> ({int(round((int(by_priority.get(label, 0)) / total) * 100))}%)"
-            for label in order
-        ]
-        self.priority_legend.setText("   ".join(legend_parts))
 
     def _render_alertas(self, alertas: List[Dict[str, str]]) -> None:
         atraso_only = [a for a in alertas if str(a.get("timing") or "").strip().lower() == "em atraso"]
