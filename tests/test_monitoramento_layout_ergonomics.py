@@ -53,6 +53,7 @@ def test_por_status_section_removed_and_grouped_cards_side_by_side():
     assert "por status" not in section_titles
     assert "status gerais" in section_titles
     assert "por prioridade" in section_titles
+    assert any(lbl.text() == "POR PRIORIDADE" for lbl in view.findChildren(QLabel) if lbl.objectName() == "sectionTitle")
 
     assert view.status_gerais_card.minimumHeight() == view.priority_card.minimumHeight()
 
@@ -62,11 +63,11 @@ def test_prioridade_uses_donut_with_expected_colors_and_placeholder():
     view = MonitoramentoView()
     view.update_metrics(_empty_metrics())
 
-    assert view.priority_pie.empty_placeholder == "Sem dados"
-    assert view.priority_pie.colors["Alta"] == "#EF4444"
-    assert view.priority_pie.colors["Média"] == "#FACC15"
-    assert view.priority_pie.colors["Baixa"] == "#22C55E"
-    assert "Alta:" in view.priority_legend.text()
+    assert view.priority_pie.empty_placeholder == "Sem dados suficientes"
+    assert view.priority_pie.colors["Alta"] == "#E53935"
+    assert view.priority_pie.colors["Média"] == "#F4B400"
+    assert view.priority_pie.colors["Baixa"] == "#43A047"
+    assert view.priority_legend.layout().alignment() == qtcore.Qt.AlignHCenter
 
 
 
@@ -139,19 +140,20 @@ def test_por_prioridade_uses_reduced_scale_for_chart():
     _app()
     view = MonitoramentoView()
 
-    assert view.priority_pie.chart_scale == pytest.approx(0.9)
+    assert view.priority_pie.chart_scale == pytest.approx(0.78)
+    assert view.priority_pie.hole_ratio == pytest.approx(0.60)
 
 
-def test_por_prioridade_legend_shows_percentage_when_data_exists():
+def test_por_prioridade_labels_use_value_dash_percentage_format():
     _app()
     view = MonitoramentoView()
     metrics = _empty_metrics()
-    metrics.por_prioridade = {"Alta": 2, "Média": 1, "Baixa": 1}
+    metrics.por_prioridade = {"Alta": 4, "Média": 9, "Baixa": 1}
     view.update_metrics(metrics)
 
-    legend = view.priority_legend.text()
-    assert "Alta:" in legend
-    assert "50%" in legend
+    assert view.priority_pie.label_text("Alta") == "4 – 29%"
+    assert view.priority_pie.label_text("Média") == "9 – 64%"
+    assert view.priority_pie.label_text("Baixa") == "1 – 7%"
 
 
 def test_por_prioridade_placeholder_when_empty_data():
@@ -160,6 +162,31 @@ def test_por_prioridade_placeholder_when_empty_data():
     view.update_metrics(_empty_metrics())
 
     assert sum(view.priority_pie.data.values()) == 0
+    assert view.priority_pie.percentages() == {"Alta": 0, "Média": 0, "Baixa": 0}
+
+
+def test_por_prioridade_dark_mode_keeps_center_dark_and_labels_legible():
+    _app()
+    view = MonitoramentoView()
+    view.apply_theme("dark")
+
+    assert view.priority_pie.center_color.name().lower() == "#111827"
+    assert view.priority_pie.value_color.name().lower() == "#f8fafc"
+
+
+def test_por_prioridade_refresh_keeps_donut_after_dataset_update():
+    _app()
+    view = MonitoramentoView()
+    metrics = _empty_metrics()
+    metrics.por_prioridade = {"Alta": 1, "Média": 0, "Baixa": 0}
+    view.update_metrics(metrics)
+    first = dict(view.priority_pie.data)
+
+    metrics.por_prioridade = {"Alta": 2, "Média": 3, "Baixa": 1}
+    view.update_metrics(metrics)
+
+    assert first != view.priority_pie.data
+    assert view.priority_pie.data == {"Alta": 2, "Média": 3, "Baixa": 1}
 
 
 def test_por_prioridade_keeps_donut_and_legend_centered():
@@ -169,7 +196,7 @@ def test_por_prioridade_keeps_donut_and_legend_centered():
     layout = view.priority_card.layout()
     assert layout.itemAt(2).spacerItem() is not None
     assert layout.itemAt(5).spacerItem() is not None
-    assert view.priority_legend.alignment() == qtcore.Qt.AlignCenter
+    assert view.priority_legend.layout().alignment() == qtcore.Qt.AlignHCenter
 
 
 def test_status_gerais_uses_expected_palette():
