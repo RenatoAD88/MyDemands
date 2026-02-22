@@ -1381,6 +1381,7 @@ class MainWindow(QMainWindow):
         self._filling = False
         self._restoring_prefs = False
         self._resizing_columns = False
+        self._tab3_auto_filter_reset_done = False
         self._table_sort_state: Dict[str, Optional[Tuple[int, Qt.SortOrder]]] = {
             "t1": None,
             "t3": None,
@@ -3573,6 +3574,11 @@ class MainWindow(QMainWindow):
             prazo=prazo_filter,
             projeto=self.t3_projeto.currentText(),
         )
+
+        if rows and not filtered and self._should_auto_reset_tab3_filters():
+            self._clear_tab3_filters_without_refresh()
+            filtered = filter_rows(rows)
+
         counts = summary_counts(rows)
         self.t3_pending_card.setText(
             f"Total de Pendências: {counts['pending']} - "
@@ -3583,6 +3589,43 @@ class MainWindow(QMainWindow):
         if hasattr(self, "t3_eisenhower_view"):
             self.t3_eisenhower_view.set_rows(filtered)
         self._save_preferences()
+
+    def _should_auto_reset_tab3_filters(self) -> bool:
+        if self._tab3_auto_filter_reset_done:
+            return False
+        has_any_filter = any(
+            [
+                (self.t3_search.text() or "").strip(),
+                (self.t3_status.currentText() or "").strip(),
+                (self.t3_prioridade.currentText() or "").strip(),
+                (self.t3_responsavel.text() or "").strip(),
+                self.t3_prazo.date() != self.t3_prazo.minimumDate(),
+                (self.t3_projeto.currentText() or "").strip(),
+            ]
+        )
+        if has_any_filter:
+            self._tab3_auto_filter_reset_done = True
+        return has_any_filter
+
+    def _clear_tab3_filters_without_refresh(self) -> None:
+        self.t3_search.blockSignals(True)
+        self.t3_status.blockSignals(True)
+        self.t3_prioridade.blockSignals(True)
+        self.t3_responsavel.blockSignals(True)
+        self.t3_prazo.blockSignals(True)
+        self.t3_projeto.blockSignals(True)
+        self.t3_search.clear()
+        self.t3_status.setCurrentIndex(0)
+        self.t3_prioridade.setCurrentIndex(0)
+        self.t3_responsavel.clear()
+        self.t3_prazo.setDate(self.t3_prazo.minimumDate())
+        self.t3_projeto.setCurrentIndex(0)
+        self.t3_search.blockSignals(False)
+        self.t3_status.blockSignals(False)
+        self.t3_prioridade.blockSignals(False)
+        self.t3_responsavel.blockSignals(False)
+        self.t3_prazo.blockSignals(False)
+        self.t3_projeto.blockSignals(False)
 
     def _ensure_eisenhower_user_columns(self, rows: List[Dict[str, Any]]) -> bool:
         user_id = self.logged_user_email or "anonimo"
