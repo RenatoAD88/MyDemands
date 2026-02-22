@@ -104,6 +104,72 @@ def test_inline_data_registro_edit_persists(tmp_path):
 
     updated = store.get(row_id).data
     assert updated["Data de Registro"] == "03/02/2026"
+    assert win.t3_table.rowCount() == 1
+    assert _cell(win, 0, "Data de Registro").text() == "03/02/2026"
+    win.close()
+
+
+def test_inline_data_registro_invalida_reverte_sem_sumir_tabela(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    _add_pending(store)
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    infos = []
+    monkeypatch.setattr("app.QMessageBox.information", lambda *_args: infos.append(True))
+
+    item = _cell(win, 0, "Data de Registro")
+    original = item.text()
+    item.setText("31/31/2026")
+
+    assert win.t3_table.rowCount() == 1
+    assert _cell(win, 0, "Data de Registro").text() == original
+    assert infos
+    win.close()
+
+
+def test_inline_urgencia_refresh_consistente_sem_refresh_magico(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store, **{"É Urgente?": "Não"})
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    item = _cell(win, 0, "É Urgente?")
+    item.setText("Sim")
+
+    assert store.get(row_id).data["É Urgente?"] == "Sim"
+    assert win.t3_table.rowCount() == 1
+    assert _cell(win, 0, "É Urgente?").text() == "Sim"
+    assert _cell(win, 0, "Descrição").text() == "Demanda"
+    win.close()
+
+
+def test_inline_reentrancia_ignora_item_changed_durante_revert(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    _add_pending(store)
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    calls = {"count": 0}
+    real_handler = win._on_item_changed
+
+    def _wrapped_handler(changed_item):
+        calls["count"] += 1
+        return real_handler(changed_item)
+
+    win.t3_table.itemChanged.disconnect(win._on_item_changed)
+    win._on_item_changed = _wrapped_handler
+    win.t3_table.itemChanged.connect(win._on_item_changed)
+
+    monkeypatch.setattr("app.QMessageBox.information", lambda *_args: None)
+    item = _cell(win, 0, "Data de Registro")
+    item.setText("99/99/9999")
+
+    assert calls["count"] == 1
+    assert win.t3_table.rowCount() == 1
     win.close()
 
 
