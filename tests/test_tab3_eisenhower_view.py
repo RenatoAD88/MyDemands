@@ -174,6 +174,31 @@ def test_eisenhower_minicard_applies_multiline_elide():
     assert margins.right() >= 12
 
 
+def test_eisenhower_light_mode_uses_contrasting_card_text_and_border():
+    _get_app()
+    tokens = EisenhowerThemeManager.tokens(is_dark=False)
+
+    assert tokens["q1"]["text_primary"] == "#0f172a"
+    assert tokens["q1"]["card_background"] == "#ffffff"
+    assert tokens["q1"]["card_border"] == tokens["q1"]["accent"]
+
+
+def test_eisenhower_theme_switch_updates_card_tokens():
+    _get_app()
+    view = EisenhowerView(lambda *_: None)
+    view.apply_theme("dark")
+
+    q1_list = view.findChild(qtwidgets.QListWidget, "q1_list")
+    qss_dark = q1_list.styleSheet()
+    assert "background: #111b2e" in qss_dark
+    assert "border: 1px solid #dc2626" in qss_dark
+
+    view.apply_theme("light")
+    qss_light = q1_list.styleSheet()
+    assert "background: #ffffff" in qss_light
+    assert "QLabel#eisenhowerDescription {font-size: 13px; font-weight: 650; color: #0f172a;" in qss_light
+
+
 def test_single_click_selects_without_opening_modal(tmp_path, monkeypatch):
     _get_app()
     store = CsvStore(str(tmp_path))
