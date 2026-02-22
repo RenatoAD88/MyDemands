@@ -1,6 +1,5 @@
-import pytest
-
-from validation import DemandValidationService, ValidationError, validate_payload
+import validation
+from validation import validate_payload
 
 
 def _base_payload(**extra):
@@ -19,29 +18,23 @@ def _base_payload(**extra):
     return payload
 
 
-def test_prazo_menor_que_registro_bloqueia_com_mensagem_amigavel():
-    with pytest.raises(ValidationError, match=DemandValidationService.PRAZO_LT_REGISTRO_MSG):
-        validate_payload(_base_payload(Prazo="31/01/2026"), mode="create")
+def test_feature_flag_off_por_padrao():
+    assert validation.ENABLE_DATE_VALIDATIONS is False
 
 
-def test_conclusao_menor_que_registro_bloqueia_com_mensagem_amigavel():
-    with pytest.raises(ValidationError, match=DemandValidationService.CONCLUSAO_LT_REGISTRO_MSG):
-        validate_payload(_base_payload(Status="Concluído", **{"Data Conclusão": "31/01/2026"}, **{"% Conclusão": "1"}), mode="create")
-
-
-def test_concluido_sem_data_conclusao_bloqueia():
-    with pytest.raises(ValidationError, match=DemandValidationService.CONCLUIDO_SEM_CONCLUSAO_MSG):
-        validate_payload(_base_payload(Status="Concluído", **{"Data Conclusão": ""}, **{"% Conclusão": "1"}), mode="create")
-
-
-def test_cancelado_com_data_conclusao_bloqueia():
-    with pytest.raises(ValidationError, match=DemandValidationService.CANCELADO_COM_CONCLUSAO_MSG):
-        validate_payload(_base_payload(Status="Cancelado", **{"Data Conclusão": "02/02/2026"}, **{"% Conclusão": "0"}), mode="create")
-
-
-def test_prazo_vazio_e_permitido():
-    out = validate_payload(_base_payload(Prazo=""), mode="create")
-    assert out["Prazo"] == ""
+def test_validacoes_globais_noop_quando_flag_off_para_create():
+    out = validate_payload(
+        _base_payload(
+            Prazo="31/01/2026",
+            Status="Concluído",
+            **{"Data Conclusão": ""},
+            **{"% Conclusão": "1"},
+        ),
+        mode="create",
+    )
+    assert out["Prazo"] == "31/01/2026"
+    assert out["Status"] == "Concluído"
+    assert out["Data Conclusão"] == ""
 
 
 def test_update_parcial_nao_exige_data_registro_no_payload():

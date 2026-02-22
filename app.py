@@ -2089,13 +2089,6 @@ class MainWindow(QMainWindow):
         new_value = (item.text() or "").strip()
 
         if table_key == "t3" and col_name in {"Prazo", "Data Conclusão", "Data de Registro"}:
-            previous_value = (item.data(Qt.UserRole + 2) or "").strip()
-            row_status = (table.item(item.row(), VISIBLE_COLUMNS.index("Status")).text() if table and table.item(item.row(), VISIBLE_COLUMNS.index("Status")) else "").strip()
-            if row_status == "Cancelado":
-                item.setText(previous_value)
-                QMessageBox.information(self, "Edição bloqueada", "Demandas canceladas não permitem edição de datas.")
-                return
-
             try:
                 payload = {col_name: new_value}
                 if col_name == "Data Conclusão" and not new_value:
@@ -2105,10 +2098,10 @@ class MainWindow(QMainWindow):
                 self.refresh_all()
                 self._flash_cell_by_id("t3", _id, col_name)
             except ValidationError as ve:
-                item.setText(previous_value)
                 self._flash_invalid_cell(item)
                 QMessageBox.information(self, "Validação", str(ve))
             return
+
 
         if col_name in NON_EDITABLE:
             return

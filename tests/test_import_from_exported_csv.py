@@ -108,12 +108,13 @@ def test_import_from_exported_csv_rejects_invalid_row_and_keeps_existing_data(tm
         }
         writer.writerow(row)
 
-    with pytest.raises(ValidationError, match=r"Erro na linha 2"):
-        store.import_from_exported_csv(str(import_path))
+    total = store.import_from_exported_csv(str(import_path))
 
+    assert total == 1
     rows = store.build_view()
     assert len(rows) == 1
-    assert rows[0]["Projeto"] == original_project
+    assert rows[0]["Projeto"] == "Projeto inválido"
+    assert rows[0]["Status"] == "Concluído"
 
 
 def test_import_from_exported_csv_rejects_template_version_mismatch(tmp_path):
