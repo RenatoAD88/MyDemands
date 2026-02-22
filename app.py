@@ -1803,7 +1803,7 @@ class MainWindow(QMainWindow):
             it.setTextAlignment(Qt.AlignCenter)
 
         is_editable = colname not in NON_EDITABLE
-        if table_key == "t3" and colname in {"Prazo", "Data Conclusão"}:
+        if table_key == "t3" and colname in {"Prazo", "Data Conclusão", "Data de Registro"}:
             is_editable = True
         if table_key in {"t4", "t4_cancelled"}:
             is_editable = is_editable and colname in TAB4_EDITABLE_COLUMNS
@@ -2063,7 +2063,7 @@ class MainWindow(QMainWindow):
 
         new_value = (item.text() or "").strip()
 
-        if table_key == "t3" and col_name in {"Prazo", "Data Conclusão"}:
+        if table_key == "t3" and col_name in {"Prazo", "Data Conclusão", "Data de Registro"}:
             previous_value = (item.data(Qt.UserRole + 2) or "").strip()
             row_status = (table.item(item.row(), VISIBLE_COLUMNS.index("Status")).text() if table and table.item(item.row(), VISIBLE_COLUMNS.index("Status")) else "").strip()
             if row_status == "Cancelado":
@@ -3650,8 +3650,17 @@ class MainWindow(QMainWindow):
         if dlg.exec() != QDialog.Accepted:
             return
 
+        payload = dlg.payload()
+        user_id = self.logged_user_email or "anonimo"
+        source_map = parse_eisenhower_column_map(source.data.get(EISENHOWER_COLUMN_FIELD))
+        source_column = source_map.get(user_id)
+        if source_column in {"q1", "q2", "q3", "q4"}:
+            duplicate_map = parse_eisenhower_column_map(payload.get(EISENHOWER_COLUMN_FIELD))
+            duplicate_map[user_id] = source_column
+            payload[EISENHOWER_COLUMN_FIELD] = dump_eisenhower_column_map(duplicate_map)
+
         try:
-            new_row_id = self.store.add(dlg.payload())
+            new_row_id = self.store.add(payload)
         except ValidationError as ve:
             QMessageBox.warning(self, "Validação", str(ve))
             return
