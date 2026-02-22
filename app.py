@@ -3219,12 +3219,14 @@ class MainWindow(QMainWindow):
         if dlg.exec() != QDialog.Accepted:
             return
 
+        payload = self._apply_initial_eisenhower_suggestion(dlg.payload())
         try:
-            new_row_id = self.store.add(dlg.payload())
+            new_row_id = self.store.add(payload)
         except ValidationError as ve:
             QMessageBox.warning(self, "Validação", str(ve))
             return
         self.refresh_all()
+        self._ensure_new_pending_demand_visible(new_row_id)
 
         if new_row_id and was_concluded:
             self._show_duplicate_success_modal(self._resolve_demand_number(new_row_id))
@@ -3590,6 +3592,54 @@ class MainWindow(QMainWindow):
             self.t3_eisenhower_view.set_rows(filtered)
         self._save_preferences()
 
+    def _apply_initial_eisenhower_suggestion(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        prepared = dict(payload or {})
+        user_id = self.logged_user_email or "anonimo"
+        if not user_id:
+            return prepared
+
+        current_map = parse_eisenhower_column_map(prepared.get(EISENHOWER_COLUMN_FIELD))
+        if current_map.get(user_id) in {"q1", "q2", "q3", "q4"}:
+            return prepared
+
+        suggested_column = EisenhowerClassifierService().classify_initial(prepared)
+        if suggested_column in {"q1", "q2", "q3", "q4"}:
+            current_map[user_id] = suggested_column
+            prepared[EISENHOWER_COLUMN_FIELD] = dump_eisenhower_column_map(current_map)
+        return prepared
+
+    def _ensure_new_pending_demand_visible(self, row_id: str) -> None:
+        if not row_id:
+            return
+
+        source = self.store.get(row_id)
+        if not source:
+            return
+
+        classifier = EisenhowerClassifierService()
+        if not classifier.should_include(source.data):
+            return
+
+        rows = self.store.tab_pending_all()
+        prazo_filter = ""
+        if self.t3_prazo.date() != self.t3_prazo.minimumDate():
+            prazo_filter = self.t3_prazo.date().toString(DATE_FMT_QT)
+
+        filtered = filter_rows(
+            rows,
+            text_query=self.t3_search.text(),
+            status=self.t3_status.currentText(),
+            prioridade=self.t3_prioridade.currentText(),
+            responsavel=self.t3_responsavel.text(),
+            prazo=prazo_filter,
+            projeto=self.t3_projeto.currentText(),
+        )
+        if any(str(row.get("_id") or "") == row_id for row in filtered):
+            return
+
+        self._clear_tab3_filters_without_refresh()
+        self.refresh_tab3()
+
     def _should_auto_reset_tab3_filters(self) -> bool:
         if self._tab3_auto_filter_reset_done:
             return False
@@ -3714,7 +3764,7 @@ class MainWindow(QMainWindow):
         if dlg.exec() != QDialog.Accepted:
             return
 
-        payload = dlg.payload()
+        payload = self._apply_initial_eisenhower_suggestion(dlg.payload())
         user_id = self.logged_user_email or "anonimo"
         source_map = parse_eisenhower_column_map(source.data.get(EISENHOWER_COLUMN_FIELD))
         source_column = source_map.get(user_id)
@@ -3730,6 +3780,7 @@ class MainWindow(QMainWindow):
             return
 
         self.refresh_all()
+        self._ensure_new_pending_demand_visible(new_row_id)
         if new_row_id and was_concluded:
             self._show_duplicate_success_modal(self._resolve_demand_number(new_row_id))
 
@@ -3795,8 +3846,10 @@ class MainWindow(QMainWindow):
     def new_demand(self):
         dlg = NewDemandDialog(self, ai_attach=self._attach_ai_widget, context_provider=lambda field: self._ai_context_provider("", field))
         if dlg.exec() == QDialog.Accepted:
+            new_row_id = ""
+            payload = self._apply_initial_eisenhower_suggestion(dlg.payload())
             try:
-                new_row_id = self.store.add(dlg.payload())
+                new_row_id = self.store.add(payload)
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
             else:
@@ -3811,6 +3864,8 @@ class MainWindow(QMainWindow):
                     )
                 )
             self.refresh_all()
+            if new_row_id:
+                self._ensure_new_pending_demand_visible(new_row_id)
             self.deadline_scheduler.check_now()
 
     def export_team_control_csv(self):
