@@ -1,7 +1,7 @@
 from csv_store import CsvStore
 
 
-def test_setting_data_conclusao_autosets_status_and_percent(tmp_path):
+def test_setting_data_conclusao_nao_autoseta_status_nem_percent_no_rollback(tmp_path):
     store = CsvStore(str(tmp_path))
     _id = store.add({
         "Descrição": "A",
@@ -17,6 +17,6 @@ def test_setting_data_conclusao_autosets_status_and_percent(tmp_path):
     store.update(_id, {"Data Conclusão": "06/02/2026"})
     dr = store.get(_id)
     assert dr is not None
-    assert dr.data["Status"] == "Concluído"
-    assert dr.data["% Conclusão"] == "1"
+    assert dr.data["Status"] == "Em andamento"
+    assert dr.data["% Conclusão"] == "0.25"
     assert dr.data["Data Conclusão"] == "06/02/2026"

@@ -8,6 +8,11 @@ class ValidationError(Exception):
     pass
 
 
+# Flag de segurança para ativar/desativar validações globais de consistência entre datas.
+# Mantido DESATIVADO por padrão para preservar comportamento legado.
+ENABLE_DATE_VALIDATIONS = False
+
+
 STATUS_OPTIONS = [
     "Não iniciada",
     "Em andamento",
@@ -199,6 +204,9 @@ class DemandValidationService:
 
     @classmethod
     def validate(cls, payload: Dict[str, str]) -> None:
+        if not ENABLE_DATE_VALIDATIONS:
+            return
+
         registro = cls._parse_date_safe(payload.get("Data de Registro", ""), "Data de Registro")
         if registro is None:
             raise ValidationError("Campo obrigatório: Data de Registro.")

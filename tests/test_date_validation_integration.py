@@ -35,7 +35,7 @@ def _cell(win: MainWindow, row: int, col_name: str):
     return win.t3_table.item(row, VISIBLE_COLUMNS.index(col_name))
 
 
-def test_inline_prazo_invalido_reverte_e_mostra_aviso(tmp_path, monkeypatch):
+def test_inline_edicao_data_nao_reverte_no_t3(tmp_path, monkeypatch):
     _get_app()
     store = CsvStore(str(tmp_path))
     row_id = _add_pending(store)
@@ -46,16 +46,14 @@ def test_inline_prazo_invalido_reverte_e_mostra_aviso(tmp_path, monkeypatch):
     monkeypatch.setattr("app.QMessageBox.information", lambda *_args: infos.append(True))
 
     item = _cell(win, 0, "Prazo")
-    previous = item.text()
     item.setText("31/01/2026")
 
-    assert _cell(win, 0, "Prazo").text() == previous
-    assert store.get(row_id).data["Prazo"] == previous.replace("*", "")
-    assert infos
+    assert store.get(row_id).data["Prazo"] == "31/01/2026"
+    assert infos == []
     win.close()
 
 
-def test_modal_bloqueia_salvar_e_mostra_mensagem(tmp_path, monkeypatch):
+def test_modal_salva_sem_bloqueio_por_validacao_global(tmp_path, monkeypatch):
     _get_app()
     store = CsvStore(str(tmp_path))
     row_id = _add_pending(store)
@@ -84,6 +82,6 @@ def test_modal_bloqueia_salvar_e_mostra_mensagem(tmp_path, monkeypatch):
     monkeypatch.setattr("app.NewDemandDialog", _FakeDialog)
     win._open_demand_from_eisenhower_card(dict(source.data) | {"_id": row_id})
 
-    assert warnings
-    assert store.get(row_id).data["Prazo"] == "10/02/2026"
+    assert warnings == []
+    assert store.get(row_id).data["Prazo"] == "31/01/2026"
     win.close()

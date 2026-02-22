@@ -436,12 +436,6 @@ class CsvStore:
 
             try:
                 normalized = validate_payload(row, mode="create")
-                normalized = _autofix_consistency(normalized)
-                _require_conclusao_date_if_needed(
-                    normalized.get("Status", ""),
-                    normalized.get("% Conclusão", ""),
-                    normalized.get("Data Conclusão", ""),
-                )
             except ValidationError as e:
                 raise ValidationError(f"Erro no arquivo de dados, linha {i}: {e}") from e
 
@@ -479,13 +473,6 @@ class CsvStore:
         payload = _map_legacy_keys(payload)
         payload = validate_payload(payload, mode="create")
 
-        payload = _autofix_consistency(payload)
-
-        _require_conclusao_date_if_needed(
-            payload.get("Status", ""),
-            payload.get("% Conclusão", ""),
-            payload.get("Data Conclusão", ""),
-        )
 
         _id = str(uuid.uuid4())
         row = {c: "" for c in CSV_COLUMNS}
@@ -513,19 +500,7 @@ class CsvStore:
         merged = dict(dr.data)
         merged.update({k: (v if v is not None else "") for k, v in changes.items()})
 
-        previous_status = (dr.data.get("Status") or "").strip()
-        if previous_status == "Concluído" and (merged.get("Status") or "").strip() == "Cancelado":
-            raise ValidationError("Demandas concluídas não podem ser marcadas como canceladas.")
-
         merged = validate_payload(merged, mode="create")
-
-        merged = _autofix_consistency(merged)
-
-        _require_conclusao_date_if_needed(
-            merged.get("Status", ""),
-            merged.get("% Conclusão", ""),
-            merged.get("Data Conclusão", ""),
-        )
 
         # grava de fato
         dr.data.update(merged)
@@ -751,12 +726,6 @@ class CsvStore:
 
             try:
                 normalized = validate_payload(payload, mode="create")
-                normalized = _autofix_consistency(normalized)
-                _require_conclusao_date_if_needed(
-                    normalized.get("Status", ""),
-                    normalized.get("% Conclusão", ""),
-                    normalized.get("Data Conclusão", ""),
-                )
             except ValidationError as e:
                 import_errors.append(f"Erro na linha {i}: {e}")
                 continue
@@ -874,12 +843,6 @@ class CsvStore:
 
             try:
                 normalized = validate_payload(payload, mode="create")
-                normalized = _autofix_consistency(normalized)
-                _require_conclusao_date_if_needed(
-                    normalized.get("Status", ""),
-                    normalized.get("% Conclusão", ""),
-                    normalized.get("Data Conclusão", ""),
-                )
             except ValidationError as e:
                 raise ValidationError(f"Erro no backup, linha {i}: {e}") from e
 
