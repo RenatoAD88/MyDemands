@@ -6,13 +6,11 @@ from PySide6.QtCore import QEvent, QPoint, QSize, Qt, Signal
 from PySide6.QtGui import QDrag, QFontMetrics
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -24,40 +22,68 @@ from mydemands.dashboard.eisenhower_dnd import EisenhowerDnDController
 class EisenhowerThemeManager:
     @staticmethod
     def tokens(is_dark: bool) -> Dict[str, Dict[str, str]]:
-        # Cores solicitadas pelo produto
-        base = {
-            "q1": "#dc2626",  # vermelho
-            "q2": "#eab308",  # amarelo
-            "q3": "#16a34a",  # verde
-            "q4": "#2563eb",  # azul
+        accent = {
+            "q1": "#dc2626",
+            "q2": "#eab308",
+            "q3": "#16a34a",
+            "q4": "#2563eb",
         }
-        text_primary = "#f8fafc" if is_dark else "#0f172a"
-        text_secondary = "#cbd5e1" if is_dark else "#334155"
-        column_bg = "#0b1220" if is_dark else "#f8fafc"
-        card_bg = "rgba(148, 163, 184, 0.30)"
-        drag_bg = "#17243c" if is_dark else "#eef2ff"
+
+        if is_dark:
+            column_bg = "#111827"
+            column_border = "#374151"
+            column_header = "#f9fafb"
+            count = "#f3f4f6"
+            text_primary = "#f9fafb"
+            text_secondary = "#e5e7eb"
+            cards = {
+                "q1": "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(120,41,45,0.88), stop:1 rgba(90,33,36,0.9))",
+                "q2": "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(113,88,28,0.86), stop:1 rgba(86,68,23,0.9))",
+                "q3": "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(43,90,58,0.86), stop:1 rgba(35,70,47,0.9))",
+                "q4": "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(37,76,119,0.86), stop:1 rgba(30,58,95,0.9))",
+            }
+            card_border = "#4b5563"
+            hover_overlay = "rgba(255,255,255,0.05)"
+            dragover_background = "#1f2937"
+            card_select_outline = "2px solid {accent}"
+        else:
+            column_bg = "#f3f4f6"
+            column_border = "#d1d5db"
+            column_header = "#111827"
+            count = "#1f2937"
+            text_primary = "#111827"
+            text_secondary = "#4b5563"
+            cards = {
+                "q1": "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(245,196,198,0.96), stop:1 rgba(240,183,186,0.96))",
+                "q2": "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(247,232,178,0.96), stop:1 rgba(242,223,158,0.96))",
+                "q3": "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(198,224,192,0.96), stop:1 rgba(184,213,176,0.96))",
+                "q4": "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(190,211,232,0.96), stop:1 rgba(176,201,225,0.96))",
+            }
+            card_border = "#dbe3f0"
+            hover_overlay = "rgba(17,24,39,0.03)"
+            dragover_background = "#eef2ff"
+            card_select_outline = "2px solid {accent}"
 
         return {
             key: {
-                "accent": accent,
-                "column_border": "#334155" if is_dark else "#d6deeb",
+                "accent": value,
+                "column_border": column_border,
                 "column_background": column_bg,
-                "column_header": text_primary,
-                "dragover_background": drag_bg,
-                "card_background": card_bg,
-                # Mantém contorno visível permanentemente (sem depender de hover).
-                "card_border": accent,
-                "hover_border": accent,
-                "hover_background": "#1f314f" if is_dark else "#f8faff",
-                "dragging_background": drag_bg,
+                "column_header": column_header,
+                "count_color": count,
                 "text_primary": text_primary,
                 "text_secondary": text_secondary,
+                "card_background": cards[key],
+                "card_border": card_border,
+                "hover_overlay": hover_overlay,
+                "dragover_background": dragover_background,
+                "card_select_outline": card_select_outline,
             }
-            for key, accent in base.items()
+            for key, value in accent.items()
         }
 
 
-class DemandMiniCard(QWidget):
+class DemandCardWidget(QFrame):
     def __init__(
         self,
         row: Dict[str, Any],
@@ -72,26 +98,26 @@ class DemandMiniCard(QWidget):
         self._on_context_menu = on_context_menu
         self.setObjectName("eisenhowerDemandCard")
         self.setCursor(Qt.PointingHandCursor)
-        self.setMinimumHeight(118)
+        self.setMinimumHeight(126)
+        self.setFrameShape(QFrame.StyledPanel)
         self.setProperty("selected", False)
         self.setProperty("dragging", False)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(8)
+        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setSpacing(10)
 
         demand_number = str(row.get("ID") or row.get("_id") or "-")
 
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
-        header.setSpacing(8)
         id_label = QLabel(f"#{demand_number}")
         id_label.setObjectName("eisenhowerDemandId")
         header.addWidget(id_label)
         header.addStretch()
 
         priority = QLabel(f"Prioridade: {row.get('Prioridade') or 'Média'}")
-        priority.setObjectName("eisenhowerMetaInfo")
+        priority.setObjectName("eisenhowerPriority")
         header.addWidget(priority)
 
         desc_label = QLabel()
@@ -107,6 +133,7 @@ class DemandMiniCard(QWidget):
 
         layout.addLayout(header)
         layout.addWidget(desc_label)
+        layout.addStretch(1)
         layout.addWidget(info)
 
         self._desc_label = desc_label
@@ -115,10 +142,8 @@ class DemandMiniCard(QWidget):
     def _set_description(self) -> None:
         raw = (self._row.get("Descrição") or "Sem descrição").replace("\n", " ").strip()
         metrics = QFontMetrics(self._desc_label.font())
-        width = max(self.width() - 24, 50)
-        first = metrics.elidedText(raw, Qt.ElideRight, width)
-        leftover = raw[len(first.rstrip("…")) :].strip()
-        self._desc_label.setText(f"{first}\n{metrics.elidedText(leftover, Qt.ElideRight, width)}" if leftover else first)
+        width = max(self.width() - 36, 70)
+        self._desc_label.setText(metrics.elidedText(raw, Qt.ElideRight, width))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -162,26 +187,28 @@ class QuadrantListWidget(QListWidget):
         self._on_card_double_click = on_card_double_click
         self._on_card_context_menu = on_card_context_menu
         self._on_move_request = on_move_request
+
         self.setObjectName(f"{quadrant_key}_list")
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setDragEnabled(True)
-        self.setAcceptDrops(True)
         self.viewport().setAcceptDrops(True)
+        self.setAcceptDrops(True)
         self.setDropIndicatorShown(True)
-        self.setDragDropOverwriteMode(False)
+        self.setAlternatingRowColors(False)
         self.setDragDropMode(QAbstractItemView.DragDrop)
         self.setDefaultDropAction(Qt.MoveAction)
-        self.setSpacing(8)
+        self.setSpacing(14)
+        self.setFrameShape(QFrame.NoFrame)
 
     def add_row(self, row: Dict[str, Any], target_index: int | None = None) -> None:
         item = QListWidgetItem()
         item.setData(Qt.UserRole, row)
-        item.setSizeHint(QSize(0, 124))
+        item.setSizeHint(QSize(0, 136))
         if isinstance(target_index, int) and 0 <= target_index <= self.count():
             self.insertItem(target_index, item)
         else:
             self.addItem(item)
-        self.setItemWidget(item, DemandMiniCard(row, self._on_card_click, self._on_card_double_click, self._on_card_context_menu))
+        self.setItemWidget(item, DemandCardWidget(row, self._on_card_click, self._on_card_double_click, self._on_card_context_menu))
 
     def _update_dragover(self, enabled: bool) -> None:
         self.setProperty("dragover", enabled)
@@ -275,22 +302,25 @@ class EisenhowerView(QWidget):
         self._dnd_controller = EisenhowerDnDController(on_move_card) if on_move_card else None
         self.last_groups: Dict[str, List[Dict[str, Any]]] = {q.key: [] for q in QUADRANTS}
         self._columns_lists: Dict[str, QuadrantListWidget] = {}
-        self._selected_card_widget: DemandMiniCard | None = None
+        self._selected_card_widget: DemandCardWidget | None = None
         self._is_dark = False
-        root = QHBoxLayout(self)
-        root.setSpacing(12)
 
-        color_tokens = EisenhowerThemeManager.tokens(self._is_dark)
+        root = QHBoxLayout(self)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(16)
 
         for quadrant in QUADRANTS:
             column = QFrame()
             column.setObjectName(f"eisenhowerColumn_{quadrant.key}")
-            column.setProperty("accent", color_tokens[quadrant.key]["accent"])
-            column.setProperty("columnBorder", color_tokens[quadrant.key]["column_border"])
             column.setFrameShape(QFrame.StyledPanel)
+
             column_layout = QVBoxLayout(column)
-            column_layout.setContentsMargins(6, 6, 6, 6)
-            column_layout.setSpacing(6)
+            column_layout.setContentsMargins(12, 10, 12, 12)
+            column_layout.setSpacing(10)
+
+            accent_line = QFrame()
+            accent_line.setObjectName(f"{quadrant.key}_accent")
+            accent_line.setFixedHeight(4)
 
             title = QLabel(quadrant.title)
             title.setObjectName("eisenhowerQuadrantTitle")
@@ -309,64 +339,66 @@ class EisenhowerView(QWidget):
                 self._show_context_menu,
                 self._handle_move_request,
             )
-            list_widget.setObjectName(f"{quadrant.key}_list")
             list_widget.viewport().installEventFilter(self)
-            list_widget.setStyleSheet(
-                f"QListWidget#{quadrant.key}_list {{"
-                f"border: 1px solid {color_tokens[quadrant.key]['column_border']};"
-                f"border-top: 4px solid {color_tokens[quadrant.key]['accent']};"
-                f"border-radius: 12px; background: {color_tokens[quadrant.key]['column_background']}; padding: 8px;}}"
-                f"QListWidget#{quadrant.key}_list[dragover='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragover_background']};}}"
-                f"QListWidget::item {{margin: 0 0 8px 0;}}"
-                f"QWidget#eisenhowerDemandCard {{border: 1px solid {color_tokens[quadrant.key]['card_border']}; border-left: 3px solid {color_tokens[quadrant.key]['accent']}; border-radius: 10px;"
-                f" background: {color_tokens[quadrant.key]['card_background']}; margin: 2px 0 8px 0;}}"
-                f"QWidget#eisenhowerDemandCard:hover {{border-color: {color_tokens[quadrant.key]['hover_border']}; background: {color_tokens[quadrant.key]['hover_background']};}}"
-                f"QWidget#eisenhowerDemandCard[selected='true'] {{border: 2px solid {color_tokens[quadrant.key]['accent']};}}"
-                f"QWidget#eisenhowerDemandCard[dragging='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragging_background']};}}"
-                f"QLabel#eisenhowerDemandId {{font-size: 13px; font-weight: 700; color: {color_tokens[quadrant.key]['text_primary']};}}"
-                f"QLabel#eisenhowerDescription {{font-size: 13px; font-weight: 650; color: {color_tokens[quadrant.key]['text_primary']};}}"
-                f"QLabel#eisenhowerMetaInfo {{font-size: 12px; color: {color_tokens[quadrant.key]['text_secondary']};}}"
-                f"QLabel#eisenhowerQuadrantTitle {{color: {color_tokens[quadrant.key]['column_header']}; font-size: 13px; font-weight: 700;}}"
-                f"QLabel#{quadrant.key}_count {{color: {color_tokens[quadrant.key]['text_primary']}; font-size: 13px; font-weight: 700;}}"
-            )
-            self._columns_lists[quadrant.key] = list_widget
-
-            scroll = QScrollArea()
-            scroll.setWidgetResizable(True)
-            scroll.setWidget(list_widget)
 
             column_layout.addLayout(header)
-            column_layout.addWidget(scroll)
+            column_layout.addWidget(accent_line)
+            column_layout.addWidget(list_widget, 1)
             root.addWidget(column, 1)
 
+            self._columns_lists[quadrant.key] = list_widget
+
         self.apply_theme("light")
+
+    def _column_stylesheet(self, key: str, t: Dict[str, str]) -> str:
+        return (
+            f"QFrame#eisenhowerColumn_{key} {{"
+            f"background: {t['column_background']};"
+            f"border: 1px solid {t['column_border']};"
+            f"border-radius: 14px;"
+            f"}}"
+            f"QFrame#{key}_accent {{background: {t['accent']}; border: none; border-top-left-radius: 4px; border-top-right-radius: 4px;}}"
+            f"QLabel#eisenhowerQuadrantTitle {{color: {t['column_header']}; font-size: 15px; font-weight: 600;}}"
+            f"QLabel#{key}_count {{color: {t['count_color']}; font-size: 14px; font-weight: 600;}}"
+        )
+
+    def _list_stylesheet(self, key: str, t: Dict[str, str]) -> str:
+        return (
+            f"QListWidget#{key}_list {{"
+            f"background: transparent; border: none; padding: 2px; outline: 0;"
+            f"}}"
+            f"QListWidget#{key}_list[dragover='true'] {{"
+            f"border: 2px dashed {t['accent']}; border-radius: 12px; background: {t['dragover_background']};"
+            f"}}"
+            "QListWidget::item {margin: 0 0 16px 0;}"
+            f"QFrame#eisenhowerDemandCard {{"
+            f"border: 1px solid {t['card_border']}; border-radius: 14px; background: {t['card_background']};"
+            f"margin: 0 0 6px 0;"
+            f"}}"
+            f"QFrame#eisenhowerDemandCard:hover {{border-color: {t['accent']};}}"
+            f"QFrame#eisenhowerDemandCard[selected='true'] {{border: {t['card_select_outline'].format(accent=t['accent'])};}}"
+            f"QFrame#eisenhowerDemandCard[dragging='true'] {{border: 2px dashed {t['accent']};}}"
+            f"QLabel#eisenhowerDemandId {{font-size: 14px; font-weight: 700; color: {t['text_primary']};}}"
+            f"QLabel#eisenhowerPriority {{font-size: 12px; color: {t['text_secondary']};}}"
+            f"QLabel#eisenhowerDescription {{font-size: 14px; font-weight: 600; color: {t['text_primary']};}}"
+            f"QLabel#eisenhowerMetaInfo {{font-size: 12px; color: {t['text_secondary']};}}"
+        )
 
     def apply_theme(self, theme_name: str) -> None:
         self._is_dark = (theme_name or "light").strip().lower() == "dark"
         color_tokens = EisenhowerThemeManager.tokens(self._is_dark)
 
         for quadrant in QUADRANTS:
+            token = color_tokens[quadrant.key]
+            column = self.findChild(QFrame, f"eisenhowerColumn_{quadrant.key}")
+            if column is not None:
+                column.setProperty("accent", token["accent"])
+                column.setProperty("columnBorder", token["column_border"])
+                column.setStyleSheet(self._column_stylesheet(quadrant.key, token))
+
             list_widget = self._columns_lists.get(quadrant.key)
-            if list_widget is None:
-                continue
-            list_widget.setStyleSheet(
-                f"QListWidget#{quadrant.key}_list {{"
-                f"border: 1px solid {color_tokens[quadrant.key]['column_border']};"
-                f"border-top: 4px solid {color_tokens[quadrant.key]['accent']};"
-                f"border-radius: 12px; background: {color_tokens[quadrant.key]['column_background']}; padding: 8px;}}"
-                f"QListWidget#{quadrant.key}_list[dragover='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragover_background']};}}"
-                f"QListWidget::item {{margin: 0 0 8px 0;}}"
-                f"QWidget#eisenhowerDemandCard {{border: 1px solid {color_tokens[quadrant.key]['card_border']}; border-left: 3px solid {color_tokens[quadrant.key]['accent']}; border-radius: 10px;"
-                f" background: {color_tokens[quadrant.key]['card_background']}; margin: 2px 0 8px 0;}}"
-                f"QWidget#eisenhowerDemandCard:hover {{border-color: {color_tokens[quadrant.key]['hover_border']}; background: {color_tokens[quadrant.key]['hover_background']};}}"
-                f"QWidget#eisenhowerDemandCard[selected='true'] {{border: 2px solid {color_tokens[quadrant.key]['accent']};}}"
-                f"QWidget#eisenhowerDemandCard[dragging='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragging_background']};}}"
-                f"QLabel#eisenhowerDemandId {{font-size: 13px; font-weight: 700; color: {color_tokens[quadrant.key]['text_primary']};}}"
-                f"QLabel#eisenhowerDescription {{font-size: 13px; font-weight: 650; color: {color_tokens[quadrant.key]['text_primary']};}}"
-                f"QLabel#eisenhowerMetaInfo {{font-size: 12px; color: {color_tokens[quadrant.key]['text_secondary']};}}"
-                f"QLabel#eisenhowerQuadrantTitle {{color: {color_tokens[quadrant.key]['column_header']}; font-size: 13px; font-weight: 700;}}"
-                f"QLabel#{quadrant.key}_count {{color: {color_tokens[quadrant.key]['text_primary']}; font-size: 13px; font-weight: 700;}}"
-            )
+            if list_widget is not None:
+                list_widget.setStyleSheet(self._list_stylesheet(quadrant.key, token))
 
     def _handle_move_request(self, source_quadrant: str, target_quadrant: str, row: Dict[str, Any]) -> bool:
         if not self._dnd_controller:
@@ -374,14 +406,14 @@ class EisenhowerView(QWidget):
         return self._dnd_controller.handle_move(source_quadrant, target_quadrant, row)
 
     def _select_card(self, row: Dict[str, Any], card: QWidget) -> None:
-        if isinstance(self._selected_card_widget, DemandMiniCard) and self._selected_card_widget is not card:
+        if isinstance(self._selected_card_widget, DemandCardWidget) and self._selected_card_widget is not card:
             self._selected_card_widget.set_selected(False)
-        if isinstance(card, DemandMiniCard):
+        if isinstance(card, DemandCardWidget):
             card.set_selected(True)
             self._selected_card_widget = card
 
     def clear_selection(self) -> None:
-        if isinstance(self._selected_card_widget, DemandMiniCard):
+        if isinstance(self._selected_card_widget, DemandCardWidget):
             self._selected_card_widget.set_selected(False)
         self._selected_card_widget = None
 

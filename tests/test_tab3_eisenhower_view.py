@@ -139,13 +139,18 @@ def test_eisenhower_columns_expose_expected_color_accent():
     _get_app()
     view = EisenhowerView(lambda *_: None)
 
-    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q1").property("accent")
-    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q2").property("accent")
-    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q3").property("accent")
-    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q4").property("accent")
+    assert view.findChild(qtwidgets.QLabel, "q1_count").text() == "0"
+    assert view.findChild(qtwidgets.QLabel, "q2_count").text() == "0"
+    assert view.findChild(qtwidgets.QLabel, "q3_count").text() == "0"
+    assert view.findChild(qtwidgets.QLabel, "q4_count").text() == "0"
+
+    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q1").property("accent") == "#dc2626"
+    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q2").property("accent") == "#eab308"
+    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q3").property("accent") == "#16a34a"
+    assert view.findChild(qtwidgets.QFrame, "eisenhowerColumn_q4").property("accent") == "#2563eb"
 
 
-def test_eisenhower_minicard_applies_multiline_elide():
+def test_eisenhower_card_uses_required_information_and_layout():
     _get_app()
     view = EisenhowerView(lambda *_: None)
     rows = [{
@@ -163,24 +168,29 @@ def test_eisenhower_minicard_applies_multiline_elide():
     card = q3_list.itemWidget(q3_list.item(0))
     description_label = card.findChild(qtwidgets.QLabel, "eisenhowerDescription")
     info_label = card.findChild(qtwidgets.QLabel, "eisenhowerMetaInfo")
+    priority_label = card.findChild(qtwidgets.QLabel, "eisenhowerPriority")
+    id_label = card.findChild(qtwidgets.QLabel, "eisenhowerDemandId")
     assert description_label is not None
     assert info_label is not None
-    assert "Prioridade:" in info_label.text()
-    assert "|" not in info_label.text()
+    assert priority_label is not None
+    assert id_label is not None
+    assert id_label.text() == "#1"
+    assert "Prioridade:" in priority_label.text()
+    assert "Prazo:" in info_label.text()
     assert "…" in description_label.text() or "..." in description_label.text()
-    assert card.minimumHeight() >= 90
+    assert card.minimumHeight() >= 110
     margins = card.layout().contentsMargins()
-    assert margins.left() >= 12
-    assert margins.right() >= 12
+    assert margins.left() >= 16
+    assert margins.right() >= 16
 
 
 def test_eisenhower_light_mode_uses_contrasting_card_text_and_border():
     _get_app()
     tokens = EisenhowerThemeManager.tokens(is_dark=False)
 
-    assert tokens["q1"]["text_primary"] == "#0f172a"
-    assert tokens["q1"]["card_background"] == "rgba(148, 163, 184, 0.30)"
-    assert tokens["q1"]["card_border"] == tokens["q1"]["accent"]
+    assert tokens["q1"]["text_primary"] == "#111827"
+    assert "qlineargradient" in tokens["q1"]["card_background"]
+    assert tokens["q1"]["card_border"] == "#dbe3f0"
 
 
 def test_eisenhower_theme_switch_updates_card_tokens():
@@ -190,13 +200,13 @@ def test_eisenhower_theme_switch_updates_card_tokens():
 
     q1_list = view.findChild(qtwidgets.QListWidget, "q1_list")
     qss_dark = q1_list.styleSheet()
-    assert "background: rgba(148, 163, 184, 0.30)" in qss_dark
-    assert "border: 1px solid #dc2626" in qss_dark
+    assert "qlineargradient" in qss_dark
+    assert "QLabel#eisenhowerDescription {font-size: 14px; font-weight: 600; color: #f9fafb;" in qss_dark
 
     view.apply_theme("light")
     qss_light = q1_list.styleSheet()
-    assert "background: rgba(148, 163, 184, 0.30)" in qss_light
-    assert "QLabel#eisenhowerDescription {font-size: 13px; font-weight: 650; color: #0f172a;" in qss_light
+    assert "qlineargradient" in qss_light
+    assert "QLabel#eisenhowerDescription {font-size: 14px; font-weight: 600; color: #111827;" in qss_light
 
 
 def test_duplicate_from_eisenhower_keeps_same_user_column(tmp_path, monkeypatch):
@@ -319,7 +329,8 @@ def test_click_outside_clears_selection(tmp_path):
 def test_dark_mode_label_forces_white_text():
     _get_app()
     tokens = EisenhowerThemeManager.tokens(True)
-    assert all(v["column_header"] == "#f8fafc" for v in tokens.values())
+    assert all(v["column_header"] == "#f9fafb" for v in tokens.values())
+    assert all(v["text_primary"] == "#f9fafb" for v in tokens.values())
 
 
 def test_minicard_styles_include_spacing_and_padding():
@@ -327,8 +338,8 @@ def test_minicard_styles_include_spacing_and_padding():
     view = EisenhowerView(lambda *_: None)
     q1_list = view.findChild(qtwidgets.QListWidget, "q1_list")
     sheet = q1_list.styleSheet()
-    assert "margin: 2px 0 8px 0" in sheet
-    assert "padding: 8px" in sheet
+    assert "margin: 0 0 6px 0" in sheet
+    assert "QListWidget::item {margin: 0 0 16px 0;}" in sheet
 
 
 def test_dnd_controller_mappings_and_persistence_call(tmp_path):
@@ -402,7 +413,7 @@ def test_card_tokens_keep_visible_border_light_and_dark():
     dark = EisenhowerThemeManager.tokens(True)
 
     assert all(v["card_border"] == "#dbe3f0" for v in light.values())
-    assert all(v["card_border"] == "#475569" for v in dark.values())
+    assert all(v["card_border"] == "#4b5563" for v in dark.values())
 
 
 def test_first_classification_is_automatic_and_manual_move_persists_user_state(tmp_path):
