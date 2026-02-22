@@ -39,6 +39,7 @@ DISPLAY_COLUMNS = [
     "Reportar?",
     "Nome",
     "Time/Função",
+    "eisenhower_column",
 ]
 
 CSV_COLUMNS = [
@@ -59,6 +60,7 @@ CSV_COLUMNS = [
     "Reportar?",
     "Nome",
     "Time/Função",
+    "eisenhower_column",
 ]
 
 LEGACY_TO_NEW = {
@@ -607,6 +609,7 @@ class CsvStore:
                 "Reportar?": data.get("Reportar?", ""),
                 "Nome": data.get("Nome", ""),
                 "Time/Função": data.get("Time/Função", ""),
+                "eisenhower_column": data.get("eisenhower_column", ""),
                 "_data_registro_date": registro,
                 "_prazos_dates": prazos,
                 "_conclusao_date": conclusao,
@@ -742,6 +745,7 @@ class CsvStore:
                 "Reportar?": (row.get("Reportar?") or "").strip(),
                 "Nome": row.get("Nome") or "",
                 "Time/Função": row.get("Time/Função") or "",
+                "eisenhower_column": row.get("eisenhower_column") or "",
             }
 
             try:
