@@ -179,7 +179,7 @@ def test_eisenhower_light_mode_uses_contrasting_card_text_and_border():
     tokens = EisenhowerThemeManager.tokens(is_dark=False)
 
     assert tokens["q1"]["text_primary"] == "#0f172a"
-    assert tokens["q1"]["card_background"] == "#ffffff"
+    assert tokens["q1"]["card_background"] == "rgba(148, 163, 184, 0.30)"
     assert tokens["q1"]["card_border"] == tokens["q1"]["accent"]
 
 
@@ -190,13 +190,48 @@ def test_eisenhower_theme_switch_updates_card_tokens():
 
     q1_list = view.findChild(qtwidgets.QListWidget, "q1_list")
     qss_dark = q1_list.styleSheet()
-    assert "background: #111b2e" in qss_dark
+    assert "background: rgba(148, 163, 184, 0.30)" in qss_dark
     assert "border: 1px solid #dc2626" in qss_dark
 
     view.apply_theme("light")
     qss_light = q1_list.styleSheet()
-    assert "background: #ffffff" in qss_light
+    assert "background: rgba(148, 163, 184, 0.30)" in qss_light
     assert "QLabel#eisenhowerDescription {font-size: 13px; font-weight: 650; color: #0f172a;" in qss_light
+
+
+def test_duplicate_from_eisenhower_keeps_same_user_column(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store)
+    win = MainWindow(store)
+    win._set_tab3_view_mode("eisenhower")
+    win.refresh_tab3()
+
+    source = store.get(row_id)
+    payload = dict(source.data)
+
+    class _FakeDialog:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def exec(self):
+            return QDialog.Accepted
+
+        def payload(self):
+            return dict(payload)
+
+    monkeypatch.setattr("app.NewDemandDialog", _FakeDialog)
+    user_id = win.logged_user_email or "anonimo"
+    win._move_demand_from_eisenhower(dict(source.data) | {"_id": row_id}, {"eisenhower_column": "q1"})
+
+    selected = next(r for r in win.t3_eisenhower_view.last_groups["q1"] if r.get("_id") == row_id)
+    win._duplicate_demand_from_row(selected)
+
+    created = [r for r in store.build_view() if r["_id"] != row_id]
+    assert len(created) == 1
+    copied_map = parse_eisenhower_column_map(created[0].get("eisenhower_column"))
+    assert copied_map.get(user_id) == "q1"
+    win.close()
 
 
 def test_single_click_selects_without_opening_modal(tmp_path, monkeypatch):

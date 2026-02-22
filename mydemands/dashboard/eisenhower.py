@@ -34,7 +34,7 @@ class EisenhowerThemeManager:
         text_primary = "#f8fafc" if is_dark else "#0f172a"
         text_secondary = "#cbd5e1" if is_dark else "#334155"
         column_bg = "#0b1220" if is_dark else "#f8fafc"
-        card_bg = "#111b2e" if is_dark else "#ffffff"
+        card_bg = "rgba(148, 163, 184, 0.30)"
         drag_bg = "#17243c" if is_dark else "#eef2ff"
 
         return {

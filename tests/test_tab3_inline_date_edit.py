@@ -90,3 +90,18 @@ def test_inline_edit_blocked_for_cancelled(tmp_path, monkeypatch):
     assert _cell(win, 0, "Prazo").text() == original
     assert infos
     win.close()
+
+
+def test_inline_data_registro_edit_persists(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store)
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    item = _cell(win, 0, "Data de Registro")
+    item.setText("03/02/2026")
+
+    updated = store.get(row_id).data
+    assert updated["Data de Registro"] == "03/02/2026"
+    win.close()
