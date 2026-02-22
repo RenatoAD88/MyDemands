@@ -35,11 +35,11 @@ class EisenhowerThemeManager:
                 "q1": {
                     "accent": base["q1"],
                     "column_border": "#3b4d66",
-                    "column_background": "#2b1118",
+                    "column_background": "#0f172a",
                     "column_header": "#e2e8f0",
                     "dragover_background": "#16233a",
                     "card_background": "#1e293b",
-                    "card_border": "#000000",
+                    "card_border": "#ffffff",
                     "hover_border": "#94a3b8",
                     "hover_background": "#26344b",
                     "dragging_background": "#2c3b54",
@@ -49,11 +49,11 @@ class EisenhowerThemeManager:
                 "q2": {
                     "accent": base["q2"],
                     "column_border": "#3b4d66",
-                    "column_background": "#2b2411",
+                    "column_background": "#0f172a",
                     "column_header": "#e2e8f0",
                     "dragover_background": "#16233a",
                     "card_background": "#1e293b",
-                    "card_border": "#000000",
+                    "card_border": "#ffffff",
                     "hover_border": "#94a3b8",
                     "hover_background": "#26344b",
                     "dragging_background": "#2c3b54",
@@ -63,11 +63,11 @@ class EisenhowerThemeManager:
                 "q3": {
                     "accent": base["q3"],
                     "column_border": "#3b4d66",
-                    "column_background": "#13291b",
+                    "column_background": "#0f172a",
                     "column_header": "#e2e8f0",
                     "dragover_background": "#16233a",
                     "card_background": "#1e293b",
-                    "card_border": "#000000",
+                    "card_border": "#ffffff",
                     "hover_border": "#94a3b8",
                     "hover_background": "#26344b",
                     "dragging_background": "#2c3b54",
@@ -77,11 +77,11 @@ class EisenhowerThemeManager:
                 "q4": {
                     "accent": base["q4"],
                     "column_border": "#3b4d66",
-                    "column_background": "#111f33",
+                    "column_background": "#0f172a",
                     "column_header": "#e2e8f0",
                     "dragover_background": "#16233a",
                     "card_background": "#1e293b",
-                    "card_border": "#000000",
+                    "card_border": "#ffffff",
                     "hover_border": "#94a3b8",
                     "hover_background": "#26344b",
                     "dragging_background": "#2c3b54",
@@ -93,11 +93,11 @@ class EisenhowerThemeManager:
             "q1": {
                 "accent": base["q1"],
                 "column_border": "#d0d7e2",
-                "column_background": "#fef2f2",
+                "column_background": "#f8fafc",
                 "column_header": "#1f2937",
                 "dragover_background": "#eff6ff",
                 "card_background": "#ffffff",
-                "card_border": "#000000",
+                "card_border": "#ffffff",
                 "hover_border": "#94a3b8",
                 "hover_background": "#f8fafc",
                 "dragging_background": "#eef2ff",
@@ -107,11 +107,11 @@ class EisenhowerThemeManager:
             "q2": {
                 "accent": base["q2"],
                 "column_border": "#d0d7e2",
-                "column_background": "#fffbeb",
+                "column_background": "#f8fafc",
                 "column_header": "#1f2937",
                 "dragover_background": "#eff6ff",
                 "card_background": "#ffffff",
-                "card_border": "#000000",
+                "card_border": "#ffffff",
                 "hover_border": "#94a3b8",
                 "hover_background": "#f8fafc",
                 "dragging_background": "#eef2ff",
@@ -121,11 +121,11 @@ class EisenhowerThemeManager:
             "q3": {
                 "accent": base["q3"],
                 "column_border": "#d0d7e2",
-                "column_background": "#f0fdf4",
+                "column_background": "#f8fafc",
                 "column_header": "#1f2937",
                 "dragover_background": "#eff6ff",
                 "card_background": "#ffffff",
-                "card_border": "#000000",
+                "card_border": "#ffffff",
                 "hover_border": "#94a3b8",
                 "hover_background": "#f8fafc",
                 "dragging_background": "#eef2ff",
@@ -135,11 +135,11 @@ class EisenhowerThemeManager:
             "q4": {
                 "accent": base["q4"],
                 "column_border": "#d0d7e2",
-                "column_background": "#eff6ff",
+                "column_background": "#f8fafc",
                 "column_header": "#1f2937",
                 "dragover_background": "#eff6ff",
                 "card_background": "#ffffff",
-                "card_border": "#000000",
+                "card_border": "#ffffff",
                 "hover_border": "#94a3b8",
                 "hover_background": "#f8fafc",
                 "dragging_background": "#eef2ff",
@@ -164,13 +164,13 @@ class DemandMiniCard(QWidget):
         self._on_context_menu = on_context_menu
         self.setObjectName("eisenhowerDemandCard")
         self.setCursor(Qt.PointingHandCursor)
-        self.setMinimumHeight(128)
+        self.setMinimumHeight(136)
         self.setProperty("selected", False)
         self.setProperty("dragging", False)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 10, 14, 10)
-        layout.setSpacing(6)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(8)
 
         demand_number = str(row.get("ID") or row.get("_id") or "-")
 
@@ -200,9 +200,9 @@ class DemandMiniCard(QWidget):
 
         meta_parts = []
         if (row.get("Projeto") or "").strip():
-            meta_parts.append(f"Projeto: {row.get('Projeto')}")
+            meta_parts.append(f"Projeto {row.get('Projeto')}")
         if (row.get("Prazo") or "").strip():
-            meta_parts.append(f"Prazo: {row.get('Prazo')}")
+            meta_parts.append(f"Prazo {row.get('Prazo')}")
         if not meta_parts:
             meta_parts = [
                 f"Prioridade: {row.get('Prioridade') or 'Média'}",
@@ -284,7 +284,7 @@ class QuadrantListWidget(QListWidget):
     def add_row(self, row: Dict[str, Any], target_index: int | None = None) -> None:
         item = QListWidgetItem()
         item.setData(Qt.UserRole, row)
-        item.setSizeHint(QSize(0, 116))
+        item.setSizeHint(QSize(0, 134))
         if isinstance(target_index, int) and 0 <= target_index <= self.count():
             self.insertItem(target_index, item)
         else:
@@ -373,17 +373,19 @@ class EisenhowerView(QWidget):
         on_card_double_click,
         on_move_card: Callable[[str, str, Dict[str, Any]], bool] | None = None,
         classifier: EisenhowerClassifierService | None = None,
+        user_id: str = "anonimo",
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
         self._on_card_double_click = on_card_double_click
         self._classifier = classifier or EisenhowerClassifierService()
+        self._user_id = user_id or "anonimo"
         self._dnd_controller = EisenhowerDnDController(on_move_card) if on_move_card else None
         self.last_groups: Dict[str, List[Dict[str, Any]]] = {q.key: [] for q in QUADRANTS}
         self._columns_lists: Dict[str, QuadrantListWidget] = {}
         self._selected_card_widget: DemandMiniCard | None = None
         root = QHBoxLayout(self)
-        root.setSpacing(8)
+        root.setSpacing(14)
 
         palette = QApplication.palette()
         is_dark = palette.color(QPalette.Window).lightness() < 128
@@ -396,8 +398,8 @@ class EisenhowerView(QWidget):
             column.setProperty("columnBorder", color_tokens[quadrant.key]["column_border"])
             column.setFrameShape(QFrame.StyledPanel)
             column_layout = QVBoxLayout(column)
-            column_layout.setContentsMargins(8, 8, 8, 8)
-            column_layout.setSpacing(6)
+            column_layout.setContentsMargins(6, 6, 6, 6)
+            column_layout.setSpacing(8)
 
             title = QLabel(quadrant.title)
             title.setObjectName("eisenhowerQuadrantTitle")
@@ -422,17 +424,17 @@ class EisenhowerView(QWidget):
                 f"QListWidget#{quadrant.key}_list {{"
                 f"border: 1px solid {color_tokens[quadrant.key]['column_border']};"
                 f"border-top: 4px solid {color_tokens[quadrant.key]['accent']};"
-                f"border-radius: 12px; background: {color_tokens[quadrant.key]['column_background']}; padding: 8px;}}"
+                f"border-radius: 14px; background: {color_tokens[quadrant.key]['column_background']}; padding: 10px;}}"
                 f"QListWidget#{quadrant.key}_list[dragover='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragover_background']};}}"
                 f"QListWidget::item {{margin: 0 0 10px 0;}}"
-                f"QWidget#eisenhowerDemandCard {{border: 1px solid {color_tokens[quadrant.key]['card_border']}; border-left: 3px solid {color_tokens[quadrant.key]['accent']}; border-radius: 12px;"
-                f" background: {color_tokens[quadrant.key]['card_background']}; margin: 2px 0 10px 0;}}"
+                f"QWidget#eisenhowerDemandCard {{border: 1px solid {color_tokens[quadrant.key]['card_border']}; border-left: 2px solid {color_tokens[quadrant.key]['accent']}; border-radius: 12px;"
+                f" background: {color_tokens[quadrant.key]['card_background']}; margin: 4px 0 12px 0;}}"
                 f"QWidget#eisenhowerDemandCard:hover {{border-color: {color_tokens[quadrant.key]['hover_border']}; background: {color_tokens[quadrant.key]['hover_background']};}}"
                 f"QWidget#eisenhowerDemandCard[selected='true'] {{border: 2px solid {color_tokens[quadrant.key]['accent']};}}"
                 f"QWidget#eisenhowerDemandCard[dragging='true'] {{border: 2px dashed {color_tokens[quadrant.key]['accent']}; background: {color_tokens[quadrant.key]['dragging_background']};}}"
                 f"QLabel#eisenhowerDemandId {{font-size: 13px; font-weight: 700; color: {color_tokens[quadrant.key]['text_primary']};}}"
-                "QLabel#eisenhowerStatusBadge {font-size: 11px; font-weight: 600; border-radius: 8px; padding: 2px 8px; background: rgba(128,128,128,0.30);}"
-                f"QLabel#eisenhowerDescription {{font-size: 13px; font-weight: 600; color: {color_tokens[quadrant.key]['text_primary']};}}"
+                "QLabel#eisenhowerStatusBadge {font-size: 11px; font-weight: 600; border-radius: 8px; padding: 3px 8px; background: rgba(148,163,184,0.20);}"
+                f"QLabel#eisenhowerDescription {{font-size: 14px; font-weight: 650; color: {color_tokens[quadrant.key]['text_primary']};}}"
                 f"QLabel#eisenhowerMetaInfo {{font-size: 12px; color: {color_tokens[quadrant.key]['text_secondary']};}}"
                 f"QLabel#eisenhowerQuadrantTitle {{color: {color_tokens[quadrant.key]['column_header']}; font-size: 14px; font-weight: 700;}}"
                 f"QLabel#{quadrant.key}_count {{color: {color_tokens[quadrant.key]['text_primary']}; font-size: 14px; font-weight: 700;}}"
@@ -481,7 +483,7 @@ class EisenhowerView(QWidget):
 
     def set_rows(self, rows: List[Dict[str, Any]]) -> None:
         self.clear_selection()
-        self.last_groups = self._classifier.group_rows(rows)
+        self.last_groups = self._classifier.group_rows(rows, user_id=self._user_id)
         for quadrant in QUADRANTS:
             key = quadrant.key
             rows_in_group = self.last_groups.get(key, [])

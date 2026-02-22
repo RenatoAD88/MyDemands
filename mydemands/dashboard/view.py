@@ -25,13 +25,13 @@ from mydemands.dashboard.grid_widgets import BaseGridView, ColumnConfigDialog
 from mydemands.dashboard.metrics_service import DashboardMetrics
 
 
-class DonutChartWidget(QWidget):
+class PieChartWidget(QWidget):
     def __init__(self, labels_order: List[str] | None = None, colors: Dict[str, str] | None = None) -> None:
         super().__init__()
         self.labels_order = labels_order or []
         self.data: Dict[str, int] = {}
         self.colors = colors or {}
-        self.empty_placeholder = "Sem dados suficientes"
+        self.empty_placeholder = "Sem dados"
         self.empty_color = "#64748B"
         self.value_color = QColor("black")
         self.chart_scale = 0.9
@@ -78,16 +78,14 @@ class DonutChartWidget(QWidget):
                 label_radius = radius * 1.1
                 x = int(center_x + label_radius * math.cos(-mid_angle / 16 * math.pi / 180))
                 y = int(center_y + label_radius * math.sin(-mid_angle / 16 * math.pi / 180))
+                percent = int(round((value / total) * 100))
                 value_font = QFont(self.font())
                 value_font.setPointSize(10)
                 value_font.setWeight(QFont.Bold)
                 painter.setFont(value_font)
                 painter.setPen(self.value_color)
-                painter.drawText(QRect(x - 18, y - 10, 36, 20), Qt.AlignCenter, str(value))
+                painter.drawText(QRect(x - 36, y - 12, 72, 24), Qt.AlignCenter, f"{value} ({percent}%)")
                 start_angle += span
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(self.palette().window().color())
-        painter.drawEllipse(pie_rect.adjusted(30, 30, -30, -30))
 
 
 class TimingBarsWidget(QWidget):
@@ -229,7 +227,7 @@ class MonitoramentoView(QWidget):
         self.progress_bar.setValue(metrics.concluidas_percentual)
         self.progress_percent_label.setText(f"{metrics.concluidas_percentual}%")
         self.progress_subtitle.setText(f"{metrics.concluidas} de {metrics.total_demandas} demandas concluídas")
-        self.priority_donut.set_data(metrics.por_prioridade)
+        self.priority_pie.set_data(metrics.por_prioridade)
         self.status_gerais_bars.set_data(metrics.status_gerais)
         self._render_priority_legenda(metrics.por_prioridade)
         self._render_alertas(metrics.alertas)
@@ -237,7 +235,7 @@ class MonitoramentoView(QWidget):
     def apply_theme(self, theme_name: str) -> None:
         dark = (theme_name or "light").lower() == "dark"
         text = "#E2E8F0" if dark else "#0F172A"
-        self.priority_donut.value_color = QColor("white") if dark else QColor("black")
+        self.priority_pie.value_color = QColor("white") if dark else QColor("black")
         self.setStyleSheet(
             f"""
             MonitoramentoView, QListWidget {{ background: {'#0F172A' if dark else '#F7F9FC'}; color: {text}; }}
@@ -313,7 +311,7 @@ class MonitoramentoView(QWidget):
         self.priority_card = QFrame(); self.priority_card.setProperty("dashboardCard", True); self.priority_card.setMinimumHeight(300)
         lp = QVBoxLayout(self.priority_card); lp.setContentsMargins(16, 16, 16, 16); lp.setSpacing(10)
         lp.addLayout(self._section_header("Por prioridade"))
-        self.priority_donut = DonutChartWidget(
+        self.priority_pie = PieChartWidget(
             labels_order=["Alta", "Média", "Baixa"],
             colors={"Alta": "#EF4444", "Média": "#FACC15", "Baixa": "#22C55E"},
         )
@@ -321,7 +319,7 @@ class MonitoramentoView(QWidget):
         self.priority_legend.setObjectName("metricSubtitle")
         self.priority_legend.setAlignment(Qt.AlignCenter)
         lp.addStretch(1)
-        lp.addWidget(self.priority_donut, 0, Qt.AlignCenter)
+        lp.addWidget(self.priority_pie, 0, Qt.AlignCenter)
         lp.addWidget(self.priority_legend, 0, Qt.AlignHCenter)
         lp.addStretch(1)
 
@@ -353,7 +351,11 @@ class MonitoramentoView(QWidget):
 
     def _render_priority_legenda(self, by_priority: Dict[str, int]) -> None:
         order = ["Alta", "Média", "Baixa"]
-        legend_parts = [f"{label}: <b>{int(by_priority.get(label, 0))}</b>" for label in order]
+        total = max(sum(int(by_priority.get(label, 0)) for label in order), 1)
+        legend_parts = [
+            f"{label}: <b>{int(by_priority.get(label, 0))}</b> ({int(round((int(by_priority.get(label, 0)) / total) * 100))}%)"
+            for label in order
+        ]
         self.priority_legend.setText("   ".join(legend_parts))
 
     def _render_alertas(self, alertas: List[Dict[str, str]]) -> None:

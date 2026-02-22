@@ -84,6 +84,12 @@ from mydemands.dashboard import (
 from mydemands.dashboard.grid_preferences import GridPreferencesService, LocalJsonPreferencesStore
 from mydemands.dashboard.view import MonitoramentoView
 from mydemands.dashboard.eisenhower import EisenhowerView
+from mydemands.dashboard.eisenhower_classifier import (
+    EISENHOWER_COLUMN_FIELD,
+    EisenhowerClassifierService,
+    dump_eisenhower_column_map,
+    parse_eisenhower_column_map,
+)
 from mydemands.dashboard.demand_update_service import DemandUpdateService
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
@@ -3364,6 +3370,7 @@ class MainWindow(QMainWindow):
         self.t3_eisenhower_view = EisenhowerView(
             self._open_demand_from_eisenhower_card,
             on_move_card=self._move_demand_from_eisenhower,
+            user_id=(self.logged_user_email or "anonimo"),
         )
         self.t3_eisenhower_view.context_action_requested.connect(self._handle_eisenhower_context_action)
         self.t3_views_stack = QStackedWidget()
@@ -3519,6 +3526,8 @@ class MainWindow(QMainWindow):
 
     def refresh_tab3(self):
         rows = self.store.tab_pending_all()
+        if self._ensure_eisenhower_user_columns(rows):
+            rows = self.store.tab_pending_all()
         project_options = sorted({(row.get("Projeto") or "").strip() for row in rows if (row.get("Projeto") or "").strip()})
         current_project = self.t3_projeto.currentText()
         self.t3_projeto.blockSignals(True)
@@ -3553,10 +3562,36 @@ class MainWindow(QMainWindow):
             self.t3_eisenhower_view.set_rows(filtered)
         self._save_preferences()
 
+    def _ensure_eisenhower_user_columns(self, rows: List[Dict[str, Any]]) -> bool:
+        user_id = self.logged_user_email or "anonimo"
+        classifier = EisenhowerClassifierService()
+        changed_any = False
+        for row in rows:
+            _id = str(row.get("_id") or "")
+            if not _id:
+                continue
+            current_map = parse_eisenhower_column_map(row.get(EISENHOWER_COLUMN_FIELD))
+            if current_map.get(user_id) in {"q1", "q2", "q3", "q4"}:
+                continue
+            initial = classifier.classify_initial(row)
+            if initial not in {"q1", "q2", "q3", "q4"}:
+                continue
+            current_map[user_id] = initial
+            self.store.update(_id, {EISENHOWER_COLUMN_FIELD: dump_eisenhower_column_map(current_map)})
+            changed_any = True
+        return changed_any
+
     def _move_demand_from_eisenhower(self, row: Dict[str, Any], changes: Dict[str, Any]) -> bool:
         _id = str(row.get("_id") or "")
         if not _id:
             return False
+        user_id = self.logged_user_email or "anonimo"
+        target_column = str(changes.get(EISENHOWER_COLUMN_FIELD) or "").strip().lower()
+        if target_column in {"q1", "q2", "q3", "q4"}:
+            existing_map = parse_eisenhower_column_map(row.get(EISENHOWER_COLUMN_FIELD))
+            existing_map[user_id] = target_column
+            changes = dict(changes)
+            changes[EISENHOWER_COLUMN_FIELD] = dump_eisenhower_column_map(existing_map)
         try:
             self._demand_update_service.update(_id, changes)
         except ValidationError as ve:

@@ -8,6 +8,7 @@ from app import MainWindow
 from csv_store import CsvStore
 
 from mydemands.dashboard.eisenhower import EisenhowerThemeManager, EisenhowerView
+from mydemands.dashboard.eisenhower_classifier import parse_eisenhower_column_map
 from mydemands.dashboard.eisenhower_dnd import EisenhowerDnDController
 
 
@@ -268,8 +269,8 @@ def test_minicard_styles_include_spacing_and_padding():
     view = EisenhowerView(lambda *_: None)
     q1_list = view.findChild(qtwidgets.QListWidget, "q1_list")
     sheet = q1_list.styleSheet()
-    assert "margin: 2px 0 10px 0" in sheet
-    assert "padding: 8px" in sheet
+    assert "margin: 4px 0 12px 0" in sheet
+    assert "padding: 10px" in sheet
 
 
 def test_dnd_controller_mappings_and_persistence_call(tmp_path):
@@ -292,12 +293,12 @@ def test_dnd_controller_mappings_and_persistence_call(tmp_path):
     controller.handle_move("q1", "q2", row)
     controller.handle_move("q2", "q3", row)
 
-    assert calls[0] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Alta"})
-    assert calls[1] == (row_id, {"É Urgente?": "Sim", "Prioridade": "Baixa"})
-    assert calls[2] == (row_id, {"É Urgente?": "Não", "Prioridade": "Média"})
+    assert calls[0] == (row_id, {"eisenhower_column": "q1"})
+    assert calls[1] == (row_id, {"eisenhower_column": "q2"})
+    assert calls[2] == (row_id, {"eisenhower_column": "q3"})
 
     controller.handle_move("q1", "q3", row | {"Prioridade": "Alta"})
-    assert calls[3] == (row_id, {"É Urgente?": "Não", "Prioridade": "Alta"})
+    assert calls[3] == (row_id, {"eisenhower_column": "q3"})
     win.close()
 
 
@@ -310,11 +311,11 @@ def test_move_from_q4_to_q1_updates_fields_and_refreshes(tmp_path):
     win.refresh_tab3()
 
     row = store.get(row_id).data | {"_id": row_id}
-    assert win._move_demand_from_eisenhower(row, {"É Urgente?": "Sim", "Prioridade": "Alta"}) is True
+    assert win._move_demand_from_eisenhower(row, {"eisenhower_column": "q1"}) is True
 
     updated = store.get(row_id).data
-    assert updated.get("É Urgente?") == "Sim"
-    assert updated.get("Prioridade") == "Alta"
+    per_user = parse_eisenhower_column_map(updated.get("eisenhower_column"))
+    assert per_user.get("anonimo") == "q1"
     win.close()
 
 
@@ -333,7 +334,7 @@ def test_move_failure_returns_false_for_visual_rollback(tmp_path, monkeypatch):
     monkeypatch.setattr("app.QMessageBox.warning", lambda *_: warnings.append(True))
 
     row = store.get(row_id).data | {"_id": row_id}
-    assert win._move_demand_from_eisenhower(row, {"É Urgente?": "Sim", "Prioridade": "Alta"}) is False
+    assert win._move_demand_from_eisenhower(row, {"eisenhower_column": "q1"}) is False
     assert warnings
     win.close()
 
@@ -342,5 +343,50 @@ def test_card_tokens_keep_visible_border_light_and_dark():
     light = EisenhowerThemeManager.tokens(False)
     dark = EisenhowerThemeManager.tokens(True)
 
-    assert all(v["card_border"] == "#000000" for v in light.values())
-    assert all(v["card_border"] == "#000000" for v in dark.values())
+    assert all(v["card_border"] == "#ffffff" for v in light.values())
+    assert all(v["card_border"] == "#ffffff" for v in dark.values())
+
+
+def test_first_classification_is_automatic_and_manual_move_persists_user_state(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store, Prioridade="Baixa", **{"É Urgente?": "Não", "Timing": "Dentro do Prazo"})
+    win = MainWindow(store)
+    win._set_tab3_view_mode("eisenhower")
+    win.refresh_tab3()
+
+    before = win.t3_eisenhower_view.last_groups
+    assert any(r.get("_id") == row_id for r in before["q4"])
+
+    row = store.get(row_id).data | {"_id": row_id}
+    assert win._move_demand_from_eisenhower(row, {"eisenhower_column": "q1"}) is True
+    win.refresh_tab3()
+
+    after = win.t3_eisenhower_view.last_groups
+    assert any(r.get("_id") == row_id for r in after["q1"])
+    win.close()
+
+
+def test_eisenhower_column_persists_per_user(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store, Prioridade="Baixa", **{"É Urgente?": "Não"})
+
+    user_a = MainWindow(store, logged_user_email="a@local")
+    row = store.get(row_id).data | {"_id": row_id}
+    assert user_a._move_demand_from_eisenhower(row, {"eisenhower_column": "q1"}) is True
+    user_a.close()
+
+    user_b = MainWindow(store, logged_user_email="b@local")
+    user_b._set_tab3_view_mode("eisenhower")
+    user_b.refresh_tab3()
+    grouped_b = user_b.t3_eisenhower_view.last_groups
+    assert any(r.get("_id") == row_id for r in grouped_b["q4"])
+    user_b.close()
+
+    user_a_reloaded = MainWindow(store, logged_user_email="a@local")
+    user_a_reloaded._set_tab3_view_mode("eisenhower")
+    user_a_reloaded.refresh_tab3()
+    grouped_a = user_a_reloaded.t3_eisenhower_view.last_groups
+    assert any(r.get("_id") == row_id for r in grouped_a["q1"])
+    user_a_reloaded.close()

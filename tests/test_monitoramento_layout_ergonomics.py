@@ -62,10 +62,10 @@ def test_prioridade_uses_donut_with_expected_colors_and_placeholder():
     view = MonitoramentoView()
     view.update_metrics(_empty_metrics())
 
-    assert view.priority_donut.empty_placeholder == "Sem dados suficientes"
-    assert view.priority_donut.colors["Alta"] == "#EF4444"
-    assert view.priority_donut.colors["Média"] == "#FACC15"
-    assert view.priority_donut.colors["Baixa"] == "#22C55E"
+    assert view.priority_pie.empty_placeholder == "Sem dados"
+    assert view.priority_pie.colors["Alta"] == "#EF4444"
+    assert view.priority_pie.colors["Média"] == "#FACC15"
+    assert view.priority_pie.colors["Baixa"] == "#22C55E"
     assert "Alta:" in view.priority_legend.text()
 
 
@@ -139,7 +139,27 @@ def test_por_prioridade_uses_reduced_scale_for_chart():
     _app()
     view = MonitoramentoView()
 
-    assert view.priority_donut.chart_scale == pytest.approx(0.9)
+    assert view.priority_pie.chart_scale == pytest.approx(0.9)
+
+
+def test_por_prioridade_legend_shows_percentage_when_data_exists():
+    _app()
+    view = MonitoramentoView()
+    metrics = _empty_metrics()
+    metrics.por_prioridade = {"Alta": 2, "Média": 1, "Baixa": 1}
+    view.update_metrics(metrics)
+
+    legend = view.priority_legend.text()
+    assert "Alta:" in legend
+    assert "50%" in legend
+
+
+def test_por_prioridade_placeholder_when_empty_data():
+    _app()
+    view = MonitoramentoView()
+    view.update_metrics(_empty_metrics())
+
+    assert sum(view.priority_pie.data.values()) == 0
 
 
 def test_por_prioridade_keeps_donut_and_legend_centered():
