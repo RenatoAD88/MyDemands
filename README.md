@@ -96,3 +96,17 @@ IA_CACHE_ENABLED=true
     - Q3: Importante + Não urgente
     - Q4: Não importante + Não urgente
 - Apenas status pendentes/ativos entram na matriz (`Não iniciada`, `Em andamento`, `Bloqueado`, `Requer revisão`).
+
+## Versão web (migração de telas)
+Foi adicionada uma versão web com rotas dedicadas para todas as telas desktop (janelas, diálogos e abas principais).  
+Para executar localmente:
+
+```powershell
+python -m mydemands.web.app
+```
+
+A aplicação sobe em `http://0.0.0.0:8080 (ou http://localhost:8080)` com:
+- `GET /screens.json`: inventário completo de telas migradas;
+- rotas individuais para cada tela (ex.: `/login`, `/consultar-pendentes`, `/monitoramento`).
+
+Os testes de garantia da migração estão em `mydemands/tests/test_web_screen_registry.py`.
