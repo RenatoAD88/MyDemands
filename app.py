@@ -41,7 +41,7 @@ from PySide6.QtWidgets import QStyledItemDelegate
 from PySide6.QtWidgets import QHeaderView, QStyle
 from PySide6.QtWidgets import QSizePolicy
 
-from csv_store import CsvStore, parse_prazos_list
+from csv_store import CSV_COLUMNS, CsvStore, parse_prazos_list
 from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, build_team_control_report_rows, monthly_k_count, split_member_names
 from validation import ValidationError, normalize_prazo_text, validate_payload
 from bootstrap import resolve_storage_root, ensure_storage_root, configure_ssl_cert_env
@@ -201,6 +201,13 @@ TAB4_EDITABLE_COLUMNS = {
     "Reportar?",
     "Nome",
     "Time/Função",
+}
+
+INLINE_FIELD_ALIASES = {
+    "Urgente": "É Urgente?",
+    "Reportar": "Reportar?",
+    "Num controle": "ID Azure",
+    "Núm. Controle": "ID Azure",
 }
 DESC_COLUMN_MAX_CHARS = 45
 COMMENT_COLUMN_MAX_CHARS = 45
@@ -2106,23 +2113,8 @@ class MainWindow(QMainWindow):
         )
 
         if table_key == "t3" and col_name in {"Prazo", "Data Conclusão", "Data de Registro"}:
-            normalized_value = self._normalize_inline_value(col_name, new_value, allow_empty=(col_name == "Data Conclusão"))
-            if normalized_value is None and col_name != "Data Conclusão":
-                self._revert_inline_item(item, old_value)
-                QMessageBox.information(self, "Validação", f"Valor inválido para {col_name}.")
-                return
             try:
-                payload = {col_name: self._to_store_value(col_name, normalized_value)}
-                if col_name == "Data Conclusão" and not new_value:
-                    payload = {"Data Conclusão": ""}
-                logger.debug(
-                    "Inline normalized demand_id=%s field=%s normalized=%r type=%s",
-                    _id,
-                    col_name,
-                    normalized_value,
-                    type(normalized_value).__name__,
-                )
-                self._persist_inline_edit(_id, payload)
+                self.update_demand_field_inline(_id, col_name, new_value)
                 self._apply_inline_edit_result(table_key, _id, col_name)
                 self._flash_cell_by_id("t3", _id, col_name)
             except ValidationError as ve:
@@ -2147,7 +2139,7 @@ class MainWindow(QMainWindow):
                 self.refresh_all()
                 return
             try:
-                self.store.update(_id, {"Status": "Concluído", "Data Conclusão": concl, "% Conclusão": "1"})
+                self._persist_inline_edit(_id, {"Status": "Concluído", "Data Conclusão": concl, "% Conclusão": "1"})
                 self._emit_notification(
                     Notification(
                         type=NotificationType.ALTERACAO_STATUS,
@@ -2174,7 +2166,7 @@ class MainWindow(QMainWindow):
                 return
 
             try:
-                self.store.update(_id, {"Status": "Cancelado", "Data Conclusão": "", "% Conclusão": "0"})
+                self._persist_inline_edit(_id, {"Status": "Cancelado", "Data Conclusão": "", "% Conclusão": "0"})
                 self._emit_notification(
                     Notification(
                         type=NotificationType.ALTERACAO_STATUS,
@@ -2214,7 +2206,7 @@ class MainWindow(QMainWindow):
                 payload["Data Conclusão"] = ""
 
             try:
-                self.store.update(_id, payload)
+                self._persist_inline_edit(_id, payload)
                 self._emit_notification(
                     Notification(
                         type=NotificationType.ALTERACAO_STATUS,
@@ -2238,14 +2230,14 @@ class MainWindow(QMainWindow):
                     self.refresh_all()
                     return
                 try:
-                    self.store.update(_id, {"% Conclusão": "1", "Status": "Concluído", "Data Conclusão": concl})
+                    self._persist_inline_edit(_id, {"% Conclusão": "1", "Status": "Concluído", "Data Conclusão": concl})
                 except ValidationError as ve:
                     QMessageBox.warning(self, "Validação", str(ve))
                 self.refresh_all()
                 return
 
             try:
-                self.store.update(_id, {"% Conclusão": pct_dec})
+                self.update_demand_field_inline(_id, "% Conclusão", pct_dec)
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
             self.refresh_all()
@@ -2254,16 +2246,7 @@ class MainWindow(QMainWindow):
         # default: salva campo normal
         save_ok = False
         try:
-            normalized_value = self._normalize_inline_value(col_name, new_value, allow_empty=True)
-            payload_value = self._to_store_value(col_name, normalized_value)
-            logger.debug(
-                "Inline normalized demand_id=%s field=%s normalized=%r type=%s",
-                _id,
-                col_name,
-                normalized_value,
-                type(normalized_value).__name__,
-            )
-            self._persist_inline_edit(_id, {col_name: payload_value})
+            self.update_demand_field_inline(_id, col_name, new_value)
             save_ok = True
         except ValidationError as ve:
             self._revert_inline_item(item, old_value)
@@ -2286,6 +2269,41 @@ class MainWindow(QMainWindow):
         except Exception:
             logger.exception("Persist inline edit demand_id=%s result=error", demand_id)
             raise
+
+    def _resolve_inline_field_name(self, field_name: str) -> str:
+        resolved = INLINE_FIELD_ALIASES.get((field_name or "").strip(), (field_name or "").strip())
+        return resolved
+
+    def update_demand_field_inline(self, demand_id: str, field_name: str, new_value: Any) -> Dict[str, Any]:
+        resolved_field = self._resolve_inline_field_name(field_name)
+        if resolved_field not in CSV_COLUMNS:
+            raise ValidationError(f"Campo inline não suportado: {field_name}.")
+
+        raw_text = "" if new_value is None else str(new_value)
+        if resolved_field == "% Conclusão":
+            normalized_percent = _normalize_percent_to_decimal_str(raw_text)
+            if not normalized_percent:
+                raise ValidationError("% Conclusão inválido. Use 0..100 ou 0..1.")
+            payload: Dict[str, Any] = {resolved_field: normalized_percent}
+        elif resolved_field == "Prazo":
+            payload = {resolved_field: normalize_prazo_text(raw_text)}
+        else:
+            normalized_value = self._normalize_inline_value(
+                resolved_field,
+                raw_text,
+                allow_empty=(resolved_field in {"Data Conclusão", "Comentário"}),
+            )
+            if normalized_value is None:
+                raise ValidationError(f"Valor inválido para {resolved_field}.")
+            payload = {resolved_field: self._to_store_value(resolved_field, normalized_value)}
+
+        if resolved_field == "Data Conclusão" and payload.get("Data Conclusão"):
+            payload["Status"] = "Concluído"
+            payload["% Conclusão"] = "1"
+
+        logger.debug("Inline normalized demand_id=%s field=%s payload=%s", demand_id, resolved_field, payload)
+        self._persist_inline_edit(demand_id, payload)
+        return payload
 
     def _revert_inline_item(self, item: QTableWidgetItem, previous_text: str) -> None:
         table = item.tableWidget()
@@ -2319,6 +2337,22 @@ class MainWindow(QMainWindow):
 
     def _apply_inline_edit_result(self, table_key: str, demand_id: str, field_name: str) -> None:
         table = self._resolve_table_for_key(table_key)
+        selected_ids: set[str] = set()
+        current_id = ""
+        v_scroll = None
+        h_scroll = None
+        if isinstance(table, QTableWidget):
+            selected_ids = {
+                str(table.item(i.row(), 0).data(Qt.UserRole) or "")
+                for i in table.selectionModel().selectedRows()
+                if table.item(i.row(), 0) is not None
+            }
+            current_item = table.currentItem()
+            if current_item is not None:
+                current_id = str(current_item.data(Qt.UserRole) or "")
+            v_scroll = table.verticalScrollBar().value()
+            h_scroll = table.horizontalScrollBar().value()
+
         before_rows = table.rowCount() if isinstance(table, QTableWidget) else 0
         logger.debug("Inline refresh start table=%s before_rows=%s", table_key, before_rows)
         try:
@@ -2333,6 +2367,24 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Erro ao atualizar", "Não foi possível atualizar a lista após a edição.")
             return
         after_rows = table.rowCount() if isinstance(table, QTableWidget) else 0
+        if isinstance(table, QTableWidget):
+            table.clearSelection()
+            for r in range(table.rowCount()):
+                id_cell = table.item(r, 0)
+                if id_cell is None:
+                    continue
+                row_id = str(id_cell.data(Qt.UserRole) or "")
+                if row_id in selected_ids:
+                    table.selectRow(r)
+                if row_id == current_id:
+                    target_col = VISIBLE_COLUMNS.index(field_name) if field_name in VISIBLE_COLUMNS else 0
+                    target_item = table.item(r, target_col) or table.item(r, 0)
+                    if target_item is not None:
+                        table.setCurrentItem(target_item)
+            if v_scroll is not None:
+                table.verticalScrollBar().setValue(v_scroll)
+            if h_scroll is not None:
+                table.horizontalScrollBar().setValue(h_scroll)
         logger.debug("Inline refresh done table=%s after_rows=%s", table_key, after_rows)
 
     def _restore_preferences(self):
