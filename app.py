@@ -2342,9 +2342,10 @@ class MainWindow(QMainWindow):
         v_scroll = None
         h_scroll = None
         if isinstance(table, QTableWidget):
+            selection_model = table.selectionModel()
             selected_ids = {
                 str(table.item(i.row(), 0).data(Qt.UserRole) or "")
-                for i in table.selectionModel().selectedRows()
+                for i in (selection_model.selectedRows() if selection_model is not None else [])
                 if table.item(i.row(), 0) is not None
             }
             current_item = table.currentItem()
