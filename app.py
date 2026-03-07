@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import logging
+from contextlib import contextmanager
 
 import mydemands.resources_rc  # noqa: F401
 
@@ -1393,6 +1394,7 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(icon_path))
 
         self._filling = False
+        self.is_updating_ui = False
         self._is_updating_inline = False
         self._inline_edit_in_progress = False
         self._restoring_prefs = False
@@ -1863,18 +1865,16 @@ class MainWindow(QMainWindow):
 
     def _fill(self, table: QTableWidget, rows: List[Dict[str, Any]]):
         self._filling = True
-        previous_block_state = table.signalsBlocked()
-        table.blockSignals(True)
         try:
-            table.setRowCount(0)
-            for row in rows:
-                r = table.rowCount()
-                table.insertRow(r)
-                _id = row["_id"]
-                for c, col in enumerate(VISIBLE_COLUMNS):
-                    self._set_item(table, r, c, str(row.get(col, "") or ""), _id)
+            with self._ui_update_guard(table):
+                table.setRowCount(0)
+                for row in rows:
+                    r = table.rowCount()
+                    table.insertRow(r)
+                    _id = row["_id"]
+                    for c, col in enumerate(VISIBLE_COLUMNS):
+                        self._set_item(table, r, c, str(row.get(col, "") or ""), _id)
         finally:
-            table.blockSignals(previous_block_state)
             self._filling = False
 
         table_key = str(table.property("tableSortKey") or "")
@@ -2093,7 +2093,7 @@ class MainWindow(QMainWindow):
             return
 
     def _on_item_changed(self, item: QTableWidgetItem):
-        if self._filling or self._is_updating_inline or self._date_visual_refresh_guard:
+        if self._filling or self._is_updating_inline or self._date_visual_refresh_guard or self.is_updating_ui:
             return
 
         _id = item.data(Qt.UserRole)
@@ -2430,16 +2430,26 @@ class MainWindow(QMainWindow):
     def _revert_inline_item(self, item: QTableWidgetItem, previous_text: str) -> None:
         table = item.tableWidget()
         self._is_updating_inline = True
+        try:
+            with self._ui_update_guard(table):
+                item.setText(previous_text)
+                item.setData(Qt.UserRole + 2, previous_text)
+        finally:
+            self._is_updating_inline = False
+
+    @contextmanager
+    def _ui_update_guard(self, table: QTableWidget | None = None):
+        prev_ui_flag = self.is_updating_ui
         previous_block_state = table.signalsBlocked() if table is not None else False
+        self.is_updating_ui = True
         if table is not None:
             table.blockSignals(True)
         try:
-            item.setText(previous_text)
-            item.setData(Qt.UserRole + 2, previous_text)
+            yield
         finally:
             if table is not None:
                 table.blockSignals(previous_block_state)
-            self._is_updating_inline = False
+            self.is_updating_ui = prev_ui_flag
 
     def _normalize_inline_value(self, col_name: str, raw_value: str, allow_empty: bool = False) -> Any:
         value = (raw_value or "").strip()
@@ -2481,7 +2491,9 @@ class MainWindow(QMainWindow):
         before_rows = table.rowCount() if isinstance(table, QTableWidget) else 0
         logger.debug("Inline refresh start table=%s before_rows=%s", table_key, before_rows)
         try:
-            if table_key == "t3":
+            if table_key == "t3" and self._refresh_single_row_if_visible(table_key, demand_id):
+                self._save_preferences()
+            elif table_key == "t3":
                 self.refresh_tab3()
             elif table_key in {"t4", "t4_cancelled"}:
                 self.refresh_tab4()
@@ -2511,6 +2523,43 @@ class MainWindow(QMainWindow):
             if h_scroll is not None:
                 table.horizontalScrollBar().setValue(h_scroll)
         logger.debug("Inline refresh done table=%s after_rows=%s", table_key, after_rows)
+
+    def _refresh_single_row_if_visible(self, table_key: str, demand_id: str) -> bool:
+        table = self._resolve_table_for_key(table_key)
+        if not isinstance(table, QTableWidget):
+            return False
+
+        target_row = -1
+        for row_index in range(table.rowCount()):
+            id_item = table.item(row_index, 0)
+            if id_item is None:
+                continue
+            if str(id_item.data(Qt.UserRole) or "") == str(demand_id):
+                target_row = row_index
+                break
+
+        if target_row < 0:
+            return False
+
+        row_payload = None
+        if table_key == "t3":
+            for row in self.store.tab_pending_all():
+                if str(row.get("_id") or "") == str(demand_id):
+                    row_payload = row
+                    break
+        if row_payload is None:
+            return False
+
+        with self._ui_update_guard(table):
+            for col_idx, col_name in enumerate(VISIBLE_COLUMNS):
+                self._set_item(table, target_row, col_idx, str(row_payload.get(col_name, "") or ""), demand_id)
+
+        table_key_name = str(table.property("tableSortKey") or "")
+        active_sort = self._table_sort_state.get(table_key_name)
+        if active_sort:
+            table.sortItems(active_sort[0], active_sort[1])
+        table.resizeRowToContents(target_row)
+        return True
 
     def _restore_preferences(self):
         self._restoring_prefs = True

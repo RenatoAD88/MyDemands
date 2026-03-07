@@ -29,6 +29,11 @@ def test_parse_ui_date_accepts_valid_br_dates():
     assert format_ui_date(parse_ui_date("01/01/2025")) == "01/01/2025"
 
 
+@pytest.mark.parametrize("raw", ["01/01/2000", "07/03/2026", "30/12/2025"])
+def test_parse_ui_date_accepts_reported_valid_examples(raw):
+    assert format_ui_date(parse_ui_date(raw)) == raw
+
+
 @pytest.mark.parametrize("raw", ["30-12-2025", "2025-12-30", "30/12/25", "1/1/2025"])
 def test_parse_ui_date_rejects_non_ddmmyyyy(raw):
     with pytest.raises(DateFieldError):
