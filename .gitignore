@@ -25,3 +25,4 @@ controle_time_*.csv
 *.csv
 /masterData
 /masterData
+/masterData/users
