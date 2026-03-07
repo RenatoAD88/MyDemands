@@ -42,7 +42,7 @@ from PySide6.QtWidgets import QHeaderView, QStyle
 from PySide6.QtWidgets import QSizePolicy
 
 from csv_store import CSV_COLUMNS, CsvStore, parse_prazos_list
-from date_field_service import parse_br_date
+from date_field_service import format_ui_date, parse_br_date, parse_ui_date
 from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, build_team_control_report_rows, monthly_k_count, split_member_names
 from validation import ValidationError, normalize_prazo_text, validate_payload
 from bootstrap import resolve_storage_root, ensure_storage_root, configure_ssl_cert_env
@@ -2446,15 +2446,17 @@ class MainWindow(QMainWindow):
         if not value:
             return "" if allow_empty else None
         if col_name in {"Data de Registro", "Data Conclusão"}:
-            parsed = _try_parse_date_br(value)
-            return parsed
+            try:
+                return parse_ui_date(value)
+            except Exception as exc:
+                raise ValidationError(str(exc)) from exc
         return value
 
     def _to_store_value(self, col_name: str, normalized: Any) -> str:
         if normalized is None:
             return ""
         if isinstance(normalized, date):
-            return normalized.strftime("%d/%m/%Y")
+            return format_ui_date(normalized)
         return str(normalized)
 
     def _apply_inline_edit_result(self, table_key: str, demand_id: str, field_name: str) -> None:
