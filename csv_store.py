@@ -7,6 +7,7 @@ import hmac
 import io
 import json
 import os
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -15,6 +16,7 @@ from typing import List, Optional, Dict, Any
 from validation import validate_payload, normalize_prazo_text, ValidationError
 
 CSV_NAME = "data.csv"
+LEGACY_CSV_NAME = "data2.csv"
 DELIMITER = ";"
 EXPORT_TEMPLATE_VERSION = "1"
 EXPORT_VERSION_PREFIX = "# MYDEMANDS_EXPORT_TEMPLATE_VERSION="
@@ -240,11 +242,21 @@ class DemandRow:
 class CsvStore:
     def __init__(self, base_dir: str):
         self.base_dir = base_dir
-        self.csv_path = os.path.join(base_dir, CSV_NAME)
+        self.csv_path = self._resolve_csv_path(base_dir)
         self.key_path = os.path.join(base_dir, KEY_FILE_NAME)
         self.rows: List[DemandRow] = []
         self._crypto_key = self._load_or_create_key()
         self.load()
+
+    @staticmethod
+    def _resolve_csv_path(base_dir: str) -> str:
+        primary = os.path.join(base_dir, CSV_NAME)
+        legacy = os.path.join(base_dir, LEGACY_CSV_NAME)
+        if os.path.exists(primary):
+            return primary
+        if os.path.exists(legacy):
+            return legacy
+        return primary
 
     def _load_or_create_key(self) -> bytes:
         env_key = (os.environ.get("DEMANDAS_APP_KEY") or "").strip()
@@ -389,7 +401,16 @@ class CsvStore:
             f.write(payload)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, self.csv_path)
+        retries = 3
+        for attempt in range(1, retries + 1):
+            try:
+                os.replace(tmp, self.csv_path)
+                return
+            except PermissionError:
+                if attempt >= retries:
+                    break
+                time.sleep(0.08 * attempt)
+        raise
 
     def ensure_exists(self):
         if not os.path.exists(self.csv_path):
