@@ -101,3 +101,24 @@ def test_data_registro_reflete_na_visao_eisenhower(tmp_path):
     updated = next(r for r in all_rows if r.get("_id") == demand_id)
     assert updated["Data de Registro"] == "07/02/2026"
     win.close()
+
+
+def test_data_registro_inline_exibe_erro_amigavel_para_id_invalido(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    demand_id = store.add(_payload())
+
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    warnings = []
+    monkeypatch.setattr("app.QMessageBox.warning", lambda *_args: warnings.append(_args[-1]))
+
+    item = win.t3_table.item(0, _col("Data de Registro"))
+    item.setData(Qt.UserRole, "id-invalido")
+    item.setText("08/02/2026")
+
+    assert store.get(demand_id).data["Data de Registro"] == "01/02/2026"
+    assert warnings
+    assert "Registro não encontrado para ID único" in str(warnings[-1])
+    win.close()
