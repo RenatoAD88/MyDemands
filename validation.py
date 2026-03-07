@@ -1,7 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Dict, List, Optional
+
+from date_field_service import (
+    DateFieldError,
+    ensure_registration_date_impacts,
+    normalize_br_date,
+    normalize_deadline_text,
+)
 
 
 class ValidationError(Exception):
@@ -35,39 +41,20 @@ PERCENT_COLUMN = "% Conclusão"
 
 
 def parse_ddmmyyyy_strict(s: str) -> Optional[str]:
-    s = (s or "").strip()
-    if not s:
+    raw = (s or "").strip()
+    if not raw:
         return ""
     try:
-        datetime.strptime(s, "%d/%m/%Y")
-        return s
-    except Exception:
+        return normalize_br_date(raw, field_name="Data")
+    except DateFieldError:
         return None
 
 
 def normalize_prazo_text(s: str) -> str:
-    if not s:
-        return ""
-    s = str(s).replace("\r\n", "\n").replace("\r", "\n")
-    s = s.replace(";", ",").replace("\n", ",")
-    parts = [p.strip() for p in s.split(",") if p.strip()]
-
-    valid: List[str] = []
-    for p in parts:
-        d = parse_ddmmyyyy_strict(p)
-        if d is None:
-            raise ValidationError(f"Prazo contém data inválida: '{p}'. Use DD/MM/AAAA.")
-        if d:
-            valid.append(d)
-
-    seen = set()
-    out = []
-    for x in valid:
-        if x not in seen:
-            seen.add(x)
-            out.append(x)
-
-    return ", ".join(out)
+    try:
+        return normalize_deadline_text(s)
+    except DateFieldError as e:
+        raise ValidationError(str(e)) from e
 
 
 def normalize_percent(value: str) -> str:
@@ -124,13 +111,10 @@ def validate_text(value: str) -> str:
 
 
 def validate_date(col: str, value: str) -> str:
-    v = (value or "").strip()
-    if not v:
-        return ""
-    ok = parse_ddmmyyyy_strict(v)
-    if ok is None:
-        raise ValidationError(f"{col} inválida: '{v}'. Use DD/MM/AAAA.")
-    return ok
+    try:
+        return normalize_br_date(value, field_name=col)
+    except DateFieldError as e:
+        raise ValidationError(str(e)) from e
 
 
 def validate_payload(payload: Dict[str, str], *, mode: str) -> Dict[str, str]:
@@ -161,5 +145,12 @@ def validate_payload(payload: Dict[str, str], *, mode: str) -> Dict[str, str]:
             normalized[k] = validate_text(v)
         else:
             normalized[k] = validate_text(v)
+
+    registro = normalized.get("Data de Registro", payload.get("Data de Registro", ""))
+    prazo = normalized.get("Prazo", payload.get("Prazo", ""))
+    try:
+        ensure_registration_date_impacts(registro or "", prazo or "")
+    except DateFieldError as e:
+        raise ValidationError(str(e)) from e
 
     return normalized

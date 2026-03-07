@@ -42,6 +42,7 @@ from PySide6.QtWidgets import QHeaderView, QStyle
 from PySide6.QtWidgets import QSizePolicy
 
 from csv_store import CSV_COLUMNS, CsvStore, parse_prazos_list
+from date_field_service import parse_br_date
 from team_control import TeamControlStore, month_days, participation_for_date, STATUS_COLORS, WEEKDAY_LABELS, build_team_control_report_rows, monthly_k_count, split_member_names
 from validation import ValidationError, normalize_prazo_text, validate_payload
 from bootstrap import resolve_storage_root, ensure_storage_root, configure_ssl_cert_env
@@ -270,13 +271,7 @@ PRIORIDADE_SORT_ORDER = {
 
 PROGRESS_FILL_COLOR = (3, 141, 220)
 def _try_parse_date_br(text: str) -> Optional[date]:
-    raw = (text or "").strip().replace("*", "")
-    if not raw:
-        return None
-    try:
-        return datetime.strptime(raw, "%d/%m/%Y").date()
-    except Exception:
-        return None
+    return parse_br_date(text)
 
 
 def _column_sort_key(col_name: str, text: str):
@@ -2121,10 +2116,10 @@ class MainWindow(QMainWindow):
                 self._flash_invalid_cell(item)
                 self._revert_inline_item(item, old_value)
                 QMessageBox.information(self, "Validação", str(ve))
-            except Exception:
+            except Exception as e:
                 self._flash_invalid_cell(item)
                 self._revert_inline_item(item, old_value)
-                QMessageBox.warning(self, "Erro ao salvar", "Não foi possível salvar a alteração inline.")
+                QMessageBox.warning(self, "Erro ao salvar", f"Falha ao salvar {col_name}: {e}")
             return
 
 
