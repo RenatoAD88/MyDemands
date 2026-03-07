@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
+import re
 from typing import Iterable, List, Optional
 
 DATE_FORMAT = "%d/%m/%Y"
+UI_DATE_PATTERN = re.compile(r"^(0[1-9]|[12][0-9]|3[01])/(0[1-9]|1[0-2])/([0-9]{4})$")
 REGISTRATION_FIELD = "Data de Registro"
 DEADLINE_FIELD = "Prazo"
 CONCLUSION_FIELD = "Data Conclusão"
@@ -21,13 +23,33 @@ class ParsedDemandDates:
     conclusao: Optional[date]
 
 
+def parse_ui_date(value: str) -> date:
+    raw = (value or "").strip().replace("*", "")
+    if not raw:
+        raise DateFieldError("Informe a data no formato DD/MM/AAAA.")
+    if UI_DATE_PATTERN.fullmatch(raw) is None:
+        raise DateFieldError("Informe a data no formato DD/MM/AAAA.")
+    try:
+        return datetime.strptime(raw, DATE_FORMAT).date()
+    except ValueError as exc:
+        raise DateFieldError("A data informada não é válida.") from exc
+
+
+def format_ui_date(date_obj: date) -> str:
+    return date_obj.strftime(DATE_FORMAT)
+
+
+def normalize_date_for_storage(date_obj: date) -> str:
+    return format_ui_date(date_obj)
+
+
 def parse_br_date(value: str) -> Optional[date]:
     raw = (value or "").strip().replace("*", "")
     if not raw:
         return None
     try:
-        return datetime.strptime(raw, DATE_FORMAT).date()
-    except Exception:
+        return parse_ui_date(raw)
+    except DateFieldError:
         return None
 
 
@@ -35,10 +57,14 @@ def normalize_br_date(value: str, *, field_name: str) -> str:
     raw = (value or "").strip().replace("*", "")
     if not raw:
         return ""
-    parsed = parse_br_date(raw)
-    if parsed is None:
-        raise DateFieldError(f"{field_name} inválida: '{raw}'. Use DD/MM/AAAA.")
-    return parsed.strftime(DATE_FORMAT)
+    try:
+        parsed = parse_ui_date(raw)
+    except DateFieldError as exc:
+        msg = str(exc)
+        if msg == "Informe a data no formato DD/MM/AAAA.":
+            raise DateFieldError(f"{field_name}: informe a data no formato DD/MM/AAAA.") from exc
+        raise DateFieldError(f"{field_name}: a data informada não é válida.") from exc
+    return normalize_date_for_storage(parsed)
 
 
 def normalize_deadline_text(value: str) -> str:
