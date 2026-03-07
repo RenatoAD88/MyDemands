@@ -86,6 +86,7 @@ from mydemands.dashboard import (
 from mydemands.dashboard.grid_preferences import GridPreferencesService, LocalJsonPreferencesStore
 from mydemands.dashboard.view import MonitoramentoView
 from mydemands.dashboard.eisenhower import EisenhowerView
+from mydemands.dashboard.demand_field_map import resolve_csv_field_name
 from mydemands.dashboard.eisenhower_classifier import (
     EISENHOWER_COLUMN_FIELD,
     EisenhowerClassifierService,
@@ -1388,6 +1389,7 @@ class MainWindow(QMainWindow):
 
         self._filling = False
         self._is_updating_inline = False
+        self._inline_edit_in_progress = False
         self._restoring_prefs = False
         self._resizing_columns = False
         self._tab3_auto_filter_reset_done = False
@@ -2019,7 +2021,7 @@ class MainWindow(QMainWindow):
             if dlg.exec() == QDialog.Accepted:
                 new_val = get_text(editor)
                 try:
-                    self.store.update(_id, {col_name: new_val})
+                    self.update_demand_field(_id, col_name, new_val, source_context="modal")
                 except ValidationError as ve:
                     QMessageBox.warning(self, "Validação", str(ve))
                 self.refresh_all()
@@ -2042,7 +2044,7 @@ class MainWindow(QMainWindow):
             if allow_clear and dlg.was_cleared():
                 # limpar data conclusão (mantém suas regras: status não muda aqui)
                 try:
-                    self.store.update(_id, {col_name: ""})
+                    self.update_demand_field(_id, col_name, "", source_context="modal")
                 except ValidationError as ve:
                     QMessageBox.warning(self, "Validação", str(ve))
                 self.refresh_all()
@@ -2053,14 +2055,14 @@ class MainWindow(QMainWindow):
             if col_name == "Data Conclusão":
                 # ✅ data conclusão => status concluído + % 100
                 try:
-                    self.store.update(_id, {"Data Conclusão": selected, "Status": "Concluído", "% Conclusão": "1"})
+                    self._demand_update_service.update(_id, {"Data Conclusão": selected, "Status": "Concluído", "% Conclusão": "1"}, source_context="modal")
                 except ValidationError as ve:
                     QMessageBox.warning(self, "Validação", str(ve))
                 self.refresh_all()
                 return
 
             try:
-                self.store.update(_id, {col_name: selected})
+                self.update_demand_field(_id, col_name, selected, source_context="modal")
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
             self.refresh_all()
@@ -2073,7 +2075,7 @@ class MainWindow(QMainWindow):
             if dlg.exec() != QDialog.Accepted:
                 return
             try:
-                self.store.update(_id, {"Prazo": dlg.prazo_str()})
+                self.update_demand_field(_id, "Prazo", dlg.prazo_str(), source_context="modal")
                 self.deadline_scheduler.check_now()
             except ValidationError as ve:
                 QMessageBox.warning(self, "Validação", str(ve))
@@ -2260,17 +2262,19 @@ class MainWindow(QMainWindow):
     def _persist_inline_edit(self, demand_id: str, payload: Dict[str, Any]) -> None:
         logger.debug("Persist inline edit demand_id=%s payload=%s", demand_id, payload)
         try:
-            self._demand_update_service.update(demand_id, payload)
+            self._demand_update_service.update(demand_id, payload, source_context="inline")
             logger.debug("Persist inline edit demand_id=%s result=ok", demand_id)
         except Exception:
             logger.exception("Persist inline edit demand_id=%s result=error", demand_id)
             raise
 
     def _resolve_inline_field_name(self, field_name: str) -> str:
-        resolved = INLINE_FIELD_ALIASES.get((field_name or "").strip(), (field_name or "").strip())
-        return resolved
+        resolved = resolve_csv_field_name(field_name or "")
+        if resolved:
+            return resolved
+        return INLINE_FIELD_ALIASES.get((field_name or "").strip(), (field_name or "").strip())
 
-    def update_demand_field_inline(self, demand_id: str, field_name: str, new_value: Any) -> Dict[str, Any]:
+    def update_demand_field(self, demand_id: str, field_name: str, new_value: Any, source_context: str | None = None) -> Dict[str, Any]:
         resolved_field = self._resolve_inline_field_name(field_name)
         if resolved_field not in CSV_COLUMNS:
             raise ValidationError(f"Campo inline não suportado: {field_name}.")
@@ -2297,9 +2301,17 @@ class MainWindow(QMainWindow):
             payload["Status"] = "Concluído"
             payload["% Conclusão"] = "1"
 
-        logger.debug("Inline normalized demand_id=%s field=%s payload=%s", demand_id, resolved_field, payload)
-        self._persist_inline_edit(demand_id, payload)
-        return payload
+        logger.debug(
+            "Inline normalized demand_id=%s field=%s payload=%s source=%s",
+            demand_id,
+            resolved_field,
+            payload,
+            source_context or "inline",
+        )
+        return self._demand_update_service.update(demand_id, payload, source_context=source_context or "inline")
+
+    def update_demand_field_inline(self, demand_id: str, field_name: str, new_value: Any) -> Dict[str, Any]:
+        return self.update_demand_field(demand_id, field_name, new_value, source_context="inline")
 
     def _revert_inline_item(self, item: QTableWidgetItem, previous_text: str) -> None:
         table = item.tableWidget()
@@ -3463,7 +3475,7 @@ class MainWindow(QMainWindow):
     def _init_tab3(self):
         tab = QWidget()
         self.t3_view_mode = "default"
-        self._demand_update_service = DemandUpdateService(self.store.update, self.deadline_scheduler.check_now)
+        self._demand_update_service = DemandUpdateService(self.store.update, self.store.get, self.deadline_scheduler.check_now)
         self.t3_view_default_btn = QPushButton("Visão Padrão")
         self.t3_view_default_btn.setCheckable(True)
         self.t3_view_eisenhower_btn = QPushButton("Visão Eisenhower")
