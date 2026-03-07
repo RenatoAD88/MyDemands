@@ -1,3 +1,4 @@
+from pathlib import Path
 import pytest
 
 qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
@@ -208,4 +209,116 @@ def test_inline_data_registro_uses_date_picker_editor(tmp_path):
     assert editor is not None
     assert editor.metaObject().className() == "QDateEdit"
     assert editor.calendarPopup() is True
+    win.close()
+
+
+def test_inline_status_edit_persists_and_updates_views(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store, Status="Em andamento")
+    win = MainWindow(store)
+    win._set_tab3_view_mode("eisenhower")
+    win.refresh_tab3()
+
+    item = _cell(win, 0, "Status")
+    item.setText("Bloqueado")
+
+    assert store.get(row_id).data["Status"] == "Bloqueado"
+    grouped = win.t3_eisenhower_view.last_groups
+    assert any(r.get("_id") == row_id for rows in grouped.values() for r in rows)
+    win.close()
+
+
+def test_inline_percent_edit_persists_and_normalizes(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store, **{"% Conclusão": "0.25"})
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    item = _cell(win, 0, "% Conclusão")
+    item.setText("50%")
+
+    assert store.get(row_id).data["% Conclusão"] == "0.5"
+    assert _cell(win, 0, "% Conclusão").text() == "50%"
+    win.close()
+
+
+def test_inline_long_text_fields_and_csv_persistence(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store)
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    desc = "Descrição inline " * 12
+    comm = "Comentário inline " * 12
+    _cell(win, 0, "Descrição").setText(desc)
+    _cell(win, 0, "Comentário").setText(comm)
+
+    data = store.get(row_id).data
+    assert data["Descrição"] == desc.strip()
+    assert data["Comentário"] == comm.strip()
+
+    csv_text = store.csv_path and Path(store.csv_path).read_text(encoding="utf-8-sig")
+    assert desc.strip() in csv_text
+    assert comm.strip() in csv_text
+    win.close()
+
+
+def test_inline_keeps_correct_row_under_filter_and_sort(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    first = _add_pending(store, Descrição="AAA", Responsável="R1", Projeto="P1")
+    second = _add_pending(store, Descrição="BBB", Responsável="R2", Projeto="P2")
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    win.t3_responsavel.setText("R2")
+    win.refresh_tab3()
+    assert win.t3_table.rowCount() == 1
+
+    item = _cell(win, 0, "Data de Registro")
+    item.setText("04/02/2026")
+
+    assert store.get(second).data["Data de Registro"] == "04/02/2026"
+    assert store.get(first).data["Data de Registro"] == "01/02/2026"
+    win.close()
+
+
+def test_inline_invalid_percent_shows_specific_error_and_reverts(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    _add_pending(store, **{"% Conclusão": "0.25"})
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    warnings = []
+    monkeypatch.setattr("app.QMessageBox.warning", lambda *_args: warnings.append(_args[2] if len(_args) > 2 else ""))
+
+    item = _cell(win, 0, "% Conclusão")
+    old = item.text()
+    item.setText("250%")
+
+    assert _cell(win, 0, "% Conclusão").text() == old
+    assert any("% Conclusão inválido" in w or "fora do intervalo" in w for w in warnings)
+    assert win.t3_table.rowCount() == 1
+    win.close()
+
+
+def test_inline_prazo_edit_persists_to_csv_and_eisenhower(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store, Prazo="10/02/2026")
+    win = MainWindow(store)
+    win._set_tab3_view_mode("eisenhower")
+    win.refresh_tab3()
+
+    _cell(win, 0, "Prazo").setText("12/02/2026")
+
+    assert store.get(row_id).data["Prazo"] == "12/02/2026"
+    grouped = win.t3_eisenhower_view.last_groups
+    assert any(r.get("_id") == row_id for rows in grouped.values() for r in rows)
+    csv_text = Path(store.csv_path).read_text(encoding="utf-8-sig")
+    assert "12/02/2026" in csv_text
     win.close()
