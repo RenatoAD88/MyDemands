@@ -61,3 +61,18 @@ def test_load_uses_legacy_key_when_user_key_missing(tmp_path):
     assert len(rows) == 1
     assert rows[0]["Projeto"] == "Projeto Secreto"
     assert (user_dir / ".demandas.key").read_bytes()[:32] == key_bytes[:32]
+
+
+def test_uses_legacy_data2_csv_as_primary_when_data_csv_missing(tmp_path):
+    store = CsvStore(str(tmp_path))
+    store.add(_payload())
+
+    data_csv = tmp_path / "data.csv"
+    legacy_csv = tmp_path / "data2.csv"
+    data_csv.replace(legacy_csv)
+
+    reopened = CsvStore(str(tmp_path))
+    rows = reopened.build_view()
+    assert len(rows) == 1
+    assert rows[0]["Projeto"] == "Projeto Secreto"
+    assert reopened.csv_path.endswith("data2.csv")
