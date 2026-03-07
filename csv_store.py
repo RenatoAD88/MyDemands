@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import List, Optional, Dict, Any
 
+from date_field_service import parse_br_date, parse_deadline_dates
 from validation import validate_payload, normalize_prazo_text, ValidationError
 
 CSV_NAME = "data.csv"
@@ -83,25 +84,11 @@ def _map_legacy_keys(payload: Dict[str, str]) -> Dict[str, str]:
 
 
 def parse_ddmmyyyy(s: str) -> Optional[date]:
-    s = (s or "").strip()
-    if not s:
-        return None
-    try:
-        return datetime.strptime(s, "%d/%m/%Y").date()
-    except Exception:
-        return None
+    return parse_br_date(s)
 
 
 def parse_prazos_list(prazo_text: str) -> List[date]:
-    prazo_text = normalize_prazo_text(prazo_text or "")
-    if not prazo_text:
-        return []
-    out: List[date] = []
-    for p in [x.strip() for x in prazo_text.split(",") if x.strip()]:
-        d = parse_ddmmyyyy(p)
-        if d:
-            out.append(d)
-    return sorted(set(out))
+    return parse_deadline_dates(prazo_text or "")
 
 
 def priority_rank(p: str) -> int:
@@ -515,7 +502,7 @@ class CsvStore:
         # encontra registro atual
         dr = self.get(_id)
         if not dr:
-            raise ValueError("Registro não encontrado")
+            raise ValueError(f"Registro não encontrado para ID único: {_id}")
 
         # aplica mudanças em uma cópia para validar consistência
         merged = dict(dr.data)
