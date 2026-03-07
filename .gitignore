@@ -19,3 +19,5 @@ controle_time_*.csv
 
 # Test cache
 .pytest_cache/
+/masterData
+/masterData
