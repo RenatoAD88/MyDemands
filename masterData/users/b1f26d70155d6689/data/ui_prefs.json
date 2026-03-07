@@ -1,13 +1,19 @@
 {
-  "tab_index": 0,
+  "tab_index": 1,
   "t3_search": "",
   "t3_status": "",
   "t3_prioridade": "",
   "t3_responsavel": "",
+  "preferences": {
+    "view": {
+      "consultar_pendentes": "default"
+    }
+  },
   "tab_order": [
+    "Presenças do Time",
     "Consultar Demandas Pendentes",
     "Consultar Demandas Concluídas",
-    "Presenças do Time"
+    "Monitoramento"
   ],
   "table_column_widths": {
     "t1": {
@@ -21,7 +27,7 @@
       "Data Conclusão": 115,
       "Projeto": 65,
       "Descrição": 525,
-      "Comentário": 92,
+      "Comentário": 525,
       "ID Azure": 73,
       "% Conclusão": 98,
       "Responsável": 96,
@@ -36,12 +42,12 @@
       "Timing": 63,
       "Prioridade": 84,
       "Data de Registro": 122,
-      "Prazo": 110,
+      "Prazo": 131,
       "Data Conclusão": 115,
       "Projeto": 65,
-      "Descrição": 525,
-      "Comentário": 92,
-      "ID Azure": 73,
+      "Descrição": 347,
+      "Comentário": 170,
+      "ID Azure": 127,
       "% Conclusão": 98,
       "Responsável": 96,
       "Reportar?": 80,
@@ -59,7 +65,7 @@
       "Data Conclusão": 115,
       "Projeto": 65,
       "Descrição": 525,
-      "Comentário": 92,
+      "Comentário": 525,
       "ID Azure": 73,
       "% Conclusão": 98,
       "Responsável": 96,
@@ -78,7 +84,7 @@
       "Data Conclusão": 115,
       "Projeto": 65,
       "Descrição": 525,
-      "Comentário": 92,
+      "Comentário": 525,
       "ID Azure": 73,
       "% Conclusão": 98,
       "Responsável": 96,

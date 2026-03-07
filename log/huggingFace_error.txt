@@ -1,0 +1,84 @@
+[2026-02-19 23:15:59] Dependência ausente: instale openai
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale openai', 'error_json': None, 'error_message': 'Dependência ausente: instale openai'}
+--------------------------------------------------------------------------------
+[2026-02-19 23:16:07] Dependência ausente: instale openai
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale openai', 'error_json': None, 'error_message': 'Dependência ausente: instale openai'}
+--------------------------------------------------------------------------------
+[2026-02-19 23:17:05] Dependência ausente: instale openai
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale openai', 'error_json': None, 'error_message': 'Dependência ausente: instale openai'}
+--------------------------------------------------------------------------------
+[2026-02-19 23:29:47] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-19 23:30:08] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-19 23:30:30] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-19 23:30:45] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-19 23:46:11] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-19 23:46:29] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-19 23:51:08] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-19 23:51:59] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-20 00:07:35] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-20 00:07:54] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-20 00:22:15] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-20 00:31:35] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-20 00:31:46] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': None, 'error_body': 'Dependência ausente: instale requests para usar o provider Hugging Face', 'error_json': None, 'error_message': 'Dependência ausente: instale requests para usar o provider Hugging Face'}
+--------------------------------------------------------------------------------
+[2026-02-20 00:34:20] Dependência ausente: instale requests para usar o provider Hugging Face
+context={'demand_id': '6907cd1e-e26f-4d20-b975-b556117b832d', 'field': 'Descrição'}
+Traceback (most recent call last):
+  File "ai_writing\huggingface_client.py", line 118, in _load_requests_module
+    import requests
+ModuleNotFoundError: No module named 'requests'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "app.py", line 2508, in _generate_ai_suggestion
+    suggestion = self.ai_service.generate(input_text=input_text, instruction=instruction, context=context, provider=self.ai_settings.provider)
+  File "ai_writing\service.py", line 39, in generate
+    response = client.suggest(input_text=input_text, instruction=instruction, context=context)
+  File "ai_writing\huggingface_client.py", line 347, in suggest
+    return self._chat_completion(
+           ~~~~~~~~~~~~~~~~~~~~~^
+        system_message=system_prompt,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        user_message=self.build_prompt(input_text, instruction, context),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        context=context,
+        ^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "ai_writing\huggingface_client.py", line 279, in _chat_completion
+    requests = self._load_requests_module()
+  File "ai_writing\huggingface_client.py", line 120, in _load_requests_module
+    raise ProviderDependencyError(
+        "Dependência ausente: instale requests para usar o provider Hugging Face"
+    ) from exc
+ai_writing.errors.ProviderDependencyError: Dependência ausente: instale requests para usar o provider Hugging Face
+--------------------------------------------------------------------------------
+[2026-02-20 00:39:48] Credencial inválida: verifique o token da Hugging Face
+context={'action': 'test_connection', 'provider': 'huggingface', 'model': 'zai-org/GLM-5:novita', 'status_code': 403, 'error_body': '{"error":"This authentication method does not have sufficient permissions to call Inference Providers on behalf of user RenatoAD88"}', 'error_json': {'error': 'This authentication method does not have sufficient permissions to call Inference Providers on behalf of user RenatoAD88'}, 'error_message': 'Credencial inválida: verifique o token da Hugging Face'}
+--------------------------------------------------------------------------------

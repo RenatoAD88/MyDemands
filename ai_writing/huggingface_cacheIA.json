@@ -1,0 +1,14 @@
+{
+  "003690488de657c3d2168dc7ba601175ce527f4ed3438465a97f8efbbfa39795": {
+    "response": "` and `",
+    "timestamp": "2026-02-20T00:41:23"
+  },
+  "e25bbe0937b943b27a0e72dfb36de962a08e889538da7023f7b3bb8cf09a8a56": {
+    "response": "Teste de conectividade",
+    "timestamp": "2026-02-20T00:41:54"
+  },
+  "941e8d248c816aa721348a2a4075e8fc8db9d5cb575edce2db5aa27f7f003b7b": {
+    "response": "1. Passo a passo instalação das IA - Colocar a descrição junto com a notificação\n2. Trocar o nome da coluna de \"ID Azure\" para \"Núm. controle\"\n3. Ao importar dados, perguntar se deseja substituir ou mesclar\n4. Se mesclar, usar palavra-chave informada pelo usuário remetente na exportação\n5. Atualizar método de exportação para solicitar",
+    "timestamp": "2026-02-20T00:42:28"
+  }
+}
