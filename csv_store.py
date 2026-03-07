@@ -232,8 +232,21 @@ class CsvStore:
         self.csv_path = self._resolve_csv_path(base_dir)
         self.key_path = os.path.join(base_dir, KEY_FILE_NAME)
         self.rows: List[DemandRow] = []
+        self._rows_by_id: Dict[str, DemandRow] = {}
         self._crypto_key = self._load_or_create_key()
         self.load()
+
+    def _rebuild_id_index(self) -> None:
+        self._rows_by_id = {dr._id: dr for dr in self.rows if str(dr._id or "").strip()}
+
+    def describe_lookup_state(self, demand_id: str | None = None) -> Dict[str, Any]:
+        demand_id = str(demand_id or "").strip()
+        return {
+            "demand_id": demand_id,
+            "rows_count": len(self.rows),
+            "index_count": len(self._rows_by_id),
+            "id_exists_in_index": bool(demand_id and demand_id in self._rows_by_id),
+        }
 
     @staticmethod
     def _resolve_csv_path(base_dir: str) -> str:
@@ -409,6 +422,7 @@ class CsvStore:
     def load(self):
         self.ensure_exists()
         self.rows = []
+        self._rows_by_id = {}
         csv_text = self._read_csv_text()
         r = csv.DictReader(io.StringIO(csv_text), delimiter=DELIMITER)
         next_numeric_id = 1
@@ -450,6 +464,8 @@ class CsvStore:
             normalized["_id"] = _id
             self.rows.append(DemandRow(_id=_id, data=normalized))
 
+        self._rebuild_id_index()
+
         self.save()
 
     def _atomic_save(self):
@@ -461,6 +477,7 @@ class CsvStore:
         self._write_csv_text(buf.getvalue())
 
     def save(self):
+        self._rebuild_id_index()
         for dr in self.rows:
             dr.data["Prazo"] = normalize_prazo_text(dr.data.get("Prazo", ""))
         self._atomic_save()
@@ -492,6 +509,7 @@ class CsvStore:
         row["Prazo"] = normalize_prazo_text(row.get("Prazo", ""))
 
         self.rows.append(DemandRow(_id=_id, data=row))
+        self._rebuild_id_index()
         self.save()
         return _id
 
@@ -518,16 +536,14 @@ class CsvStore:
         self.save()
 
     def get(self, _id: str) -> Optional[DemandRow]:
-        for dr in self.rows:
-            if dr._id == _id:
-                return dr
-        return None
+        return self._rows_by_id.get(str(_id or "").strip())
 
     def delete_by_id(self, _id: str) -> bool:
         before = len(self.rows)
         self.rows = [r for r in self.rows if r._id != _id]
         if len(self.rows) == before:
             return False
+        self._rebuild_id_index()
         self.save()
         return True
         
@@ -767,6 +783,7 @@ class CsvStore:
 
     def replace_with_rows(self, imported_rows: List[DemandRow]) -> int:
         self.rows = imported_rows
+        self._rebuild_id_index()
         self.save()
         return len(imported_rows)
 
@@ -789,6 +806,7 @@ class CsvStore:
             row.data["ID"] = str(idx)
 
         self.rows = merged
+        self._rebuild_id_index()
         self.save()
         return len(imported_rows)
 
@@ -877,5 +895,6 @@ class CsvStore:
             imported_rows.append(DemandRow(_id=new_id, data=data))
 
         self.rows = imported_rows
+        self._rebuild_id_index()
         self.save()
         return team_control_payload

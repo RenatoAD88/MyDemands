@@ -3475,7 +3475,13 @@ class MainWindow(QMainWindow):
     def _init_tab3(self):
         tab = QWidget()
         self.t3_view_mode = "default"
-        self._demand_update_service = DemandUpdateService(self.store.update, self.store.get, self.deadline_scheduler.check_now)
+        self._demand_update_service = DemandUpdateService(
+            self.store.update,
+            self.store.get,
+            self.deadline_scheduler.check_now,
+            lookup_state_callable=self.store.describe_lookup_state,
+            on_missing_record=self._handle_stale_demand_reference,
+        )
         self.t3_view_default_btn = QPushButton("Visão Padrão")
         self.t3_view_default_btn.setCheckable(True)
         self.t3_view_eisenhower_btn = QPushButton("Visão Eisenhower")
@@ -3778,6 +3784,15 @@ class MainWindow(QMainWindow):
         if not rows:
             return
         self._fill(table, rows)
+
+
+    def _handle_stale_demand_reference(self, demand_id: str, source_context: str | None = None) -> None:
+        logger.warning(
+            "Referência obsoleta detectada na UI demand_id=%s source=%s; recarregando visão.",
+            demand_id,
+            source_context or "unspecified",
+        )
+        self.refresh_all()
 
     def _apply_initial_eisenhower_suggestion(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         prepared = dict(payload or {})

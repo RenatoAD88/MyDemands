@@ -17,10 +17,14 @@ class DemandUpdateService:
         update_callable: Callable[[str, Dict[str, Any]], None],
         get_callable: Callable[[str], Any],
         after_update: Callable[[], None] | None = None,
+        lookup_state_callable: Callable[[str], Dict[str, Any]] | None = None,
+        on_missing_record: Callable[[str, str | None], None] | None = None,
     ):
         self._update_callable = update_callable
         self._get_callable = get_callable
         self._after_update = after_update
+        self._lookup_state_callable = lookup_state_callable
+        self._on_missing_record = on_missing_record
 
     def update(self, demand_id: str, changes: Dict[str, Any], source_context: str | None = None) -> Dict[str, Any]:
         return self.update_demand_field(demand_id=demand_id, changes=changes, source_context=source_context)
@@ -32,7 +36,24 @@ class DemandUpdateService:
 
         existing = self._get_callable(demand_id)
         if existing is None:
-            raise ValidationError(f"Registro não encontrado para ID único: {demand_id}")
+            lookup_state = {}
+            if self._lookup_state_callable:
+                try:
+                    lookup_state = self._lookup_state_callable(demand_id) or {}
+                except Exception:
+                    LOGGER.exception("Falha ao coletar estado de lookup demand_id=%s", demand_id)
+            LOGGER.error(
+                "Demand update failed: missing demand_id=%s source=%s lookup_state=%s",
+                demand_id,
+                source_context or "unspecified",
+                lookup_state,
+            )
+            if self._on_missing_record:
+                try:
+                    self._on_missing_record(demand_id, source_context)
+                except Exception:
+                    LOGGER.exception("Falha ao processar recarga segura para demand_id=%s", demand_id)
+            raise ValidationError("Não foi possível localizar a demanda selecionada. A lista será recarregada.")
 
         normalized_changes: Dict[str, Any] = {}
         for field_name, value in (changes or {}).items():
