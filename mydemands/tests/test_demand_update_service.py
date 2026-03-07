@@ -32,6 +32,6 @@ def test_update_retorna_erro_amigavel_quando_id_nao_existe():
     try:
         service.update("id-inexistente", {"Data de Registro": "03/02/2026"})
     except ValidationError as exc:
-        assert "Registro não encontrado para ID único" in str(exc)
+        assert "Não foi possível localizar a demanda selecionada" in str(exc)
     else:
         raise AssertionError("Era esperado ValidationError para ID inexistente")

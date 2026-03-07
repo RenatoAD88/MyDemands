@@ -120,5 +120,5 @@ def test_data_registro_inline_exibe_erro_amigavel_para_id_invalido(tmp_path, mon
 
     assert store.get(demand_id).data["Data de Registro"] == "01/02/2026"
     assert warnings
-    assert "Registro não encontrado para ID único" in str(warnings[-1])
+    assert "Não foi possível localizar a demanda selecionada" in str(warnings[-1])
     win.close()
