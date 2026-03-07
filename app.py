@@ -94,6 +94,11 @@ from mydemands.dashboard.eisenhower_classifier import (
     parse_eisenhower_column_map,
 )
 from mydemands.dashboard.demand_update_service import DemandUpdateService
+from mydemands.dashboard.date_field_persistence_service import (
+    DateFieldPersistenceService,
+    DateFieldSaveJob,
+    DateFieldSaveResult,
+)
 
 EXEC_NAME = os.path.basename(sys.argv[0]).lower()
 DEBUG_MODE = "debug" in EXEC_NAME
@@ -1392,6 +1397,7 @@ class MainWindow(QMainWindow):
         self._inline_edit_in_progress = False
         self._restoring_prefs = False
         self._resizing_columns = False
+        self._date_visual_refresh_guard = False
         self._tab3_auto_filter_reset_done = False
         self._table_sort_state: Dict[str, Optional[Tuple[int, Qt.SortOrder]]] = {
             "t1": None,
@@ -1434,6 +1440,10 @@ class MainWindow(QMainWindow):
         self._init_tab3()
         self._init_tab4()
         self._init_tab_monitoramento()
+        self._date_field_persistence = DateFieldPersistenceService(
+            self._persist_date_field_background,
+            self._on_date_field_persistence_result,
+        )
 
         self.refresh_all()
         self.tabs.currentChanged.connect(self._on_tab_changed)
@@ -2083,7 +2093,7 @@ class MainWindow(QMainWindow):
             return
 
     def _on_item_changed(self, item: QTableWidgetItem):
-        if self._filling or self._is_updating_inline:
+        if self._filling or self._is_updating_inline or self._date_visual_refresh_guard:
             return
 
         _id = item.data(Qt.UserRole)
@@ -2110,6 +2120,9 @@ class MainWindow(QMainWindow):
         )
 
         if table_key == "t3" and col_name in {"Prazo", "Data Conclusão", "Data de Registro"}:
+            if col_name in {"Prazo", "Data de Registro"}:
+                self._handle_inline_date_field_edit(table_key, item, _id, col_name, old_value, new_value)
+                return
             try:
                 self.update_demand_field_inline(_id, col_name, new_value)
                 self._apply_inline_edit_result(table_key, _id, col_name)
@@ -2267,6 +2280,107 @@ class MainWindow(QMainWindow):
         except Exception:
             logger.exception("Persist inline edit demand_id=%s result=error", demand_id)
             raise
+
+    def _handle_inline_date_field_edit(
+        self,
+        table_key: str,
+        item: QTableWidgetItem,
+        demand_id: str,
+        field_name: str,
+        old_value: str,
+        new_value: str,
+    ) -> None:
+        try:
+            normalized_payload = self._normalize_date_edit_payload(demand_id, field_name, new_value)
+            normalized_value = str(normalized_payload.get(field_name, "") or "")
+            self._update_date_state_in_memory(demand_id, normalized_payload)
+            self._date_field_persistence.enqueue(
+                DateFieldSaveJob(
+                    demand_id=demand_id,
+                    field_name=field_name,
+                    old_value=old_value,
+                    new_value=normalized_value,
+                    changed_at=datetime.now(),
+                )
+            )
+            self._apply_inline_edit_result(table_key, demand_id, field_name)
+            self._flash_cell_by_id("t3", demand_id, field_name)
+        except ValidationError as ve:
+            self._flash_invalid_cell(item)
+            self._revert_inline_item(item, old_value)
+            QMessageBox.information(self, "Validação", str(ve))
+        except Exception as e:
+            self._flash_invalid_cell(item)
+            self._revert_inline_item(item, old_value)
+            QMessageBox.warning(self, "Erro ao salvar", f"Falha ao salvar {field_name}: {e}")
+
+    def _normalize_date_edit_payload(self, demand_id: str, field_name: str, raw_value: str) -> Dict[str, str]:
+        dr = self.store.get(demand_id)
+        if dr is None:
+            raise ValidationError("Registro não encontrado para o ID informado.")
+
+        merged = dict(dr.data)
+        if field_name == "Prazo":
+            merged[field_name] = normalize_prazo_text(raw_value)
+        else:
+            normalized = self._normalize_inline_value(field_name, raw_value, allow_empty=False)
+            if normalized is None:
+                raise ValidationError(f"Valor inválido para {field_name}.")
+            merged[field_name] = self._to_store_value(field_name, normalized)
+        return validate_payload(merged, mode="create")
+
+    def _update_date_state_in_memory(self, demand_id: str, merged_payload: Dict[str, str]) -> None:
+        dr = self.store.get(demand_id)
+        if dr is None:
+            raise ValidationError("Registro não encontrado para o ID informado.")
+        dr.data.update(merged_payload)
+
+    def _persist_date_field_background(self, demand_id: str, field_name: str, value: str) -> None:
+        dr = self.store.get(demand_id)
+        if dr is None:
+            raise ValidationError("Registro não encontrado para o ID informado.")
+        dr.data[field_name] = value
+        self.store.save()
+
+    def _on_date_field_persistence_result(self, result: DateFieldSaveResult) -> None:
+        if result.ok:
+            logger.info(
+                "Date save success demand_id=%s field=%s attempt=%s/%s old=%r new=%r",
+                result.demand_id,
+                result.field_name,
+                result.attempt,
+                result.max_attempts,
+                result.old_value,
+                result.new_value,
+            )
+            return
+
+        logger.error(
+            "Date save exhausted retries demand_id=%s field=%s attempt=%s/%s old=%r new=%r error=%s",
+            result.demand_id,
+            result.field_name,
+            result.attempt,
+            result.max_attempts,
+            result.old_value,
+            result.new_value,
+            result.error,
+        )
+        dr = self.store.get(result.demand_id)
+        if dr is not None:
+            dr.data[result.field_name] = result.old_value
+        self._date_visual_refresh_guard = True
+        try:
+            self.refresh_tab3()
+        finally:
+            self._date_visual_refresh_guard = False
+        QMessageBox.warning(
+            self,
+            "Falha ao salvar",
+            (
+                f"Não foi possível persistir {result.field_name} após {result.max_attempts} tentativas. "
+                "A alteração foi revertida para manter consistência."
+            ),
+        )
 
     def _resolve_inline_field_name(self, field_name: str) -> str:
         resolved = resolve_csv_field_name(field_name or "")

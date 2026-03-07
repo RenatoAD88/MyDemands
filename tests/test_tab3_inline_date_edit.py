@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 import pytest
 
 qtwidgets = pytest.importorskip("PySide6.QtWidgets", reason="PySide6 indisponível no ambiente de teste", exc_type=ImportError)
@@ -35,6 +36,14 @@ def _add_pending(store: CsvStore, **extra):
 
 def _cell(win: MainWindow, row: int, col_name: str):
     return win.t3_table.item(row, VISIBLE_COLUMNS.index(col_name))
+
+
+def _drain_date_queue(win: MainWindow, timeout_s: float = 2.0):
+    app = _get_app()
+    deadline = time.time() + timeout_s
+    while win._date_field_persistence.has_pending() and time.time() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
 
 
 def test_inline_prazo_edit_persists_without_modal(tmp_path, monkeypatch):
@@ -102,6 +111,7 @@ def test_inline_data_registro_edit_persists(tmp_path):
 
     item = _cell(win, 0, "Data de Registro")
     item.setText("03/02/2026")
+    _drain_date_queue(win)
 
     updated = store.get(row_id).data
     assert updated["Data de Registro"] == "03/02/2026"
@@ -171,6 +181,93 @@ def test_inline_reentrancia_ignora_item_changed_durante_revert(tmp_path, monkeyp
 
     assert calls["count"] == 1
     assert win.t3_table.rowCount() == 1
+    win.close()
+
+
+def test_inline_data_registro_retry_transiente_ate_sucesso(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store)
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    attempts = {"count": 0}
+    real_save = store.save
+
+    def flaky_save():
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            raise OSError("arquivo temporariamente bloqueado")
+        return real_save()
+
+    store.save = flaky_save
+
+    _cell(win, 0, "Data de Registro").setText("05/02/2026")
+    _drain_date_queue(win)
+
+    assert attempts["count"] == 3
+    assert store.get(row_id).data["Data de Registro"] == "05/02/2026"
+    win.close()
+
+
+def test_inline_data_registro_sem_retry_quando_invalida(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    _add_pending(store)
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    attempts = {"count": 0}
+
+    def counted_save():
+        attempts["count"] += 1
+
+    store.save = counted_save
+
+    _cell(win, 0, "Data de Registro").setText("31/31/2026")
+    _drain_date_queue(win)
+
+    assert attempts["count"] == 0
+    assert _cell(win, 0, "Data de Registro").text() == "01/02/2026"
+    win.close()
+
+
+def test_inline_prazo_falha_final_reverte_e_avisa(tmp_path, monkeypatch):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store)
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    warnings = []
+    monkeypatch.setattr("app.QMessageBox.warning", lambda *_args: warnings.append(_args[-1]))
+
+    def always_fails_save():
+        raise OSError("lock persistente")
+
+    store.save = always_fails_save
+    _cell(win, 0, "Prazo").setText("15/02/2026")
+    _drain_date_queue(win)
+
+    assert store.get(row_id).data["Prazo"] == "10/02/2026"
+    assert any("após 3 tentativas" in str(msg) for msg in warnings)
+    assert _cell(win, 0, "Prazo").text() == "10/02/2026"
+    win.close()
+
+
+def test_inline_data_registro_persistencia_consistente_com_csv(tmp_path):
+    _get_app()
+    store = CsvStore(str(tmp_path))
+    row_id = _add_pending(store)
+    win = MainWindow(store)
+    win.refresh_tab3()
+
+    _cell(win, 0, "Data de Registro").setText("06/02/2026")
+    _drain_date_queue(win)
+    store.load()
+
+    assert store.get(row_id).data["Data de Registro"] == "06/02/2026"
+    assert Path(store.csv_path).exists()
     win.close()
 
 
