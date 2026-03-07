@@ -2128,7 +2128,8 @@ class MainWindow(QMainWindow):
             return
 
 
-        if col_name in NON_EDITABLE:
+        tab4_allows_column = table_key in {"t4", "t4_cancelled"} and col_name in TAB4_EDITABLE_COLUMNS
+        if col_name in NON_EDITABLE and not tab4_allows_column:
             return
 
 
